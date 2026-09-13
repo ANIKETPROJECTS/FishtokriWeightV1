@@ -13,17 +13,6 @@ const masterAdminNavItems = [
   { href: "/hubs", label: "Hubs", icon: Warehouse },
   { href: "/orders", label: "Orders", icon: ClipboardList },
   {
-    href: "/fish-calculator",
-    label: "Fish Purchase Calculator",
-    icon: Calculator,
-    children: [
-      { href: "/fish-calculator/price", label: "Price Calculator", icon: Calculator },
-      { href: "/fish-calculator/yield", label: "Yield & Price Calculator", icon: RefreshCw },
-      { href: "/fish-calculator/history", label: "History", icon: Clock },
-      { href: "/fish-calculator/config", label: "Configuration", icon: Settings },
-    ],
-  },
-  {
     href: "/inventory",
     label: "Inventory Management",
     icon: Boxes,
@@ -34,29 +23,9 @@ const masterAdminNavItems = [
       { href: "/inventory/wastage", label: "Wastage Report", icon: Trash2 },
     ],
   },
-  {
-    href: "/banking",
-    label: "Banking",
-    icon: Landmark,
-    children: [
-      { href: "/banking/accounts", label: "Accounts", icon: Building2 },
-      { href: "/banking/receipts", label: "Receipts", icon: ArrowDownCircle },
-      { href: "/banking/payments", label: "Payments", icon: ArrowUpCircle },
-    ],
-  },
   { href: "/admin-users", label: "Admin Users", icon: Users },
   { href: "/customers", label: "Customers", icon: ShoppingBasket },
-  { href: "/delivery-report", label: "Delivery Report", icon: FileBarChart },
   { href: "/day-end-report", label: "Day End Report", icon: FileSpreadsheet },
-  {
-    href: "/live-chat",
-    label: "WhatsApp",
-    icon: MessageSquare,
-    children: [
-      { href: "/live-chat",   label: "Live Chat",       icon: MessageSquare },
-      { href: "/wa-contacts", label: "Contacts",        icon: BookUser },
-    ],
-  },
 ];
 
 function getAdminData() {
