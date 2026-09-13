@@ -315,6 +315,8 @@ export default function POS() {
   }
 
   const canSubmit = Boolean(hub && customerName.trim() && cart.length && subtotal > 0 && !submitting);
+  const phoneError = phone.length > 0 && phone.length !== 10;
+  const canCompleteSale = canSubmit && !phoneError;
 
   return (
     <div className="min-h-full bg-[#FAF7F3] pb-3" data-testid="page-pos">
@@ -407,12 +409,28 @@ export default function POS() {
 
               <div className="space-y-2">
                 <div><label htmlFor="pos-customer-name" className="mb-1.5 block text-xs font-bold text-[#51617A]">Customer name <span className="text-[#D94A3D]">*</span></label><div className="relative"><UserRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#98A4B4]" /><input id="pos-customer-name" value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Enter customer name" className="h-10 w-full rounded-lg border border-[#D8E0EA] bg-white pl-9 pr-3 text-sm text-[#162B4D] outline-none placeholder:text-[#A4AFBC] focus:border-[#F05B4E] focus:ring-2 focus:ring-[#F05B4E]/10" data-testid="input-customer-name" /></div></div>
-                <div><label htmlFor="pos-customer-phone" className="mb-1.5 block text-xs font-bold text-[#51617A]">Phone <span className="font-normal text-[#A0A9B7]">optional</span></label><input id="pos-customer-phone" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="10-digit mobile number" inputMode="tel" className="h-10 w-full rounded-lg border border-[#D8E0EA] bg-white px-3 text-sm text-[#162B4D] outline-none placeholder:text-[#A4AFBC] focus:border-[#F05B4E] focus:ring-2 focus:ring-[#F05B4E]/10" data-testid="input-customer-phone" /></div>
+                <div>
+                  <label htmlFor="pos-customer-phone" className="mb-1.5 block text-xs font-bold text-[#51617A]">Phone <span className="font-normal text-[#A0A9B7]">optional</span></label>
+                  <input
+                    id="pos-customer-phone"
+                    value={phone}
+                    onChange={(event) => setPhone(event.target.value.replace(/\D/g, "").slice(0, 10))}
+                    placeholder="10-digit mobile number"
+                    inputMode="numeric"
+                    autoComplete="tel"
+                    maxLength={10}
+                    pattern="[0-9]{10}"
+                    className={`h-10 w-full rounded-lg border bg-white px-3 text-sm text-[#162B4D] outline-none placeholder:text-[#A4AFBC] focus:ring-2 focus:ring-[#F05B4E]/10 ${phoneError ? "border-[#D94A3D] focus:border-[#D94A3D]" : "border-[#D8E0EA] focus:border-[#F05B4E]"}`}
+                    aria-invalid={phoneError}
+                    data-testid="input-customer-phone"
+                  />
+                  {phoneError && <p className="mt-1 text-[11px] text-[#C94338]" data-testid="text-phone-error">Enter exactly 10 digits.</p>}
+                </div>
                 <div><p className="mb-1.5 text-xs font-bold text-[#51617A]">Payment method</p><div className="flex gap-2"><PaymentButton mode="cash" selected={paymentMode === "cash"} onSelect={setPaymentMode} icon={Banknote} label="Cash" /><PaymentButton mode="upi" selected={paymentMode === "upi"} onSelect={setPaymentMode} icon={Smartphone} label="UPI" /><PaymentButton mode="card" selected={paymentMode === "card"} onSelect={setPaymentMode} icon={CreditCard} label="Card" /></div></div>
               </div>
 
               {submitError && <div className="mt-3 flex gap-2 rounded-lg border border-[#F2C2BC] bg-[#FFF4F2] px-3 py-2.5 text-xs leading-5 text-[#B8443B]" role="alert" data-testid="status-sale-error"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /> <span>{submitError}</span></div>}
-              <button type="button" onClick={() => void submitSale()} disabled={!canSubmit} className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-[#F05B4E] text-sm font-bold text-white shadow-[0_6px_12px_rgba(240,91,78,0.22)] transition-all hover:bg-[#D94A3D] active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-[#D7DDE5] disabled:text-[#8A95A5] disabled:shadow-none" data-testid="button-complete-sale">
+              <button type="button" onClick={() => void submitSale()} disabled={!canCompleteSale} className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-[#F05B4E] text-sm font-bold text-white shadow-[0_6px_12px_rgba(240,91,78,0.22)] transition-all hover:bg-[#D94A3D] active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-[#D7DDE5] disabled:text-[#8A95A5] disabled:shadow-none" data-testid="button-complete-sale">
                 {submitting ? <><Loader2 className="h-4 w-4 animate-spin" /> Completing sale</> : <>Complete takeaway sale <ChevronRight className="h-4 w-4" /></>}
               </button>
               {cart.length > 0 && !customerName.trim() && <p className="mt-2 text-center text-[11px] text-[#A25952]" data-testid="text-name-required">Customer name is required to complete the sale.</p>}
