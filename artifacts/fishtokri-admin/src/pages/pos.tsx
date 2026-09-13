@@ -263,6 +263,7 @@ export default function POS() {
         body: JSON.stringify({
           customerName: customerName.trim(),
           phone: phone.trim(),
+          createCustomerIfMissing: true,
           items: cart.filter((line) => Number(line.cartQuantity) > 0).map((line) => ({
             productId: line._id,
             name: line.name,
@@ -364,12 +365,9 @@ export default function POS() {
                       className={`group relative overflow-hidden rounded-xl border bg-[#FFFCFA] text-left transition-all ${outOfStock ? "cursor-not-allowed border-[#E8E2DB] opacity-55" : "border-[#E8E2DB] hover:-translate-y-0.5 hover:border-[#F1A59D] hover:shadow-[0_8px_18px_rgba(240,91,78,0.10)] active:translate-y-0"} ${inCart ? "ring-2 ring-[#F05B4E]/30" : ""}`}
                       data-testid={`card-product-${product._id}`}
                     >
-                      <div className="relative aspect-[1.5] overflow-hidden bg-[#F4EFEA]">
-                        {product.imageUrl ? <img src={product.imageUrl} alt="" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" data-testid={`img-product-${product._id}`} /> : <div className="flex h-full items-center justify-center text-[#B3AAA0]"><Fish className="h-8 w-8" /></div>}
-                        {inCart && <span className="absolute right-2 top-2 flex h-6 min-w-6 items-center justify-center rounded-full bg-[#F05B4E] px-1.5 text-[11px] font-bold text-white" data-testid={`badge-cart-product-${product._id}`}>{getPricingBasis(product.unit).isWeightBased ? formatWeight(inCart.cartQuantity) : formatQty(inCart.cartQuantity)}</span>}
-                      </div>
-                      <div className="p-3">
-                        <p className="truncate text-sm font-semibold text-[#162B4D]">{product.name}</p>
+                      <div className="relative p-3">
+                        {inCart && <span className="absolute right-3 top-3 flex h-6 min-w-6 items-center justify-center rounded-full bg-[#F05B4E] px-1.5 text-[11px] font-bold text-white" data-testid={`badge-cart-product-${product._id}`}>{getPricingBasis(product.unit).isWeightBased ? formatWeight(inCart.cartQuantity) : formatQty(inCart.cartQuantity)}</span>}
+                        <p className={`truncate text-sm font-semibold text-[#162B4D] ${inCart ? "pr-8" : ""}`}>{product.name}</p>
                         <p className="mt-1 truncate text-[10px] font-medium uppercase tracking-wide text-[#9A8F84]">{getCategoryName(product, categories)}</p>
                         <div className="mt-3 flex items-end justify-between gap-1">
                           <div><p className="text-sm font-bold text-[#D94A3D]">{productRateLabel(product)}</p><p className="text-[10px] text-[#8B95A5]">rate basis</p></div>

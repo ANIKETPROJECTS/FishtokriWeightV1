@@ -1154,11 +1154,13 @@ router.post("/", async (req: ScopedRequest, res) => {
     let resolvedCustomerId: string | undefined = customerId ? String(customerId) : undefined;
 
     // Optionally create customer if missing
-    if (!resolvedCustomerId && createCustomerIfMissing && (email || phone)) {
+    if (!resolvedCustomerId && createCustomerIfMissing && (email || phone || effectiveCustomerName)) {
       const cCol = await getCustomersCollection();
       const existing = email
         ? await cCol.findOne({ email: String(email).toLowerCase().trim() })
-        : await cCol.findOne({ phone: String(phone).trim() });
+        : phone
+          ? await cCol.findOne({ phone: String(phone).trim() })
+          : null;
       if (existing) {
         resolvedCustomerId = String(existing._id);
       } else {

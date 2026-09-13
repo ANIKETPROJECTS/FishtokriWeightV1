@@ -49,7 +49,19 @@ router.get("/day-end/orders", async (req: ScopedRequest, res) => {
       const dateClause: any = {};
       if (from) dateClause.$gte = from;
       if (to) dateClause.$lte = to;
-      filter.deliveryDate = dateClause;
+
+      // Delivery orders are grouped by their scheduled delivery date. Takeaway
+      // POS sales do not have a delivery date, so group them by creation date
+      // or they disappear from the day-end report.
+      const createdAtClause: any = {};
+      if (from) createdAtClause.$gte = new Date(`${from}T00:00:00.000Z`);
+      if (to) createdAtClause.$lte = new Date(`${to}T23:59:59.999Z`);
+      filter.$and = [{
+        $or: [
+          { deliveryDate: dateClause },
+          { deliveryType: "takeaway", createdAt: createdAtClause },
+        ],
+      }];
     }
 
     if (subHubIdFilter) {
