@@ -62,6 +62,10 @@ function getPricingBasis(unit?: string): PricingBasis {
   return { isWeightBased: false, basisGrams: 1, label: normalized || "unit" };
 }
 
+function roundWeight(weightInKg: number) {
+  return Math.round((Number(weightInKg) + Number.EPSILON) * 1000) / 1000;
+}
+
 function formatWeight(weightInKg: number) {
   const grams = Math.round((Number(weightInKg) || 0) * 1000);
   if (grams < 1000) return `${grams} g`;
@@ -237,8 +241,9 @@ export default function POS() {
       const found = current.find((line) => line._id === product._id);
       if (found) {
         const step = getPricingBasis(product.unit).isWeightBased ? 0.05 : 1;
+        const nextQuantity = Math.min(available, found.cartQuantity + step);
         return current.map((line) => line._id === product._id
-          ? { ...line, cartQuantity: Math.min(available, line.cartQuantity + step) }
+          ? { ...line, cartQuantity: getPricingBasis(product.unit).isWeightBased ? roundWeight(nextQuantity) : nextQuantity }
           : line);
       }
       const initialQuantity = getPricingBasis(product.unit).isWeightBased ? Math.min(0, available) : Math.min(1, available);
@@ -251,7 +256,8 @@ export default function POS() {
     if (!line) return;
     const parsed = Number(nextValue);
     if (!Number.isFinite(parsed)) return;
-    const next = Math.min(Math.max(parsed, 0), Number(line.quantity) || 0);
+    const capped = Math.min(Math.max(parsed, 0), Number(line.quantity) || 0);
+    const next = getPricingBasis(line.unit).isWeightBased ? roundWeight(capped) : capped;
     setCart((current) => current.map((item) => item._id === id ? { ...item, cartQuantity: next } : item));
   };
 
@@ -405,7 +411,7 @@ export default function POS() {
                 return (
                 <div key={line._id} className="border-b border-[#E8EDF3] py-3 last:border-0" data-testid={`row-cart-${line._id}`}>
                   <div className="flex items-start gap-2"><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-[#162B4D]">{line.name}</p><p className="mt-0.5 text-[11px] text-[#8A95A5]">{productRateLabel(line)}</p></div><p className="text-sm font-bold text-[#162B4D]">{formatRupees(amount)}</p><button type="button" onClick={() => setCart((current) => current.filter((item) => item._id !== line._id))} className="rounded p-1 text-[#A1AAB7] hover:bg-[#FFF0ED] hover:text-[#D94A3D]" aria-label={`Remove ${line.name}`} data-testid={`button-remove-cart-${line._id}`}><Trash2 className="h-3.5 w-3.5" /></button></div>
-                  <div className="mt-2 flex items-center justify-between"><span className="text-[10px] font-semibold uppercase tracking-wide text-[#9A8F84]">{basis.isWeightBased ? "Weight from scale" : "Quantity"}</span><div className="flex items-center gap-1.5"><button type="button" onClick={() => shiftQuantity(line, -1)} className="flex h-7 w-7 items-center justify-center rounded-md border border-[#D8E0EA] bg-white text-[#52627A] hover:border-[#F1A59D] hover:text-[#D94A3D]" aria-label={`Decrease ${line.name}`} data-testid={`button-decrease-cart-${line._id}`}><Minus className="h-3 w-3" /></button><input type="number" min="0" max={line.quantity} step={basis.isWeightBased ? "0.001" : "1"} value={line.cartQuantity} onChange={(event) => updateQuantity(line._id, event.target.value)} className="h-7 w-[78px] rounded-md border border-[#D8E0EA] bg-white px-2 text-center text-xs font-bold text-[#162B4D] outline-none focus:border-[#F05B4E]" aria-label={`${basis.isWeightBased ? "Weight in kilograms" : "Quantity"} for ${line.name}`} data-testid={`input-quantity-${line._id}`} /><button type="button" onClick={() => shiftQuantity(line, 1)} disabled={line.cartQuantity >= Number(line.quantity)} className="flex h-7 w-7 items-center justify-center rounded-md border border-[#D8E0EA] bg-white text-[#52627A] hover:border-[#F1A59D] hover:text-[#D94A3D] disabled:cursor-not-allowed disabled:opacity-40" aria-label={`Increase ${line.name}`} data-testid={`button-increase-cart-${line._id}`}><Plus className="h-3 w-3" /></button><span className="w-8 text-[10px] text-[#7E8998]">{basis.isWeightBased ? "kg" : line.unit || "unit"}</span></div></div>
+                   <div className="mt-2 flex items-center justify-between"><span className="text-[10px] font-semibold uppercase tracking-wide text-[#9A8F84]">{basis.isWeightBased ? "Weight from scale" : "Quantity"}</span><div className="flex items-center gap-1.5"><button type="button" onClick={() => shiftQuantity(line, -1)} className="flex h-7 w-7 items-center justify-center rounded-md border border-[#D8E0EA] bg-white text-[#52627A] hover:border-[#F1A59D] hover:text-[#D94A3D]" aria-label={`Decrease ${line.name}`} data-testid={`button-decrease-cart-${line._id}`}><Minus className="h-3 w-3" /></button><input type="number" min="0" max={line.quantity} step={basis.isWeightBased ? "0.001" : "1"} value={basis.isWeightBased ? line.cartQuantity.toFixed(3) : line.cartQuantity} onChange={(event) => updateQuantity(line._id, event.target.value)} className="h-7 w-[78px] rounded-md border border-[#D8E0EA] bg-white px-2 text-center text-xs font-bold text-[#162B4D] outline-none focus:border-[#F05B4E]" aria-label={`${basis.isWeightBased ? "Weight in kilograms" : "Quantity"} for ${line.name}`} data-testid={`input-quantity-${line._id}`} /><button type="button" onClick={() => shiftQuantity(line, 1)} disabled={line.cartQuantity >= Number(line.quantity)} className="flex h-7 w-7 items-center justify-center rounded-md border border-[#D8E0EA] bg-white text-[#52627A] hover:border-[#F1A59D] hover:text-[#D94A3D] disabled:cursor-not-allowed disabled:opacity-40" aria-label={`Increase ${line.name}`} data-testid={`button-increase-cart-${line._id}`}><Plus className="h-3 w-3" /></button><span className="w-8 text-[10px] text-[#7E8998]">{basis.isWeightBased ? "kg" : line.unit || "unit"}</span></div></div>
                   {basis.isWeightBased && <p className="mt-1 text-[10px] text-[#7E8998]">{line.cartQuantity > 0 ? `${formatWeight(line.cartQuantity)} · ${formatRupees(amount)}` : "Waiting for weight from scale"}</p>}
                 </div>
                 );
