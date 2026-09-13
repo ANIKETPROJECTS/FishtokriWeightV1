@@ -8,7 +8,6 @@ import {
   Fish,
   Loader2,
   Minus,
-  PackageCheck,
   Plus,
   RefreshCw,
   Search,
@@ -318,51 +317,29 @@ export default function POS() {
   const canSubmit = Boolean(hub && customerName.trim() && cart.length && subtotal > 0 && !submitting);
 
   return (
-    <div className="min-h-full bg-[#FAF7F3] pb-6" data-testid="page-pos">
+    <div className="min-h-full bg-[#FAF7F3] pb-3" data-testid="page-pos">
       <div className="mx-auto max-w-[1500px]">
-        <header className="mb-5 flex flex-col gap-4 rounded-2xl border border-[#E9E0D8] bg-white px-5 py-5 shadow-[0_4px_18px_rgba(22,43,77,0.04)] sm:flex-row sm:items-center sm:justify-between" data-testid="header-pos">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#FFF0ED] text-[#D94A3D]">
-              <ShoppingBasket className="h-5 w-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold tracking-tight text-[#162B4D]">Counter sale</h1>
-                <span className="rounded-full bg-[#EAF4EF] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.16em] text-[#26734A]">Live</span>
-              </div>
-              <p className="mt-0.5 text-sm text-[#778398]">Fresh catch, weighed and paid at the counter.</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 rounded-xl bg-[#F7F4F0] px-3 py-2.5" data-testid="text-pos-hub">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#E3EAF7] text-[#364F9F]"><PackageCheck className="h-4 w-4" /></div>
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#9A8F84]">Serving from</p>
-              <p className="text-sm font-semibold text-[#162B4D]">{hub?.name || "Thane Hub"}</p>
-            </div>
-          </div>
-        </header>
-
         {successReference && (
-          <div className="mb-5 flex items-center justify-between gap-3 rounded-xl border border-[#BFE3CC] bg-[#F0FAF3] px-4 py-3 text-sm text-[#26734A]" role="status" data-testid="status-sale-success">
+          <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-[#BFE3CC] bg-[#F0FAF3] px-4 py-2.5 text-sm text-[#26734A]" role="status" data-testid="status-sale-success">
             <div className="flex items-center gap-2"><span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#2B8A57] text-white"><Check className="h-4 w-4" /></span><span>Sale completed. Reference <strong>{successReference}</strong></span></div>
             <button type="button" onClick={() => setSuccessReference("")} className="rounded p-1 hover:bg-[#DDF1E4]" aria-label="Dismiss sale confirmation" data-testid="button-dismiss-sale-success"><X className="h-4 w-4" /></button>
           </div>
         )}
 
-        <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_390px]">
-          <section className="min-w-0 rounded-2xl border border-[#E9E0D8] bg-white p-4 shadow-[0_4px_18px_rgba(22,43,77,0.04)] sm:p-5" data-testid="section-menu">
-            <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <section className="min-w-0 rounded-2xl border border-[#E9E0D8] bg-white p-3 shadow-[0_4px_18px_rgba(22,43,77,0.04)] sm:p-4" data-testid="section-menu">
+            <div className="mb-3 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <h2 className="text-base font-bold text-[#162B4D]">Today&apos;s menu</h2>
                 <p className="mt-0.5 text-xs text-[#8B95A5]">{filteredProducts.length} available {filteredProducts.length === 1 ? "item" : "items"}</p>
               </div>
-              <label className="relative block w-full lg:max-w-[300px]">
+              <label className="relative block w-full lg:max-w-[270px]">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#A0A9B7]" />
                 <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search fish or category" className="h-10 w-full rounded-lg border border-[#E4DED7] bg-[#FFFCFA] pl-9 pr-3 text-sm text-[#162B4D] outline-none transition-colors placeholder:text-[#A6ADB8] focus:border-[#F05B4E] focus:ring-2 focus:ring-[#F05B4E]/10" data-testid="input-search-products" />
               </label>
             </div>
 
-            <div className="mb-5 flex gap-2 overflow-x-auto pb-1" data-testid="list-product-categories">
+            <div className="mb-3 flex gap-2 overflow-x-auto pb-1" data-testid="list-product-categories">
               <button type="button" onClick={() => setSelectedCategory("all")} className={`shrink-0 rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${selectedCategory === "all" ? "bg-[#162B4D] text-white" : "bg-[#F7F4F0] text-[#68758A] hover:bg-[#EEE9E3]"}`} data-testid="button-category-all">All catch</button>
               {categories.map((category) => (
                 <button key={category._id} type="button" onClick={() => setSelectedCategory(String(category._id))} className={`shrink-0 rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${selectedCategory === String(category._id) ? "bg-[#162B4D] text-white" : "bg-[#F7F4F0] text-[#68758A] hover:bg-[#EEE9E3]"}`} data-testid={`button-category-${category._id}`}>
@@ -372,7 +349,7 @@ export default function POS() {
             </div>
 
             {filteredProducts.length === 0 ? <EmptyProducts search={search} onClear={() => { setSearch(""); setSelectedCategory("all"); }} /> : (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5" data-testid="grid-products">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5" data-testid="grid-products">
                 {filteredProducts.map((product) => {
                   const inCart = cart.find((line) => line._id === product._id);
                   const outOfStock = Number(product.quantity) <= 0;
@@ -404,14 +381,14 @@ export default function POS() {
             )}
           </section>
 
-          <aside className="sticky top-3 rounded-2xl border border-[#D7E0EE] bg-[#F8FAFD] shadow-[0_6px_24px_rgba(22,43,77,0.08)]" data-testid="section-sale">
-            <div className="border-b border-[#E4EAF2] px-5 py-4">
+           <aside className="sticky top-2 rounded-2xl border border-[#D7E0EE] bg-[#F8FAFD] shadow-[0_6px_24px_rgba(22,43,77,0.08)]" data-testid="section-sale">
+             <div className="border-b border-[#E4EAF2] px-4 py-3">
               <div className="flex items-center justify-between"><div><h2 className="text-base font-bold text-[#162B4D]">Current sale</h2><p className="mt-0.5 text-xs text-[#7B8799]">{cart.length ? `${cart.length} line item${cart.length === 1 ? "" : "s"}` : "Add fish to begin"}</p></div><div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#E8EEF8] text-[#364F9F]"><ShoppingBasket className="h-4 w-4" /></div></div>
             </div>
 
-            <div className="max-h-[340px] overflow-y-auto px-5 py-3">
+             <div className="max-h-[280px] overflow-y-auto px-4 py-2">
               {cart.length === 0 ? (
-                <div className="flex min-h-[150px] flex-col items-center justify-center text-center" data-testid="empty-pos-cart"><div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#E9EEF7] text-[#70809A]"><Fish className="h-5 w-5" /></div><p className="mt-3 text-sm font-semibold text-[#51617A]">Your basket is empty</p><p className="mt-1 text-xs text-[#8A95A5]">Tap a menu item to add it here.</p></div>
+                 <div className="flex min-h-[112px] flex-col items-center justify-center text-center" data-testid="empty-pos-cart"><div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#E9EEF7] text-[#70809A]"><Fish className="h-4 w-4" /></div><p className="mt-2 text-sm font-semibold text-[#51617A]">Your basket is empty</p><p className="mt-1 text-xs text-[#8A95A5]">Tap a menu item to add it here.</p></div>
               ) : cart.map((line) => {
                 const basis = getPricingBasis(line.unit);
                 const amount = lineTotal(line);
@@ -425,17 +402,17 @@ export default function POS() {
               })}
             </div>
 
-            <div className="border-t border-[#E4EAF2] px-5 py-4">
-              <div className="mb-4 space-y-2 text-sm"><div className="flex justify-between text-[#718096]"><span>Subtotal</span><span className="font-semibold text-[#3B4B63]" data-testid="text-pos-subtotal">{formatRupees(subtotal)}</span></div><div className="flex justify-between text-[#718096]"><span>Discount</span><span className="font-semibold text-[#3B4B63]">₹0.00</span></div><div className="flex items-end justify-between border-t border-dashed border-[#D8E0EA] pt-3"><span className="text-xs font-bold uppercase tracking-[0.14em] text-[#51617A]">Total due</span><span className="text-2xl font-bold tracking-tight text-[#162B4D]" data-testid="text-pos-total">{formatRupees(subtotal)}</span></div></div>
+             <div className="border-t border-[#E4EAF2] px-4 py-3">
+               <div className="mb-3 space-y-1.5 text-sm"><div className="flex justify-between text-[#718096]"><span>Subtotal</span><span className="font-semibold text-[#3B4B63]" data-testid="text-pos-subtotal">{formatRupees(subtotal)}</span></div><div className="flex justify-between text-[#718096]"><span>Discount</span><span className="font-semibold text-[#3B4B63]">₹0.00</span></div><div className="flex items-end justify-between border-t border-dashed border-[#D8E0EA] pt-2"><span className="text-xs font-bold uppercase tracking-[0.14em] text-[#51617A]">Total due</span><span className="text-xl font-bold tracking-tight text-[#162B4D]" data-testid="text-pos-total">{formatRupees(subtotal)}</span></div></div>
 
-              <div className="space-y-3">
+              <div className="space-y-2">
                 <div><label htmlFor="pos-customer-name" className="mb-1.5 block text-xs font-bold text-[#51617A]">Customer name <span className="text-[#D94A3D]">*</span></label><div className="relative"><UserRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#98A4B4]" /><input id="pos-customer-name" value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Enter customer name" className="h-10 w-full rounded-lg border border-[#D8E0EA] bg-white pl-9 pr-3 text-sm text-[#162B4D] outline-none placeholder:text-[#A4AFBC] focus:border-[#F05B4E] focus:ring-2 focus:ring-[#F05B4E]/10" data-testid="input-customer-name" /></div></div>
                 <div><label htmlFor="pos-customer-phone" className="mb-1.5 block text-xs font-bold text-[#51617A]">Phone <span className="font-normal text-[#A0A9B7]">optional</span></label><input id="pos-customer-phone" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="10-digit mobile number" inputMode="tel" className="h-10 w-full rounded-lg border border-[#D8E0EA] bg-white px-3 text-sm text-[#162B4D] outline-none placeholder:text-[#A4AFBC] focus:border-[#F05B4E] focus:ring-2 focus:ring-[#F05B4E]/10" data-testid="input-customer-phone" /></div>
                 <div><p className="mb-1.5 text-xs font-bold text-[#51617A]">Payment method</p><div className="flex gap-2"><PaymentButton mode="cash" selected={paymentMode === "cash"} onSelect={setPaymentMode} icon={Banknote} label="Cash" /><PaymentButton mode="upi" selected={paymentMode === "upi"} onSelect={setPaymentMode} icon={Smartphone} label="UPI" /><PaymentButton mode="card" selected={paymentMode === "card"} onSelect={setPaymentMode} icon={CreditCard} label="Card" /></div></div>
               </div>
 
               {submitError && <div className="mt-3 flex gap-2 rounded-lg border border-[#F2C2BC] bg-[#FFF4F2] px-3 py-2.5 text-xs leading-5 text-[#B8443B]" role="alert" data-testid="status-sale-error"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /> <span>{submitError}</span></div>}
-              <button type="button" onClick={() => void submitSale()} disabled={!canSubmit} className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#F05B4E] text-sm font-bold text-white shadow-[0_6px_12px_rgba(240,91,78,0.22)] transition-all hover:bg-[#D94A3D] active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-[#D7DDE5] disabled:text-[#8A95A5] disabled:shadow-none" data-testid="button-complete-sale">
+              <button type="button" onClick={() => void submitSale()} disabled={!canSubmit} className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-[#F05B4E] text-sm font-bold text-white shadow-[0_6px_12px_rgba(240,91,78,0.22)] transition-all hover:bg-[#D94A3D] active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-[#D7DDE5] disabled:text-[#8A95A5] disabled:shadow-none" data-testid="button-complete-sale">
                 {submitting ? <><Loader2 className="h-4 w-4 animate-spin" /> Completing sale</> : <>Complete takeaway sale <ChevronRight className="h-4 w-4" /></>}
               </button>
               {cart.length > 0 && !customerName.trim() && <p className="mt-2 text-center text-[11px] text-[#A25952]" data-testid="text-name-required">Customer name is required to complete the sale.</p>}

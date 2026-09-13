@@ -165,7 +165,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
     return () => mq.removeEventListener("change", apply);
   }, []);
   // On mobile the drawer should always render in "expanded" mode (with labels)
-  const expanded = isMobile ? true : sidebarOpen;
+  const isPos = location === "/pos";
+  const expanded = isMobile ? true : (isPos ? false : sidebarOpen);
   // Close drawer on route change
   useEffect(() => {
     setMobileOpen(false);
@@ -269,7 +270,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     : masterAdminNavItems;
   const roleLabel = isSuperHub ? "Super Hub" : isSubHub ? "Sub Hub" : isDelivery ? "Delivery" : "Master Admin";
 
-  const sidebarW = sidebarOpen ? "220px" : "56px";
+  const sidebarW = expanded ? "220px" : "56px";
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#F4F6FA]" style={{ ["--sidebar-w" as any]: sidebarW }}>
@@ -499,13 +500,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* Desktop-only collapse/expand toggle at the bottom */}
-        <button
-          onClick={() => setSidebarOpen((o) => !o)}
-          className="hidden md:flex items-center justify-center py-3 border-t border-white/10 hover:bg-white/10 transition-colors text-white/50 hover:text-white w-full"
-          title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
-        >
-          {sidebarOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-        </button>
+        {!isPos && (
+          <button
+            onClick={() => setSidebarOpen((o) => !o)}
+            className="hidden md:flex items-center justify-center py-3 border-t border-white/10 hover:bg-white/10 transition-colors text-white/50 hover:text-white w-full"
+            title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+          >
+            {sidebarOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+          </button>
+        )}
       </aside>
 
       {/* Main Content */}
@@ -535,9 +538,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <div className={`flex-1 min-w-0 min-h-0 bg-white ${
           location.startsWith("/live-chat")
             ? "overflow-hidden p-0 flex flex-col"
-            : `overflow-y-auto overflow-x-hidden ${
+              : `overflow-y-auto overflow-x-hidden ${
                 location.startsWith("/day-end-report")
                   ? "p-0"
+                    : location === "/pos"
+                      ? "p-3"
                   : location.startsWith("/orders")
                     ? "px-4 py-3"
                     : location.startsWith("/my-deliveries") || location.startsWith("/delivery-report")
