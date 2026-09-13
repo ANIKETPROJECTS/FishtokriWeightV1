@@ -973,8 +973,6 @@ const PRODUCT_COLS = [
   { key: "originalPrice", header: "MRP" },
   { key: "discountPct", header: "Discount %" },
   { key: "unit", header: "Unit" },
-  { key: "pieces", header: "Pieces" },
-  { key: "serves", header: "Serves" },
   { key: "quantity", header: "Stock" },
   { key: "status", header: "Status (available/out_of_stock)" },
   { key: "isArchived", header: "Archived (yes/no)" },
@@ -1158,8 +1156,6 @@ function ProductsTab({ subHubId, onSetExcel }: { subHubId: string; onSetExcel: (
       { header: "Unit",                            key: "unit",             width: 16 },
       { header: "Gross Weight",                    key: "grossWeight",      width: 14 },
       { header: "Net Weight",                      key: "netWeight",        width: 14 },
-      { header: "Pieces",                          key: "pieces",           width: 12 },
-      { header: "Serves",                          key: "serves",           width: 12 },
       { header: "Stock",                           key: "stock",            width: 10 },
       { header: "Status (available/out_of_stock)", key: "status",           width: 30 },
       { header: "Archived (yes/no)",               key: "archived",         width: 16 },
@@ -1188,8 +1184,6 @@ function ProductsTab({ subHubId, onSetExcel }: { subHubId: string; onSetExcel: (
         unit: p.unit ?? "",
         grossWeight: p.grossWeight ?? "",
         netWeight: p.netWeight ?? "",
-        pieces: p.pieces ?? "",
-        serves: p.serves ?? "",
         stock: p.quantity ?? 0,
         status: p.status ?? "available",
         archived: p.isArchived ? "yes" : "no",
@@ -1368,8 +1362,6 @@ function ProductsTab({ subHubId, onSetExcel }: { subHubId: string; onSetExcel: (
           unit: r["Unit"] ?? r["unit"] ?? "per pack",
           grossWeight: String(r["Gross Weight"] ?? r["grossWeight"] ?? ""),
           netWeight: String(r["Net Weight"] ?? r["netWeight"] ?? ""),
-          pieces: String(r["Pieces"] ?? r["pieces"] ?? ""),
-          serves: String(r["Serves"] ?? r["serves"] ?? ""),
           quantity: Number(r["Stock"] ?? r["quantity"] ?? 0),
           status: r["Status (available/out_of_stock)"] ?? r["status"] ?? "available",
           isArchived: r["Archived (yes/no)"] ?? r["isArchived"] ?? "no",
@@ -1416,8 +1408,6 @@ function ProductsTab({ subHubId, onSetExcel }: { subHubId: string; onSetExcel: (
             unit: r["Unit"] ?? r["unit"] ?? orig?.unit ?? "per pack",
             grossWeight: String(r["Gross Weight"] ?? r["grossWeight"] ?? orig?.grossWeight ?? ""),
             netWeight: String(r["Net Weight"] ?? r["netWeight"] ?? orig?.netWeight ?? ""),
-            pieces: String(r["Pieces"] ?? r["pieces"] ?? orig?.pieces ?? ""),
-            serves: String(r["Serves"] ?? r["serves"] ?? orig?.serves ?? ""),
             quantity: Number(r["Stock"] ?? r["quantity"] ?? orig?.quantity ?? 0),
             status: r["Status (available/out_of_stock)"] ?? r["status"] ?? orig?.status ?? "available",
             isArchived: r["Archived (yes/no)"] ?? r["isArchived"] ?? (orig?.isArchived ? "yes" : "no"),
@@ -1439,8 +1429,7 @@ function ProductsTab({ subHubId, onSetExcel }: { subHubId: string; onSetExcel: (
             row.unit !== (orig.unit ?? "") ||
             row.grossWeight !== String(orig.grossWeight ?? "") ||
             row.netWeight !== String(orig.netWeight ?? "") ||
-            row.pieces !== String(orig.pieces ?? "") ||
-            row.serves !== String(orig.serves ?? "") || row.quantity !== (orig.quantity ?? 0) ||
+            row.quantity !== (orig.quantity ?? 0) ||
             row.status !== (orig.status ?? "available") ||
             (String(row.isArchived).toLowerCase() === "yes") !== (orig.isArchived === true) ||
             row.preorderMode !== (orig.preorderMode ?? "normal") ||
@@ -1504,7 +1493,6 @@ function ProductsTab({ subHubId, onSetExcel }: { subHubId: string; onSetExcel: (
                 <th className="px-5 py-3 text-sm font-bold text-black uppercase tracking-wide">Category</th>
                 <th className="px-5 py-3 text-sm font-bold text-black uppercase tracking-wide">Price</th>
                 <th className="px-5 py-3 text-sm font-bold text-black uppercase tracking-wide">Weight / Unit</th>
-                <th className="px-5 py-3 text-sm font-bold text-black uppercase tracking-wide">Pieces / Serves</th>
                 <th className="px-5 py-3 text-sm font-bold text-black uppercase tracking-wide text-center">Stock</th>
                 <th className="px-5 py-3 text-sm font-bold text-black uppercase tracking-wide text-center">Recipes</th>
                 <th className="px-5 py-3 text-sm font-bold text-black uppercase tracking-wide">Preorder</th>
@@ -1535,10 +1523,6 @@ function ProductsTab({ subHubId, onSetExcel }: { subHubId: string; onSetExcel: (
                   </td>
                   <td className="px-5 py-4">
                     <p className="text-sm text-black font-medium">{p.unit || "—"}</p>
-                  </td>
-                  <td className="px-5 py-4">
-                    <p className="text-sm text-black font-medium">{p.pieces || "—"}</p>
-                    {p.serves && <p className="text-sm text-black">{p.serves}</p>}
                   </td>
                   <td className="px-5 py-4 text-center">
                     <div className="flex flex-col items-center gap-0.5">
