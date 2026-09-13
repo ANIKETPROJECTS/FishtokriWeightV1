@@ -17,10 +17,6 @@ import iconMenuProducts from "@/assets/icon-menu-products.png";
 import iconMenuCategories from "@/assets/icon-menu-categories.png";
 import iconMenuCombos from "@/assets/icon-menu-combos.png";
 import iconMenuCoupons from "@/assets/icon-menu-coupons.png";
-import iconMenuBanners from "@/assets/icon-menu-banners.png";
-import iconMenuSections from "@/assets/icon-menu-sections.png";
-import iconMenuTimeslots from "@/assets/icon-menu-timeslots.png";
-import iconPin from "@/assets/icon-pin.png";
 import iconView from "@/assets/icon-view.png";
 import iconEdit from "@/assets/icon-edit.png";
 import iconDelete from "@/assets/icon-delete.png";
@@ -161,7 +157,7 @@ async function apiFetch(path: string, options?: RequestInit) {
   return res.json();
 }
 
-type Tab = "products" | "categories" | "combos" | "coupons" | "carousels" | "sections" | "timeslots" | "pincodes";
+type Tab = "products" | "categories" | "combos" | "coupons";
 type Layout = "list" | "grid";
 
 type BatchForm = {
@@ -205,10 +201,6 @@ const TABS: { key: Tab; label: string; icon: any }[] = [
   { key: "categories", label: "Categories", icon: Tag },
   { key: "combos", label: "Combos", icon: ShoppingBag },
   { key: "coupons", label: "Coupons", icon: Ticket },
-  { key: "carousels", label: "Banners", icon: Image },
-  { key: "sections", label: "Sections", icon: LayoutList },
-  { key: "timeslots", label: "Time Slots", icon: Clock },
-  { key: "pincodes", label: "Pincodes", icon: Database },
 ];
 
 // ─── SHARED TOOLBAR ───────────────────────────────────────────────────────────
@@ -562,15 +554,12 @@ export default function SubHubMenuAdmin() {
   const [statsError, setStatsError] = useState("");
   const [excelBar, setExcelBar] = useState<ExcelBarConfig>(null);
 
-  const [pincodesCount, setPincodesCount] = useState(0);
-
   const loadStats = useCallback(async (silent = false) => {
     if (!silent) { setLoadingStats(true); setStatsError(""); }
     try {
       const data = await apiFetch(`/api/sub-hubs/${subHubId}/menu/stats`);
       setStats(data.stats);
       setDbName(data.stats.dbName ?? "");
-      setPincodesCount(Number(data.stats.pincodes) || 0);
     } catch (err: any) {
       if (!silent) setStatsError(err.message);
     } finally {
@@ -599,10 +588,6 @@ export default function SubHubMenuAdmin() {
     { label: "Categories", value: stats?.categories ?? 0, img: iconMenuCategories },
     { label: "Combos", value: stats?.combos ?? 0, img: iconMenuCombos },
     { label: "Coupons", value: stats?.coupons ?? 0, img: iconMenuCoupons },
-    { label: "Banners", value: stats?.carousels ?? 0, img: iconMenuBanners },
-    { label: "Sections", value: stats?.sections ?? 0, img: iconMenuSections },
-    { label: "Time Slots", value: stats?.timeslots ?? 0, img: iconMenuTimeslots },
-    { label: "Pincodes", value: pincodesCount, img: iconPin },
   ];
 
   const headerSlot = document.getElementById("page-header-slot");
@@ -655,9 +640,9 @@ export default function SubHubMenuAdmin() {
         </div>
       )}
 
-      <div className="grid grid-cols-4 md:grid-cols-8 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {loadingStats
-          ? [1, 2, 3, 4, 5, 6, 7, 8].map((i) => <Skeleton key={i} className="h-24 rounded-xl" />)
+          ? [1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-24 rounded-xl" />)
           : statCards.map(({ label, value, img }) => (
             <button
               key={label}
@@ -678,11 +663,7 @@ export default function SubHubMenuAdmin() {
           {!statsError && tab === "categories" && <CategoriesTab subHubId={subHubId} onRefreshStats={loadStats} onSetExcel={setExcelBar} />}
           {!statsError && tab === "combos" && <CombosTab subHubId={subHubId} onSetExcel={setExcelBar} />}
           {!statsError && tab === "coupons" && <CouponsTab subHubId={subHubId} onSetExcel={setExcelBar} />}
-          {!statsError && tab === "carousels" && <CarouselsTab subHubId={subHubId} />}
-          {!statsError && tab === "sections" && <SectionsTab subHubId={subHubId} onSetExcel={setExcelBar} />}
-          {!statsError && tab === "timeslots" && <TimeSlotsTab subHubId={subHubId} onSetExcel={setExcelBar} />}
-          {tab === "pincodes" && <PincodesTab subHubId={subHubId} onCountChange={setPincodesCount} />}
-          {statsError && tab !== "pincodes" && <div className="py-12 text-center text-gray-400 text-sm">Fix the database connection to manage this sub hub's menu.</div>}
+          {statsError && <div className="py-12 text-center text-gray-400 text-sm">Fix the database connection to manage this sub hub's menu.</div>}
         </div>
       </div>
     </div>

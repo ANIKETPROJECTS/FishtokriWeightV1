@@ -6,7 +6,7 @@ import {
   getGetSuperHubsQueryKey,
 } from "@workspace/api-client-react";
 import {
-  Building2, MapPin, Users, Layers, TrendingUp, Activity,
+  Building2, MapPin, Users, TrendingUp,
   CheckCircle2, AlertCircle, ShoppingBag, Truck, Clock,
   Package, XCircle, RefreshCw, Phone, User, UserCheck,
   ArrowRight, Store, CircleDollarSign,
@@ -41,8 +41,6 @@ function formatDate(d: any) {
 
 // ─── COLORS ───────────────────────────────────────────────────────────────────
 const HUB_COLORS   = ["#1A56DB", "#10B981", "#F59E0B", "#8B5CF6", "#EF4444"];
-const ACTIVE_COLOR = "#10B981";
-const INACTIVE_COLOR = "#F87171";
 
 const ORDER_STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; chart: string; icon: any }> = {
   pending:          { label: "Pending",         color: "text-amber-600",  bg: "bg-amber-50 border-amber-200",  chart: "#F59E0B", icon: Clock },
@@ -129,8 +127,6 @@ export default function Dashboard() {
   const [orderStats, setOrderStats]           = useState<Record<string, number>>({});
   const [recentOrders, setRecentOrders]       = useState<any[]>([]);
   const [customers, setCustomers]             = useState<{ total: number }>({ total: 0 });
-  const [vendors, setVendors]                 = useState<{ total: number }>({ total: 0 });
-  const [deliveryPersons, setDeliveryPersons] = useState<{ total: number }>({ total: 0 });
   const [extraLoading, setExtraLoading]       = useState(true);
 
   const loadExtra = useCallback(async (silent = false) => {
@@ -140,14 +136,10 @@ export default function Dashboard() {
         apiFetch("/api/orders/stats"),
         apiFetch("/api/orders?limit=6&sort=createdAt&order=desc"),
         apiFetch("/api/customers?limit=1"),
-        apiFetch("/api/vendors?limit=1"),
-        apiFetch("/api/users?role=delivery_person&limit=1"),
       ]);
       if (oStats.status === "fulfilled")   setOrderStats(oStats.value.stats ?? {});
       if (oRecent.status === "fulfilled")  setRecentOrders(oRecent.value.orders ?? []);
       if (cust.status === "fulfilled")     setCustomers({ total: cust.value.total ?? 0 });
-      if (vend.status === "fulfilled")     setVendors({ total: vend.value.total ?? 0 });
-      if (dp.status === "fulfilled")       setDeliveryPersons({ total: dp.value.total ?? 0 });
     } finally { setExtraLoading(false); }
   }, []);
 
@@ -184,17 +176,9 @@ export default function Dashboard() {
   }));
 
   // ── Hub bar data ─────────────────────────────────────────────────────────
-  const subHubsBarData = superHubs.map((h) => ({ name: h.name, "Sub Hubs": h.subHubCount }));
-
-  const hubStatusData = [
-    { name: "Active",   value: stats?.activeSuperHubs ?? 0 },
-    { name: "Inactive", value: (stats?.totalSuperHubs ?? 0) - (stats?.activeSuperHubs ?? 0) },
-  ].filter((d) => d.value > 0);
-
-  const subHubStatusData = [
-    { name: "Active",   value: stats?.activeSubHubs ?? 0 },
-    { name: "Inactive", value: (stats?.totalSubHubs ?? 0) - (stats?.activeSubHubs ?? 0) },
-  ].filter((d) => d.value > 0);
+  const awaitingAction = (orderStats.pending ?? 0) + (orderStats.confirmed ?? 0);
+  const readyForHandover = orderStats.out_for_delivery ?? 0;
+  const itemsHandedOver = (orderStats.delivered ?? 0) + (orderStats.takeaway ?? 0);
 
   return (
     <div className="space-y-7 max-w-7xl mx-auto">
