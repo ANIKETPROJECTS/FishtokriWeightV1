@@ -36,6 +36,11 @@ type Category = { _id: string; name: string };
 type Hub = { id: string; name: string };
 type CartLine = Product & { cartQuantity: number };
 type PaymentMode = "cash" | "upi" | "card";
+type PricingBasis = {
+  isWeightBased: boolean;
+  basisGrams: number;
+  label: string;
+};
 
 const coral = "#F05B4E";
 const ink = "#162B4D";
@@ -48,6 +53,37 @@ function getCategoryId(product: Product) {
 function getCategoryName(product: Product, categories: Category[]) {
   if (typeof product.category === "object" && product.category?.name) return product.category.name;
   return categories.find((category) => String(category._id) === getCategoryId(product))?.name || String(product.category || "Fresh catch");
+}
+
+function getPricingBasis(unit?: string): PricingBasis {
+  const normalized = String(unit || "").trim().toLowerCase();
+  if (normalized.includes("kg")) return { isWeightBased: true, basisGrams: 1000, label: "kg" };
+  const gramMatch = normalized.match(/(\d+(?:\.\d+)?)\s*g/);
+  if (gramMatch) return { isWeightBased: true, basisGrams: Number(gramMatch[1]), label: `${gramMatch[1]}g` };
+  return { isWeightBased: false, basisGrams: 1, label: normalized || "unit" };
+}
+
+function formatWeight(weightInKg: number) {
+  const grams = Math.round((Number(weightInKg) || 0) * 1000);
+  if (grams < 1000) return `${grams} g`;
+  return `${formatQty(weightInKg)} kg`;
+}
+
+function productRateLabel(product: Product) {
+  const basis = getPricingBasis(product.unit);
+  return basis.isWeightBased ? `${formatRupees(Number(product.price) || 0)} / ${basis.label}` : `${formatRupees(Number(product.price) || 0)} / ${basis.label}`;
+}
+
+function lineTotal(line: CartLine) {
+  const basis = getPricingBasis(line.unit);
+  const price = Number(line.price) || 0;
+  const quantity = Number(line.cartQuantity) || 0;
+  return basis.isWeightBased ? price * quantity * (1000 / basis.basisGrams) : price * quantity;
+}
+
+function effectiveRatePerKg(line: CartLine) {
+  const basis = getPricingBasis(line.unit);
+  return basis.isWeightBased ? (Number(line.price) || 0) * (1000 / basis.basisGrams) : Number(line.price) || 0;
 }
 
 function productMatchesCategory(product: Product, selectedCategory: string, categories: Category[]) {
@@ -65,7 +101,10 @@ function formatQty(value: number) {
 }
 
 function stockLabel(product: Product) {
-  return `${formatQty(Number(product.quantity) || 0)} ${product.unit || "units"} available`;
+  const basis = getPricingBasis(product.unit);
+  return basis.isWeightBased
+    ? `${formatWeight(Number(product.quantity) || 0)} available`
+    : `${formatQty(Number(product.quantity) || 0)} ${product.unit || "units"} available`;
 }
 
 function PageSkeleton() {
@@ -179,7 +218,7 @@ export default function POS() {
   }, [categories, products, search, selectedCategory]);
 
   const subtotal = useMemo(
-    () => cart.reduce((sum, line) => sum + Number(line.price || 0) * Number(line.cartQuantity || 0), 0),
+    () => cart.reduce((sum, line) => sum + lineTotal(line), 0),
     [cart],
   );
 
@@ -190,9 +229,13 @@ export default function POS() {
     setCart((current) => {
       const found = current.find((line) => line._id === product._id);
       if (found) {
-        return current.map((line) => line._id === product._id ? { ...line, cartQuantity: Math.min(available, line.cartQuantity + 1) } : line);
+        const step = getPricingBasis(product.unit).isWeightBased ? 0.05 : 1;
+        return current.map((line) => line._id === product._id
+          ? { ...line, cartQuantity: Math.min(available, line.cartQuantity + step) }
+          : line);
       }
-      return [...current, { ...product, cartQuantity: Math.min(1, available) }];
+      const initialQuantity = getPricingBasis(product.unit).isWeightBased ? Math.min(0, available) : Math.min(1, available);
+      return [...current, { ...product, cartQuantity: initialQuantity }];
     });
   };
 
@@ -202,15 +245,11 @@ export default function POS() {
     const parsed = Number(nextValue);
     if (!Number.isFinite(parsed)) return;
     const next = Math.min(Math.max(parsed, 0), Number(line.quantity) || 0);
-    if (next === 0) {
-      setCart((current) => current.filter((item) => item._id !== id));
-      return;
-    }
     setCart((current) => current.map((item) => item._id === id ? { ...item, cartQuantity: next } : item));
   };
 
   const shiftQuantity = (line: CartLine, amount: number) => {
-    const step = /kg|kilogram/i.test(line.unit || "") ? 0.25 : 1;
+    const step = getPricingBasis(line.unit).isWeightBased ? 0.05 : 1;
     updateQuantity(line._id, String(Math.min(Number(line.quantity) || 0, Math.max(0, line.cartQuantity + amount * step))));
   };
 
@@ -225,12 +264,12 @@ export default function POS() {
         body: JSON.stringify({
           customerName: customerName.trim(),
           phone: phone.trim(),
-          items: cart.map((line) => ({
+          items: cart.filter((line) => Number(line.cartQuantity) > 0).map((line) => ({
             productId: line._id,
             name: line.name,
-            price: Number(line.price) || 0,
+            price: effectiveRatePerKg(line),
             quantity: Number(line.cartQuantity),
-            unit: line.unit || "",
+            unit: getPricingBasis(line.unit).isWeightBased ? "per kg" : (line.unit || ""),
           })),
           deliveryType: "takeaway",
           subHubId: hub.id,
@@ -348,13 +387,13 @@ export default function POS() {
                     >
                       <div className="relative aspect-[1.5] overflow-hidden bg-[#F4EFEA]">
                         {product.imageUrl ? <img src={product.imageUrl} alt="" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" data-testid={`img-product-${product._id}`} /> : <div className="flex h-full items-center justify-center text-[#B3AAA0]"><Fish className="h-8 w-8" /></div>}
-                        {inCart && <span className="absolute right-2 top-2 flex h-6 min-w-6 items-center justify-center rounded-full bg-[#F05B4E] px-1.5 text-[11px] font-bold text-white" data-testid={`badge-cart-product-${product._id}`}>{formatQty(inCart.cartQuantity)}</span>}
+                        {inCart && <span className="absolute right-2 top-2 flex h-6 min-w-6 items-center justify-center rounded-full bg-[#F05B4E] px-1.5 text-[11px] font-bold text-white" data-testid={`badge-cart-product-${product._id}`}>{getPricingBasis(product.unit).isWeightBased ? formatWeight(inCart.cartQuantity) : formatQty(inCart.cartQuantity)}</span>}
                       </div>
                       <div className="p-3">
                         <p className="truncate text-sm font-semibold text-[#162B4D]">{product.name}</p>
                         <p className="mt-1 truncate text-[10px] font-medium uppercase tracking-wide text-[#9A8F84]">{getCategoryName(product, categories)}</p>
                         <div className="mt-3 flex items-end justify-between gap-1">
-                          <div><p className="text-sm font-bold text-[#D94A3D]">{formatRupees(Number(product.price) || 0)}</p><p className="text-[10px] text-[#8B95A5]">per {product.unit || "unit"}</p></div>
+                          <div><p className="text-sm font-bold text-[#D94A3D]">{productRateLabel(product)}</p><p className="text-[10px] text-[#8B95A5]">rate basis</p></div>
                           <span className={`text-[10px] font-semibold ${outOfStock ? "text-[#B34A43]" : "text-[#6E7C70]"}`}>{outOfStock ? "Out of stock" : stockLabel(product)}</span>
                         </div>
                       </div>
@@ -373,12 +412,17 @@ export default function POS() {
             <div className="max-h-[340px] overflow-y-auto px-5 py-3">
               {cart.length === 0 ? (
                 <div className="flex min-h-[150px] flex-col items-center justify-center text-center" data-testid="empty-pos-cart"><div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#E9EEF7] text-[#70809A]"><Fish className="h-5 w-5" /></div><p className="mt-3 text-sm font-semibold text-[#51617A]">Your basket is empty</p><p className="mt-1 text-xs text-[#8A95A5]">Tap a menu item to add it here.</p></div>
-              ) : cart.map((line) => (
+              ) : cart.map((line) => {
+                const basis = getPricingBasis(line.unit);
+                const amount = lineTotal(line);
+                return (
                 <div key={line._id} className="border-b border-[#E8EDF3] py-3 last:border-0" data-testid={`row-cart-${line._id}`}>
-                  <div className="flex items-start gap-2"><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-[#162B4D]">{line.name}</p><p className="mt-0.5 text-[11px] text-[#8A95A5]">{formatRupees(Number(line.price) || 0)} / {line.unit || "unit"}</p></div><p className="text-sm font-bold text-[#162B4D]">{formatRupees(Number(line.price) * line.cartQuantity)}</p><button type="button" onClick={() => setCart((current) => current.filter((item) => item._id !== line._id))} className="rounded p-1 text-[#A1AAB7] hover:bg-[#FFF0ED] hover:text-[#D94A3D]" aria-label={`Remove ${line.name}`} data-testid={`button-remove-cart-${line._id}`}><Trash2 className="h-3.5 w-3.5" /></button></div>
-                  <div className="mt-2 flex items-center justify-between"><span className="text-[10px] font-semibold uppercase tracking-wide text-[#9A8F84]">Quantity / weight</span><div className="flex items-center gap-1.5"><button type="button" onClick={() => shiftQuantity(line, -1)} className="flex h-7 w-7 items-center justify-center rounded-md border border-[#D8E0EA] bg-white text-[#52627A] hover:border-[#F1A59D] hover:text-[#D94A3D]" aria-label={`Decrease ${line.name}`} data-testid={`button-decrease-cart-${line._id}`}><Minus className="h-3 w-3" /></button><input type="number" min="0" max={line.quantity} step="0.01" value={line.cartQuantity} onChange={(event) => updateQuantity(line._id, event.target.value)} className="h-7 w-[70px] rounded-md border border-[#D8E0EA] bg-white px-2 text-center text-xs font-bold text-[#162B4D] outline-none focus:border-[#F05B4E]" aria-label={`Quantity for ${line.name}`} data-testid={`input-quantity-${line._id}`} /><button type="button" onClick={() => shiftQuantity(line, 1)} disabled={line.cartQuantity >= Number(line.quantity)} className="flex h-7 w-7 items-center justify-center rounded-md border border-[#D8E0EA] bg-white text-[#52627A] hover:border-[#F1A59D] hover:text-[#D94A3D] disabled:cursor-not-allowed disabled:opacity-40" aria-label={`Increase ${line.name}`} data-testid={`button-increase-cart-${line._id}`}><Plus className="h-3 w-3" /></button><span className="w-8 text-[10px] text-[#7E8998]">{line.unit || "unit"}</span></div></div>
+                  <div className="flex items-start gap-2"><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-[#162B4D]">{line.name}</p><p className="mt-0.5 text-[11px] text-[#8A95A5]">{productRateLabel(line)}</p></div><p className="text-sm font-bold text-[#162B4D]">{formatRupees(amount)}</p><button type="button" onClick={() => setCart((current) => current.filter((item) => item._id !== line._id))} className="rounded p-1 text-[#A1AAB7] hover:bg-[#FFF0ED] hover:text-[#D94A3D]" aria-label={`Remove ${line.name}`} data-testid={`button-remove-cart-${line._id}`}><Trash2 className="h-3.5 w-3.5" /></button></div>
+                  <div className="mt-2 flex items-center justify-between"><span className="text-[10px] font-semibold uppercase tracking-wide text-[#9A8F84]">{basis.isWeightBased ? "Weight from scale" : "Quantity"}</span><div className="flex items-center gap-1.5"><button type="button" onClick={() => shiftQuantity(line, -1)} className="flex h-7 w-7 items-center justify-center rounded-md border border-[#D8E0EA] bg-white text-[#52627A] hover:border-[#F1A59D] hover:text-[#D94A3D]" aria-label={`Decrease ${line.name}`} data-testid={`button-decrease-cart-${line._id}`}><Minus className="h-3 w-3" /></button><input type="number" min="0" max={line.quantity} step={basis.isWeightBased ? "0.001" : "1"} value={line.cartQuantity} onChange={(event) => updateQuantity(line._id, event.target.value)} className="h-7 w-[78px] rounded-md border border-[#D8E0EA] bg-white px-2 text-center text-xs font-bold text-[#162B4D] outline-none focus:border-[#F05B4E]" aria-label={`${basis.isWeightBased ? "Weight in kilograms" : "Quantity"} for ${line.name}`} data-testid={`input-quantity-${line._id}`} /><button type="button" onClick={() => shiftQuantity(line, 1)} disabled={line.cartQuantity >= Number(line.quantity)} className="flex h-7 w-7 items-center justify-center rounded-md border border-[#D8E0EA] bg-white text-[#52627A] hover:border-[#F1A59D] hover:text-[#D94A3D] disabled:cursor-not-allowed disabled:opacity-40" aria-label={`Increase ${line.name}`} data-testid={`button-increase-cart-${line._id}`}><Plus className="h-3 w-3" /></button><span className="w-8 text-[10px] text-[#7E8998]">{basis.isWeightBased ? "kg" : line.unit || "unit"}</span></div></div>
+                  {basis.isWeightBased && <p className="mt-1 text-[10px] text-[#7E8998]">{line.cartQuantity > 0 ? `${formatWeight(line.cartQuantity)} · ${formatRupees(amount)}` : "Waiting for weight from scale"}</p>}
                 </div>
-              ))}
+                );
+              })}
             </div>
 
             <div className="border-t border-[#E4EAF2] px-5 py-4">
