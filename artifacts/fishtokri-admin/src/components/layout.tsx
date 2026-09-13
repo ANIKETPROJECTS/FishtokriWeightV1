@@ -12,6 +12,7 @@ const masterAdminNavItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/hubs", label: "Hubs", icon: Warehouse },
   { href: "/orders", label: "Orders", icon: ClipboardList },
+  { href: "/pos", label: "POS", icon: Receipt },
   {
     href: "/inventory",
     label: "Inventory Management",
@@ -227,6 +228,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     "/dashboard",
     "/hubs",
     "/orders",
+    "/pos",
     "/fish-calculator",
     "/inventory",
     "/banking",
@@ -237,6 +239,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const subHubAllowedHrefs = new Set([
     "/dashboard",
     "/orders",
+    "/pos",
     "/inventory",
     "/customers",
     "/delivery-report",
