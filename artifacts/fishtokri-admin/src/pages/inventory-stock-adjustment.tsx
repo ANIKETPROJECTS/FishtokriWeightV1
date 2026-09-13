@@ -1040,6 +1040,7 @@ export default function InventoryStockAdjustment() {
       ...r,
       productId: p.id, productName: p.name, category: p.category || "",
       unit: p.unit, quantityBefore: p.quantity, search: p.name,
+      addQuantity: "", rawWeight: "", cleanedWeight: "", removeQuantity: "",
       batchNumber: r.mode === "add" ? autoNum : "",
       batchNotes: "",
       selectedBatchId: "",
@@ -1047,11 +1048,19 @@ export default function InventoryStockAdjustment() {
   }
 
   function clearProduct(i: number) {
-    updateRow(i, { productId: "", productName: "", category: "", unit: "", quantityBefore: 0, search: "", batchNumber: "", selectedBatchId: "" });
+    updateRow(i, {
+      productId: "", productName: "", category: "", unit: "", quantityBefore: 0, search: "",
+      addQuantity: "", rawWeight: "", cleanedWeight: "", removeQuantity: "",
+      batchNumber: "", selectedBatchId: "",
+    });
   }
 
   function onSearchChange(i: number, val: string) {
-    updateRow(i, { search: val, productId: "", productName: "", category: "", unit: "", quantityBefore: 0, batchNumber: "", selectedBatchId: "" });
+    updateRow(i, {
+      search: val, productId: "", productName: "", category: "", unit: "", quantityBefore: 0,
+      addQuantity: "", rawWeight: "", cleanedWeight: "", removeQuantity: "",
+      batchNumber: "", selectedBatchId: "",
+    });
   }
 
   function changeMode(i: number, mode: FormMode) {
@@ -1063,7 +1072,16 @@ export default function InventoryStockAdjustment() {
       const productBatches: Batch[] = prod?.batches ?? [];
       batchNumber = generateNextBatchNumber(row.productName, productBatches, prod?.shortCode);
     }
-    updateRow(i, { mode, batchNumber, batchNotes: "", selectedBatchId: "" });
+    updateRow(i, {
+      mode,
+      batchNumber,
+      batchNotes: "",
+      selectedBatchId: "",
+      rawWeight: mode === "add" ? row.rawWeight : "",
+      cleanedWeight: mode === "add" ? row.cleanedWeight : "",
+      addQuantity: mode === "remove" ? "" : row.addQuantity,
+      removeQuantity: mode === "remove" ? row.removeQuantity : "",
+    });
   }
 
   function setShelfLife(i: number, val: string) {
@@ -1082,11 +1100,10 @@ export default function InventoryStockAdjustment() {
   }
 
   function setWeight(i: number, field: "rawWeight" | "cleanedWeight", value: string) {
-    const row = formRows[i];
     const patch: Partial<FormRow> = { [field]: value };
     if (field === "cleanedWeight" && value !== "") {
       patch.addQuantity = value;
-    } else if (field === "cleanedWeight" && row.rawWeight === "") {
+    } else if (field === "cleanedWeight") {
       patch.addQuantity = "";
     }
     updateRow(i, patch);
