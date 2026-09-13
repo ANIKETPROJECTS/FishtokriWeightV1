@@ -174,6 +174,8 @@ export default function POS() {
   const [customerName, setCustomerName] = useState("");
   const [phone, setPhone] = useState("");
   const [paymentMode, setPaymentMode] = useState<PaymentMode>("cash");
+  const [discountType, setDiscountType] = useState<"flat" | "percent">("flat");
+  const [discountValue, setDiscountValue] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [submitError, setSubmitError] = useState("");
@@ -220,6 +222,12 @@ export default function POS() {
     () => cart.reduce((sum, line) => sum + lineTotal(line), 0),
     [cart],
   );
+  const discountAmount = useMemo(() => {
+    const value = Math.max(0, Number(discountValue) || 0);
+    if (discountType === "percent") return Math.min(subtotal, subtotal * Math.min(value, 100) / 100);
+    return Math.min(subtotal, value);
+  }, [discountType, discountValue, subtotal]);
+  const total = Math.max(0, subtotal - discountAmount);
 
   const addProduct = (product: Product) => {
     const available = Number(product.quantity) || 0;
@@ -277,10 +285,10 @@ export default function POS() {
           status: "takeaway",
           paymentStatus: "paid",
           paymentMode,
-          paidAmount: subtotal,
+          paidAmount: total,
           subtotal,
-          discount: 0,
-          total: subtotal,
+          discount: discountAmount,
+          total,
           orderType: "normal",
         }),
       });
@@ -290,6 +298,8 @@ export default function POS() {
       setCustomerName("");
       setPhone("");
       setPaymentMode("cash");
+      setDiscountType("flat");
+      setDiscountValue("");
       void loadMenu();
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "Sale could not be completed. Check the stock and try again.");
@@ -402,8 +412,42 @@ export default function POS() {
               })}
             </div>
 
-             <div className="border-t border-[#E4EAF2] px-4 py-3">
-               <div className="mb-3 space-y-1.5 text-sm"><div className="flex justify-between text-[#718096]"><span>Subtotal</span><span className="font-semibold text-[#3B4B63]" data-testid="text-pos-subtotal">{formatRupees(subtotal)}</span></div><div className="flex justify-between text-[#718096]"><span>Discount</span><span className="font-semibold text-[#3B4B63]">₹0.00</span></div><div className="flex items-end justify-between border-t border-dashed border-[#D8E0EA] pt-2"><span className="text-xs font-bold uppercase tracking-[0.14em] text-[#51617A]">Total due</span><span className="text-xl font-bold tracking-tight text-[#162B4D]" data-testid="text-pos-total">{formatRupees(subtotal)}</span></div></div>
+              <div className="border-t border-[#E4EAF2] px-4 py-3">
+                <div className="mb-3 space-y-1.5 text-sm">
+                  <div className="flex justify-between text-[#718096]"><span>Subtotal</span><span className="font-semibold text-[#3B4B63]" data-testid="text-pos-subtotal">{formatRupees(subtotal)}</span></div>
+                  <div className="flex items-center justify-between gap-2 text-[#718096]">
+                    <label htmlFor="pos-discount-value">Discount</label>
+                    {cart.length > 0 ? (
+                      <div className="flex h-8">
+                        <select
+                          value={discountType}
+                          onChange={(event) => setDiscountType(event.target.value as "flat" | "percent")}
+                          className="rounded-l-md border border-r-0 border-[#D8E0EA] bg-[#F8FAFD] px-2 text-xs font-bold text-[#51617A] outline-none focus:border-[#F05B4E]"
+                          aria-label="Discount type"
+                          data-testid="select-discount-type"
+                        >
+                          <option value="flat">₹</option>
+                          <option value="percent">%</option>
+                        </select>
+                        <input
+                          id="pos-discount-value"
+                          type="number"
+                          min="0"
+                          max={discountType === "percent" ? 100 : subtotal}
+                          step={discountType === "percent" ? "1" : "0.01"}
+                          value={discountValue}
+                          onChange={(event) => setDiscountValue(event.target.value)}
+                          placeholder="0"
+                          className="w-[76px] rounded-r-md border border-[#D8E0EA] bg-white px-2 text-right text-xs font-bold text-[#162B4D] outline-none focus:border-[#F05B4E]"
+                          aria-label={discountType === "percent" ? "Discount percentage" : "Discount in rupees"}
+                          data-testid="input-discount-value"
+                        />
+                      </div>
+                    ) : <span className="font-semibold text-[#3B4B63]">₹0.00</span>}
+                  </div>
+                  <div className="flex justify-between text-[#718096]"><span>Discount applied</span><span className="font-semibold text-[#3B4B63]" data-testid="text-pos-discount">{formatRupees(discountAmount)}</span></div>
+                  <div className="flex items-end justify-between border-t border-dashed border-[#D8E0EA] pt-2"><span className="text-xs font-bold uppercase tracking-[0.14em] text-[#51617A]">Total due</span><span className="text-xl font-bold tracking-tight text-[#162B4D]" data-testid="text-pos-total">{formatRupees(total)}</span></div>
+                </div>
 
               <div className="space-y-2">
                 <div><label htmlFor="pos-customer-name" className="mb-1.5 block text-xs font-bold text-[#51617A]">Customer name <span className="text-[#D94A3D]">*</span></label><div className="relative"><UserRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#98A4B4]" /><input id="pos-customer-name" value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Enter customer name" className="h-10 w-full rounded-lg border border-[#D8E0EA] bg-white pl-9 pr-3 text-sm text-[#162B4D] outline-none placeholder:text-[#A4AFBC] focus:border-[#F05B4E] focus:ring-2 focus:ring-[#F05B4E]/10" data-testid="input-customer-name" /></div></div>
