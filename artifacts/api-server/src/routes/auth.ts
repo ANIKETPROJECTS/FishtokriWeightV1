@@ -31,8 +31,13 @@ router.post("/login", async (req, res) => {
 
   const { email, password, loginRole } = parsed.data;
 
+  if (loginRole && loginRole !== "master_admin") {
+    res.status(403).json({ error: "Forbidden", message: "Only Master Admin login is available." });
+    return;
+  }
+
   // Master Admin portal: credentials come from environment secrets.
-  if (loginRole === "master_admin") {
+  if (!loginRole || loginRole === "master_admin") {
     if (!ADMIN_EMAIL || !ADMIN_PASSWORD) {
       res.status(503).json({ error: "NotConfigured", message: "Master admin credentials are not configured. Set MASTER_ADMIN_EMAIL and MASTER_ADMIN_PASSWORD." });
       return;
@@ -47,56 +52,7 @@ router.post("/login", async (req, res) => {
     return;
   }
 
-  // Super Hub or Sub Hub portal: look up DB
-  try {
-    const user = await HubUser.findOne({ email });
-    if (!user) {
-      res.status(401).json({ error: "Unauthorized", message: "Invalid credentials. Please check your email and password." });
-      return;
-    }
-    if (user.status !== "Active") {
-      res.status(403).json({ error: "Forbidden", message: "Your account has been deactivated. Contact your administrator." });
-      return;
-    }
-
-    const expectedRole = loginRole === "sub_hub" ? "sub_hub" : loginRole === "delivery_person" ? "delivery_person" : "super_hub";
-    const portalLabel = loginRole === "sub_hub" ? "Sub Hub" : loginRole === "delivery_person" ? "Delivery Person" : "Super Hub";
-    if (user.role !== expectedRole) {
-      res.status(403).json({ error: "Forbidden", message: `Your account does not have ${portalLabel} portal access.` });
-      return;
-    }
-
-    const passwordMatch = await bcrypt.compare(password, user.password);
-    if (!passwordMatch) {
-      res.status(401).json({ error: "Unauthorized", message: "Invalid credentials. Please check your email and password." });
-      return;
-    }
-
-    const resolvedSuperHubIds: string[] =
-      Array.isArray((user as any).superHubIds) && (user as any).superHubIds.length > 0
-        ? (user as any).superHubIds.map((id: any) => String(id))
-        : user.superHubId ? [String(user.superHubId)] : [];
-
-    const resolvedSubHubIds: string[] =
-      Array.isArray((user as any).subHubIds) && (user as any).subHubIds.length > 0
-        ? (user as any).subHubIds.map((id: any) => String(id))
-        : user.subHubId ? [String(user.subHubId)] : [];
-
-    const admin = {
-      id: String(user._id),
-      email: user.email,
-      name: user.name,
-      role: user.role,
-      superHubId: resolvedSuperHubIds[0] ?? null,
-      superHubIds: resolvedSuperHubIds,
-      subHubId: resolvedSubHubIds[0] ?? null,
-      subHubIds: resolvedSubHubIds,
-    };
-    const token = jwt.sign({ adminId: admin.id, email: admin.email, role: admin.role }, JWT_SECRET, { expiresIn: "7d" });
-    res.json({ token, admin });
-  } catch (err) {
-    res.status(500).json({ error: "InternalError", message: "Login failed" });
-  }
+  res.status(403).json({ error: "Forbidden", message: "Only Master Admin login is available." });
 });
 
 // ─── Forgot Password ────────────────────────────────────────────────

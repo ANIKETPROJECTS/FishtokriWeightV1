@@ -1,5 +1,5 @@
 import { useLocation } from "wouter";
-import { ShieldCheck, Warehouse, Store, Truck, ArrowRight } from "lucide-react";
+import { ShieldCheck, ArrowRight } from "lucide-react";
 import { useEffect } from "react";
 
 const roles = [
@@ -9,27 +9,6 @@ const roles = [
     desc: "Full system access across all hubs and operations.",
     icon: ShieldCheck,
     route: "/login?role=master_admin",
-  },
-  {
-    key: "super_hub",
-    label: "Super Hub",
-    desc: "Manage sub-hubs, vendors and regional operations.",
-    icon: Warehouse,
-    route: "/login?role=super_hub",
-  },
-  {
-    key: "sub_hub",
-    label: "Sub Hub",
-    desc: "Local hub orders, inventory and deliveries.",
-    icon: Store,
-    route: "/login?role=sub_hub",
-  },
-  {
-    key: "delivery_person",
-    label: "Delivery Partner",
-    desc: "Pickup, route and delivery management.",
-    icon: Truck,
-    route: "/login?role=delivery_person",
   },
 ];
 
