@@ -6,10 +6,10 @@ import {
   getGetSuperHubsQueryKey,
 } from "@workspace/api-client-react";
 import {
-  Building2, MapPin, Users, TrendingUp,
-  CheckCircle2, AlertCircle, ShoppingBag, Truck, Clock,
-  Package, XCircle, RefreshCw, Phone, User, UserCheck,
-  ArrowRight, Store, CircleDollarSign,
+  Building2, MapPin, Users,
+  CheckCircle2, ShoppingBag, Truck, Clock,
+  XCircle, RefreshCw, Phone, User,
+  ArrowRight,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -163,7 +163,6 @@ export default function Dashboard() {
   const totalOrders    = Object.values(orderStats).reduce((a, b) => a + b, 0);
   const activeOrders   = (orderStats.pending ?? 0) + (orderStats.confirmed ?? 0) + (orderStats.out_for_delivery ?? 0);
   const pendingOrders  = orderStats.pending ?? 0;
-  const deliveredCount = orderStats.delivered ?? 0;
 
   const orderStatusPieData = Object.entries(ORDER_STATUS_CONFIG)
     .map(([key, cfg]) => ({ name: cfg.label, value: orderStats[key] ?? 0, color: cfg.chart }))
@@ -187,7 +186,7 @@ export default function Dashboard() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-extrabold text-[#162B4D]">Dashboard</h2>
-          <p className="text-gray-400 text-sm mt-0.5">Complete overview of your distribution network</p>
+          <p className="text-gray-400 text-sm mt-0.5">Overview of your hub operations</p>
         </div>
         <Button variant="outline" size="sm" onClick={handleRefresh} className="h-8 gap-1.5 text-gray-500">
           <RefreshCw className="w-3.5 h-3.5" /> Refresh
@@ -199,11 +198,9 @@ export default function Dashboard() {
         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
           <Building2 className="w-3 h-3" /> Network
         </p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <StatCard loading={isLoading} title="Total Super Hubs"   value={stats?.totalSuperHubs ?? 0}   sub={`${stats?.activeSuperHubs ?? 0} active`}          icon={Building2}  iconColor="text-[#1A56DB]"    iconBg="bg-blue-50"   border="border-blue-100"   badge="Network"        badgeColor="bg-blue-50 text-blue-600" />
-          <StatCard loading={isLoading} title="Total Sub Hubs"     value={stats?.totalSubHubs ?? 0}     sub={`${stats?.activeSubHubs ?? 0} active`}            icon={Layers}     iconColor="text-green-600"    iconBg="bg-green-50"  border="border-green-100"  badge={`${stats?.totalSubHubs ? Math.round((stats.activeSubHubs / stats.totalSubHubs) * 100) : 0}% active`} badgeColor="bg-green-50 text-green-600" />
-          <StatCard loading={isLoading} title="Service Pincodes"   value={stats?.totalPincodes ?? 0}    sub="across all hubs"                                  icon={MapPin}     iconColor="text-purple-600"   iconBg="bg-purple-50" border="border-purple-100" badge="Coverage"       badgeColor="bg-purple-50 text-purple-600" />
-          <StatCard loading={isLoading} title="Admin Users"        value={stats?.totalUsers ?? 0}       sub={`${stats?.activeUsers ?? 0} active`}              icon={Users}      iconColor="text-amber-600"    iconBg="bg-amber-50"  border="border-amber-100"  badge={`${stats?.totalUsers ? Math.round((stats.activeUsers / stats.totalUsers) * 100) : 0}% active`} badgeColor="bg-amber-50 text-amber-600" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl">
+          <StatCard loading={isLoading} title="Total Hubs" value={stats?.totalSubHubs ?? 0} sub={`${stats?.activeSubHubs ?? 0} active`} icon={Building2} iconColor="text-[#1A56DB]" iconBg="bg-blue-50" border="border-blue-100" badge={`${stats?.totalSubHubs ? Math.round((stats.activeSubHubs / stats.totalSubHubs) * 100) : 0}% active`} badgeColor="bg-blue-50 text-blue-600" />
+          <StatCard loading={isLoading} title="Master Admin" value={1} sub="active system account" icon={Users} iconColor="text-amber-600" iconBg="bg-amber-50" border="border-amber-100" badge="100% active" badgeColor="bg-amber-50 text-amber-600" />
         </div>
       </div>
 
@@ -214,9 +211,9 @@ export default function Dashboard() {
         </p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <StatCard loading={extraLoading} title="Total Orders"       value={totalOrders}              sub={`${activeOrders} active`}                         icon={ShoppingBag} iconColor="text-orange-600"   iconBg="bg-orange-50"  border="border-orange-100"  badge={`${pendingOrders} pending`} badgeColor={pendingOrders > 0 ? "bg-amber-50 text-amber-600" : "bg-gray-50 text-gray-400"} />
-          <StatCard loading={extraLoading} title="Delivered Orders"   value={deliveredCount}           sub={`${orderStats.cancelled ?? 0} cancelled`}         icon={CheckCircle2} iconColor="text-green-600"   iconBg="bg-green-50"  border="border-green-100"   badge="Fulfilled"      badgeColor="bg-green-50 text-green-600" />
-          <StatCard loading={extraLoading} title="Total Customers"    value={customers.total}          sub="registered accounts"                              icon={User}        iconColor="text-sky-600"      iconBg="bg-sky-50"    border="border-sky-100"     badge="Customers"      badgeColor="bg-sky-50 text-sky-600" />
-          <StatCard loading={extraLoading} title="Delivery Partners"  value={deliveryPersons.total}    sub="across all hubs"                                  icon={UserCheck}   iconColor="text-indigo-600"   iconBg="bg-indigo-50" border="border-indigo-100"   badge="Field team"     badgeColor="bg-indigo-50 text-indigo-600" />
+          <StatCard loading={extraLoading} title="Awaiting Action" value={awaitingAction} sub="received, not handed over" icon={Clock} iconColor="text-amber-600" iconBg="bg-amber-50" border="border-amber-100" badge="Needs action" badgeColor="bg-amber-50 text-amber-600" />
+          <StatCard loading={extraLoading} title="Items Handed Over" value={itemsHandedOver} sub="delivery and takeaway" icon={CheckCircle2} iconColor="text-green-600" iconBg="bg-green-50" border="border-green-100" badge="Completed" badgeColor="bg-green-50 text-green-600" />
+          <StatCard loading={extraLoading} title="Total Customers" value={customers.total} sub="registered accounts" icon={User} iconColor="text-sky-600" iconBg="bg-sky-50" border="border-sky-100" badge="Customers" badgeColor="bg-sky-50 text-sky-600" />
         </div>
       </div>
 
@@ -304,111 +301,20 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ── Row 4: Hub charts ─────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-        {/* Sub Hubs per Super Hub bar */}
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <SectionHeader icon={Activity} iconColor="text-[#1A56DB]" title="Sub Hubs per Super Hub" />
-          {hubsLoading ? (
-            <Skeleton className="h-48 rounded-xl" />
-          ) : subHubsBarData.length === 0 ? (
-            <div className="h-48 flex flex-col items-center justify-center text-gray-300">
-              <Building2 className="w-10 h-10 mb-2" />
-              <p className="text-sm font-medium">No hubs configured</p>
-            </div>
-          ) : (
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={subHubsBarData} barSize={44}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="name" tick={{ fontSize: 12, fill: "#6B7280" }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: "#6B7280" }} axisLine={false} tickLine={false} allowDecimals={false} />
-                <Tooltip content={<CustomTooltip />} />
-                <Bar dataKey="Sub Hubs" radius={[8, 8, 0, 0]}>
-                  {subHubsBarData.map((_, i) => <Cell key={i} fill={HUB_COLORS[i % HUB_COLORS.length]} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </div>
-
-        {/* Hub status donuts stacked */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col gap-6">
-          {/* Super hub status */}
-          <div>
-            <div className="flex items-center gap-2 mb-3">
-              <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
-              <h4 className="text-xs font-bold text-[#162B4D]">Super Hub Status</h4>
-            </div>
-            {statsLoading ? <Skeleton className="h-28 rounded-xl" /> : (
-              <div className="flex items-center gap-4">
-                <ResponsiveContainer width={90} height={90}>
-                  <PieChart>
-                    <Pie data={hubStatusData} cx="50%" cy="50%" innerRadius={25} outerRadius={40} paddingAngle={4} dataKey="value">
-                      {hubStatusData.map((_, i) => <Cell key={i} fill={i === 0 ? ACTIVE_COLOR : INACTIVE_COLOR} />)}
-                    </Pie>
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="space-y-1.5">
-                  {hubStatusData.map((d, i) => (
-                    <div key={d.name} className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: i === 0 ? ACTIVE_COLOR : INACTIVE_COLOR }} />
-                      <span className="text-xs text-gray-500">{d.name}</span>
-                      <strong className="text-xs text-gray-800 ml-auto pl-2">{d.value}</strong>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="border-t border-gray-100" />
-
-          {/* Sub hub status */}
-          <div>
-            <div className="flex items-center gap-2 mb-3">
-              <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
-              <h4 className="text-xs font-bold text-[#162B4D]">Sub Hub Status</h4>
-            </div>
-            {statsLoading ? <Skeleton className="h-28 rounded-xl" /> : (
-              <div className="flex items-center gap-4">
-                <ResponsiveContainer width={90} height={90}>
-                  <PieChart>
-                    <Pie data={subHubStatusData} cx="50%" cy="50%" innerRadius={25} outerRadius={40} paddingAngle={4} dataKey="value">
-                      {subHubStatusData.map((_, i) => <Cell key={i} fill={i === 0 ? ACTIVE_COLOR : INACTIVE_COLOR} />)}
-                    </Pie>
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="space-y-1.5">
-                  {subHubStatusData.map((d, i) => (
-                    <div key={d.name} className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: i === 0 ? ACTIVE_COLOR : INACTIVE_COLOR }} />
-                      <span className="text-xs text-gray-500">{d.name}</span>
-                      <strong className="text-xs text-gray-800 ml-auto pl-2">{d.value}</strong>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* ── Row 5: Order pipeline + Hub performance ──────────────────────────── */}
+      {/* ── Order handover summary + Hub performance ─────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
         {/* Order pipeline card */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <SectionHeader icon={Truck} iconColor="text-indigo-500" title="Order Pipeline" />
+          <SectionHeader icon={ShoppingBag} iconColor="text-indigo-500" title="Order Handover Summary" />
           <div className="space-y-3">
             {[
-              { key: "pending",          label: "Pending",         icon: Clock,        color: "text-amber-600",  bg: "bg-amber-50",  bar: "bg-amber-400"  },
-              { key: "confirmed",        label: "Confirmed",       icon: CheckCircle2, color: "text-blue-600",   bg: "bg-blue-50",   bar: "bg-blue-500"   },
-              { key: "out_for_delivery", label: "Out for Delivery",icon: Truck,        color: "text-indigo-600", bg: "bg-indigo-50", bar: "bg-indigo-500" },
-              { key: "delivered",        label: "Delivered",       icon: CheckCircle2, color: "text-green-600",  bg: "bg-green-50",  bar: "bg-green-500"  },
-              { key: "cancelled",        label: "Cancelled",       icon: XCircle,      color: "text-red-500",    bg: "bg-red-50",    bar: "bg-red-400"    },
-            ].map(({ key, label, icon: Icon, color, bg, bar }) => {
-              const count = orderStats[key] ?? 0;
+              { key: "received", label: "Orders Received", icon: ShoppingBag, color: "text-blue-600", bg: "bg-blue-50", bar: "bg-blue-500", count: totalOrders },
+              { key: "awaiting", label: "Awaiting Action", icon: Clock, color: "text-amber-600", bg: "bg-amber-50", bar: "bg-amber-400", count: awaitingAction },
+              { key: "ready", label: "Ready for Handover", icon: Truck, color: "text-indigo-600", bg: "bg-indigo-50", bar: "bg-indigo-500", count: readyForHandover },
+              { key: "handed", label: "Items Handed Over", icon: CheckCircle2, color: "text-green-600", bg: "bg-green-50", bar: "bg-green-500", count: itemsHandedOver },
+              { key: "cancelled", label: "Cancelled", icon: XCircle, color: "text-red-500", bg: "bg-red-50", bar: "bg-red-400", count: orderStats.cancelled ?? 0 },
+            ].map(({ key, label, icon: Icon, color, bg, bar, count }) => {
               const pct   = totalOrders > 0 ? Math.round((count / totalOrders) * 100) : 0;
               return (
                 <div key={key} className="flex items-center gap-3">
@@ -439,12 +345,11 @@ export default function Dashboard() {
           ) : superHubs.length === 0 ? (
             <div className="h-48 flex flex-col items-center justify-center text-gray-300">
               <Building2 className="w-10 h-10 mb-2" />
-              <p className="text-sm font-medium">No super hubs yet</p>
+              <p className="text-sm font-medium">No hubs yet</p>
             </div>
           ) : (
             <div className="space-y-3">
               {superHubs.map((hub, idx) => {
-                const pct = stats?.totalSubHubs ? Math.round((hub.subHubCount / stats.totalSubHubs) * 100) : 0;
                 return (
                   <div key={hub.id} className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:bg-gray-50/60 transition-colors">
                     <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 font-bold text-white text-sm" style={{ background: HUB_COLORS[idx % HUB_COLORS.length] }}>
@@ -459,13 +364,7 @@ export default function Dashboard() {
                       </div>
                       <div className="flex items-center gap-3 mt-1">
                         {hub.location && <span className="text-[10px] text-gray-400 flex items-center gap-0.5"><MapPin className="w-2.5 h-2.5" />{hub.location}</span>}
-                        <span className="text-[10px] text-blue-600 font-semibold bg-blue-50 px-1.5 py-0.5 rounded-full">{hub.subHubCount} sub-hub{hub.subHubCount !== 1 ? "s" : ""}</span>
-                      </div>
-                      <div className="flex items-center gap-2 mt-1.5">
-                        <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                          <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, background: HUB_COLORS[idx % HUB_COLORS.length] }} />
-                        </div>
-                        <span className="text-[10px] text-gray-400 w-7">{pct}%</span>
+                        <span className="text-[10px] text-blue-600 font-semibold bg-blue-50 px-1.5 py-0.5 rounded-full">Hub</span>
                       </div>
                     </div>
                   </div>
@@ -474,28 +373,6 @@ export default function Dashboard() {
             </div>
           )}
         </div>
-      </div>
-
-      {/* ── Row 6: Quick numbers strip ────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {[
-          { label: "Vendors",           value: vendors.total,          icon: Store,            color: "text-rose-500",    bg: "bg-rose-50",    loading: extraLoading },
-          { label: "Delivery Partners", value: deliveryPersons.total,  icon: Truck,            color: "text-indigo-500",  bg: "bg-indigo-50",  loading: extraLoading },
-          { label: "Out for Delivery",  value: orderStats.out_for_delivery ?? 0, icon: Truck,  color: "text-blue-500",    bg: "bg-blue-50",    loading: extraLoading },
-          { label: "Pincodes Covered",  value: stats?.totalPincodes ?? 0, icon: MapPin,         color: "text-purple-500",  bg: "bg-purple-50",  loading: isLoading },
-        ].map(({ label, value, icon: Icon, color, bg, loading }) =>
-          loading ? <Skeleton key={label} className="h-20 rounded-2xl" /> : (
-            <div key={label} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-xl ${bg} flex items-center justify-center flex-shrink-0`}>
-                <Icon className={`w-5 h-5 ${color}`} />
-              </div>
-              <div>
-                <p className="text-xl font-extrabold text-[#162B4D]">{value}</p>
-                <p className="text-[11px] text-gray-400 font-medium">{label}</p>
-              </div>
-            </div>
-          )
-        )}
       </div>
 
     </div>
