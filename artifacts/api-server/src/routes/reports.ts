@@ -36,6 +36,7 @@ router.get("/day-end/orders", async (req: ScopedRequest, res) => {
     const from = String(req.query.from || "");
     const to = String(req.query.to || "");
     const subHubIdFilter = String(req.query.subHubId || "");
+    const channel = String(req.query.channel || "").toLowerCase();
 
     const scopeClause = scopeOrderFilter(req);
     if (scopeClause === null) {
@@ -44,6 +45,11 @@ router.get("/day-end/orders", async (req: ScopedRequest, res) => {
     }
 
     const filter: any = { ...scopeClause, isDeleted: { $ne: true } };
+    if (channel === "pos") {
+      // The FishTokri Admin day-end report is for counter sales only.
+      // POS/admin invoices use the FTS order prefix; storefront orders use FTW/FTN.
+      filter.orderId = { $regex: /^#?FTS/i };
+    }
 
     if (from || to) {
       const dateClause: any = {};

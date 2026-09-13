@@ -337,7 +337,7 @@ function OrdersReport({ from, to, onDownload, downloadRef }: { from: string; to:
   const { data, isLoading, isError } = useQuery({
     queryKey: ["day-end-orders", from, to],
     queryFn: () => {
-      const p = new URLSearchParams({ from, to });
+      const p = new URLSearchParams({ from, to, channel: "pos" });
       return apiFetch(`/api/reports/day-end/orders?${p}`);
     },
   });
@@ -461,8 +461,7 @@ function OrdersReport({ from, to, onDownload, downloadRef }: { from: string; to:
     }
     rows.push([]);
     rows.push(["SUMMARY", "", "", "", "", "", "", "", "", "", "", "", "", ""]);
-    rows.push(["Showing (filtered)", filteredOrders.length, "of", orders.length, "total orders"]);
-    rows.push(["Web Orders (FTW)", filteredOrders.filter(o => isOrderFromChannel(o, "FTW")).length]);
+    rows.push(["Showing POS orders (filtered)", filteredOrders.length, "of", orders.length, "POS orders"]);
     rows.push(["POS Orders (FTS)", filteredOrders.filter(o => isOrderFromChannel(o, "FTS")).length]);
     rows.push(["Cash Revenue", stats.cash]);
     rows.push(["UPI Revenue", stats.upi]);
@@ -486,7 +485,6 @@ function OrdersReport({ from, to, onDownload, downloadRef }: { from: string; to:
       {(() => {
         const cancelledCount = filteredOrders.filter(o => String(o.orderStatus || o.status || "").toLowerCase() === "cancelled").length;
         const regularCount   = filteredOrders.length - cancelledCount;
-        const webOrderCount  = filteredOrders.filter(o => isOrderFromChannel(o, "FTW")).length;
         const posOrderCount  = filteredOrders.filter(o => isOrderFromChannel(o, "FTS")).length;
 
         type InfoLine = { label: string; color: string; value?: string };
@@ -500,13 +498,12 @@ function OrdersReport({ from, to, onDownload, downloadRef }: { from: string; to:
 
         const cards: StatCard[] = [
           {
-            label: "Total Orders",
+            label: "POS Orders",
             value: String(filteredOrders.length),
             color: "#000",
             sub: [
               { text: `${regularCount} regular`, color: "#16a34a" },
               { text: `${cancelledCount} cancelled`, color: "#dc2626" },
-              { text: `${webOrderCount} web (FTW)`, color: "#2563eb" },
               { text: `${posOrderCount} POS (FTS)`, color: "#ea580c" },
             ],
           },
