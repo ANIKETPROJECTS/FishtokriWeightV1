@@ -2915,19 +2915,19 @@ export default function Orders() {
     <div className="w-full bg-white">
       {headerSlot && createPortal(
         <>
-          <h1 className="text-lg font-bold text-black truncate flex-shrink-0">Orders Management</h1>
-          <div className="flex items-center flex-nowrap gap-0 border-b border-transparent flex-1 min-w-0 overflow-x-auto scrollbar-none">
+          <h1 className="text-lg font-bold text-black truncate flex-shrink-0">Orders</h1>
+          <div className="flex items-center flex-nowrap gap-0 border-b border-transparent flex-1 min-w-0 overflow-visible">
             {TABS.map(({ key, label, count }) => (
               <button
                 key={key}
                 onClick={() => { setActiveTab(key); setStatusFilter(""); }}
-                className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold border-b-2 transition-colors flex-shrink-0 ${
+                className={`flex min-w-0 flex-1 items-center justify-center gap-1 px-2 py-2 text-xs font-semibold border-b-2 transition-colors ${
                   activeTab === key
                     ? "border-[#1A56DB] text-[#1A56DB]"
                     : "border-transparent text-black hover:text-[#1A56DB]"
                 }`}
               >
-                {label}
+                <span className="truncate">{label}</span>
                 <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${activeTab === key ? "bg-[#1A56DB] text-white" : "bg-gray-100 text-black"}`}>{count}</span>
               </button>
             ))}
