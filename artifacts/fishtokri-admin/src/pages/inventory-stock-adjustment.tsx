@@ -43,6 +43,9 @@ type Batch = {
   id: string;
   batchNumber: string;
   quantity: number;
+  rawWeight?: number | null;
+  cleanedWeight?: number | null;
+  yieldPercentage?: number | null;
   shelfLifeDays: number | null;
   receivedDate: string | null;
   expiryDate: string | null;
@@ -60,6 +63,8 @@ type FormRow = {
   quantityBefore: number;
   mode: FormMode;
   addQuantity: string;
+  rawWeight: string;
+  cleanedWeight: string;
   shelfLifeDays: string;
   expiryDate: string;
   expiryTime: string;
@@ -149,7 +154,7 @@ function generateNextBatchNumber(productName: string, productBatches: Batch[], s
 function emptyRow(): FormRow {
   return {
     productId: "", productName: "", category: "", unit: "", quantityBefore: 0,
-    mode: "add", addQuantity: "", shelfLifeDays: "", expiryDate: "", expiryTime: getCurrentTime12h(), batchNumber: "",
+    mode: "add", addQuantity: "", rawWeight: "", cleanedWeight: "", shelfLifeDays: "", expiryDate: "", expiryTime: getCurrentTime12h(), batchNumber: "",
     batchNotes: "",
     removeQuantity: "", selectedBatchId: "", search: "",
   };
@@ -1076,6 +1081,17 @@ export default function InventoryStockAdjustment() {
     updateRow(i, { expiryDate: val, shelfLifeDays });
   }
 
+  function setWeight(i: number, field: "rawWeight" | "cleanedWeight", value: string) {
+    const row = formRows[i];
+    const patch: Partial<FormRow> = { [field]: value };
+    if (field === "cleanedWeight" && value !== "") {
+      patch.addQuantity = value;
+    } else if (field === "cleanedWeight" && row.rawWeight === "") {
+      patch.addQuantity = "";
+    }
+    updateRow(i, patch);
+  }
+
   function resetForm() {
     setFormDate(toInputDate(new Date()));
     setFormReason("");
@@ -1103,6 +1119,20 @@ export default function InventoryStockAdjustment() {
       toast({ title: "Select a batch", description: `Choose which existing batch to add into for ${missingBatch.productName}.`, variant: "destructive" });
       return;
     }
+    const invalidWeights = validRows.find((r) => {
+      if (r.mode !== "add") return false;
+      const raw = Number(r.rawWeight);
+      const cleaned = Number(r.cleanedWeight);
+      return !r.rawWeight || !r.cleanedWeight || !Number.isFinite(raw) || !Number.isFinite(cleaned) || raw <= 0 || cleaned <= 0 || cleaned > raw;
+    });
+    if (invalidWeights) {
+      toast({
+        title: "Enter valid fish weights",
+        description: `For ${invalidWeights.productName}, enter raw and cleaned weights. Cleaned weight must not exceed raw weight.`,
+        variant: "destructive",
+      });
+      return;
+    }
     setSaving(true);
     try {
       await apiFetch("/api/inventory/adjustments", {
@@ -1117,6 +1147,9 @@ export default function InventoryStockAdjustment() {
             if (r.mode === "add") return {
               productId: r.productId, mode: "add",
               addQuantity: Number(r.addQuantity),
+               rawWeight: Number(r.rawWeight),
+               cleanedWeight: Number(r.cleanedWeight),
+               yieldPercentage: Number(r.cleanedWeight) / Number(r.rawWeight) * 100,
               shelfLifeDays: r.shelfLifeDays !== "" ? Number(r.shelfLifeDays) : undefined,
               expiryDate: r.expiryDate
                 ? (r.expiryTime ? `${r.expiryDate}T${to24hTime(r.expiryTime)}:00+05:30` : r.expiryDate)
@@ -1313,13 +1346,16 @@ export default function InventoryStockAdjustment() {
 
                         {/* Quantity */}
                         <div className="col-span-6 md:col-span-2 space-y-1">
-                          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Quantity</label>
+                          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                            {isAdd ? `Final Weight (${row.unit || "unit"})` : "Quantity"}
+                          </label>
                           <input
                             type="number" min="0"
                             value={isAddAny ? row.addQuantity : row.removeQuantity}
-                            onChange={(e) => updateRow(idx, isAddAny ? { addQuantity: e.target.value } : { removeQuantity: e.target.value })}
-                            placeholder="0"
-                            className="w-full h-9 px-3 text-sm font-bold text-[#162B4D] text-center border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-[#364F9F]/20 focus:border-[#364F9F]"
+                            onChange={(e) => updateRow(idx, isAddAny ? { addQuantity: e.target.value, cleanedWeight: isAdd ? e.target.value : row.cleanedWeight } : { removeQuantity: e.target.value })}
+                            placeholder={isAdd ? "From cleaned weight" : "0"}
+                            readOnly={isAdd}
+                            className={`w-full h-9 px-3 text-sm font-bold text-[#162B4D] text-center border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-[#364F9F]/20 focus:border-[#364F9F] ${isAdd ? "bg-emerald-50/60" : "bg-white"}`}
                           />
                         </div>
 
@@ -1378,6 +1414,55 @@ export default function InventoryStockAdjustment() {
                           </div>
                         ) : null}
                       </div>
+
+                      {isAdd && (
+                        <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-3 rounded-lg border border-emerald-100 bg-emerald-50/40 p-3">
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">
+                              Raw Weight ({row.unit || "unit"})
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={row.rawWeight}
+                              onChange={(e) => setWeight(idx, "rawWeight", e.target.value)}
+                              placeholder="e.g. 100"
+                              className="w-full h-9 px-3 text-sm font-semibold text-[#162B4D] border border-emerald-200 rounded-lg bg-white outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">
+                              After Cleaning ({row.unit || "unit"})
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={row.cleanedWeight}
+                              onChange={(e) => setWeight(idx, "cleanedWeight", e.target.value)}
+                              placeholder="e.g. 78"
+                              className="w-full h-9 px-3 text-sm font-semibold text-[#162B4D] border border-emerald-200 rounded-lg bg-white outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Cleaning Loss</label>
+                            <div className="h-9 px-3 flex items-center text-sm font-bold text-amber-700 border border-amber-100 rounded-lg bg-amber-50">
+                              {row.rawWeight && row.cleanedWeight
+                                ? `${Math.max(0, Number(row.rawWeight) - Number(row.cleanedWeight)).toFixed(2)} ${row.unit || ""}`
+                                : "—"}
+                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Yield</label>
+                            <div className="h-9 px-3 flex items-center text-sm font-bold text-emerald-700 border border-emerald-100 rounded-lg bg-white">
+                              {row.rawWeight && row.cleanedWeight && Number(row.rawWeight) > 0
+                                ? `${(Number(row.cleanedWeight) / Number(row.rawWeight) * 100).toFixed(1)}%`
+                                : "—"}
+                            </div>
+                          </div>
+                        </div>
+                      )}
 
                       {/* Batch number + notes row for new batch mode only */}
                       {isAdd && row.productId && (

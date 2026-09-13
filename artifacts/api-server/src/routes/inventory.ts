@@ -77,6 +77,9 @@ type Batch = {
   _id?: any;
   batchNumber?: string;
   quantity: number;
+  rawWeight?: number | null;
+  cleanedWeight?: number | null;
+  yieldPercentage?: number | null;
   shelfLifeDays?: number | null;
   receivedDate?: Date | null;
   expiryDate?: Date | null;
@@ -101,6 +104,9 @@ function normalizeBatch(b: any): Batch {
     _id: b?._id ?? new mongoose.Types.ObjectId(),
     batchNumber: b?.batchNumber ? String(b.batchNumber).trim() : "",
     quantity: Math.max(0, Number(b?.quantity) || 0),
+    rawWeight: Number.isFinite(Number(b?.rawWeight)) ? Number(b.rawWeight) : null,
+    cleanedWeight: Number.isFinite(Number(b?.cleanedWeight)) ? Number(b.cleanedWeight) : null,
+    yieldPercentage: Number.isFinite(Number(b?.yieldPercentage)) ? Number(b.yieldPercentage) : null,
     shelfLifeDays: shelf != null && Number.isFinite(shelf) ? shelf : null,
     receivedDate: received,
     expiryDate: expiry,
@@ -431,6 +437,9 @@ router.get("/products", async (req, res) => {
             id: String(b._id ?? ""),
             batchNumber: b.batchNumber ?? "",
             quantity: Number(b.quantity) || 0,
+            rawWeight: b.rawWeight ?? null,
+            cleanedWeight: b.cleanedWeight ?? null,
+            yieldPercentage: b.yieldPercentage ?? null,
             shelfLifeDays: b.shelfLifeDays ?? null,
             receivedDate: b.receivedDate ? new Date(b.receivedDate).toISOString() : null,
             expiryDate: b.expiryDate ? new Date(b.expiryDate).toISOString() : null,
@@ -576,6 +585,9 @@ router.post("/adjustments", async (req, res) => {
         const batch = normalizeBatch({
           batchNumber: it.batchNumber,
           quantity: addQty,
+          rawWeight: it.rawWeight,
+          cleanedWeight: it.cleanedWeight,
+          yieldPercentage: it.yieldPercentage,
           shelfLifeDays: it.shelfLifeDays,
           expiryDate: it.expiryDate,
           receivedDate: it.receivedDate ?? now,
@@ -680,6 +692,9 @@ router.post("/adjustments", async (req, res) => {
         batch: appliedBatch ? {
           batchNumber: appliedBatch.batchNumber,
           quantity: appliedBatch.quantity,
+           rawWeight: appliedBatch.rawWeight,
+           cleanedWeight: appliedBatch.cleanedWeight,
+           yieldPercentage: appliedBatch.yieldPercentage,
           shelfLifeDays: appliedBatch.shelfLifeDays,
           expiryDate: appliedBatch.expiryDate,
         } : undefined,
