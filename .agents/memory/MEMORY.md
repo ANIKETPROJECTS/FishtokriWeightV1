@@ -11,3 +11,4 @@
 - [Delivery timing coverage](delivery-timing-coverage.md) — calculate each lifecycle duration only when both endpoint timestamps exist; expose coverage instead of guessing missing durations.
 - [FTW inventory ownership](ftw-frontend-inventory.md) — FTW UPI starts in the storefront, but explicit admin edits/cancellations/deletes/restores use the normal admin inventory flow.
 - [Quiet runtime logging](quiet-runtime-logging.md) — production defaults to error-only output; request logs are disabled and PM2 stdout is discarded.
+- [Filtered pnpm startup installs](filtered-pnpm-startup-installs.md) — install each runtime’s dependency closure separately; broad or concurrent workspace installs fail on Replit.

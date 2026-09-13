@@ -39,7 +39,7 @@ outputType = "console"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "pnpm install && cd artifacts/api-server && pnpm run build && cd ../.. && PORT=8080 node --enable-source-maps scripts/run-api.mjs"
+args = "pnpm install --filter @workspace/api-server... && cd artifacts/api-server && pnpm run build && cd ../.. && PORT=8080 node --enable-source-maps scripts/run-api.mjs"
 waitForPort = 8080
 
 [[workflows.workflow]]
@@ -51,7 +51,7 @@ outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "pnpm install && cd artifacts/fishtokri-admin && PORT=5000 BASE_PATH=/ pnpm run dev"
+args = "pnpm install --filter @workspace/fishtokri-admin... && cd artifacts/fishtokri-admin && PORT=5000 BASE_PATH=/ pnpm run dev"
 waitForPort = 5000
 
 [[workflows.workflow]]
