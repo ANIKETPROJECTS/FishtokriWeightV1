@@ -2895,8 +2895,6 @@ function ProductModal({ isOpen, onClose, product, subHubId, categories, onSaved 
   const [unit, setUnit] = useState("pack");
   const [grossWeight, setGrossWeight] = useState("");
   const [netWeight, setNetWeight] = useState("");
-  const [pieces, setPieces] = useState("");
-  const [serves, setServes] = useState("");
   const [quantity, setQuantity] = useState("0");
   const [status, setStatus] = useState("available");
   const [isArchived, setIsArchived] = useState(false);
@@ -2940,8 +2938,6 @@ function ProductModal({ isOpen, onClose, product, subHubId, categories, onSaved 
       setUnit(product.unit ?? "pack");
       setGrossWeight(product.grossWeight ?? "");
       setNetWeight(product.netWeight ?? "");
-      setPieces(product.pieces ?? "");
-      setServes(product.serves ?? "");
       setQuantity(String(product.quantity ?? 0));
       setStatus(product.status ?? "available");
       setIsArchived(product.isArchived === true);
@@ -2977,7 +2973,7 @@ function ProductModal({ isOpen, onClose, product, subHubId, categories, onSaved 
     } else {
       setName(""); setShortCode(""); setDescription(""); setCategory(""); setSubCategory("");
       setPrice(""); setOriginalPrice(""); setUnit("pack");
-      setGrossWeight(""); setNetWeight(""); setPieces(""); setServes(""); setQuantity("0"); setStatus("available");
+      setGrossWeight(""); setNetWeight(""); setQuantity("0"); setStatus("available");
       setIsArchived(false); setProductImageUrl(""); setProductImageMode("url"); setRecipes([]);
       setPreorderMode("normal");
       setPreorderAvailability(defaultPreorderAvailability());
@@ -3048,7 +3044,7 @@ function ProductModal({ isOpen, onClose, product, subHubId, categories, onSaved 
       price: Number(price) || 0,
       originalPrice: Number(originalPrice) || Number(price) || 0,
       discountPct,
-      unit, grossWeight, netWeight, pieces, serves,
+      unit, grossWeight, netWeight,
       quantity: batchesTotal,
       status, isArchived, imageUrl,
       lowStockThreshold: Number(lowStockThreshold) || 0,
@@ -3367,9 +3363,7 @@ function ProductModal({ isOpen, onClose, product, subHubId, categories, onSaved 
                 <div className="space-y-1.5"><Label className="text-xs font-semibold text-gray-600">Gross Weight</Label><Input value={grossWeight} onChange={(e) => setGrossWeight(e.target.value)} placeholder="e.g. 800 - 900 g" className="h-9" /></div>
                 <div className="space-y-1.5"><Label className="text-xs font-semibold text-gray-600">Net Weight</Label><Input value={netWeight} onChange={(e) => setNetWeight(e.target.value)} placeholder="e.g. 500 g" className="h-9" /></div>
               </div>
-              <div className="grid grid-cols-4 gap-3">
-                <div className="space-y-1.5"><Label className="text-xs font-semibold text-gray-600">Pieces</Label><Input value={pieces} onChange={(e) => setPieces(e.target.value)} placeholder="e.g. 8–10 Pieces" className="h-9" /></div>
-                <div className="space-y-1.5"><Label className="text-xs font-semibold text-gray-600">Serves</Label><Input value={serves} onChange={(e) => setServes(e.target.value)} placeholder="e.g. Serves 4" className="h-9" /></div>
+              <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label className="text-xs font-semibold text-gray-600">Stock (Qty)</Label>
                   <Input type="number" readOnly value={batchesTotal} className="h-9 bg-gray-50 text-gray-500 cursor-not-allowed" title="Derived from batches below" />
