@@ -10,7 +10,7 @@ import Dashboard from "@/pages/dashboard";
 import DeliveryDashboard from "@/pages/delivery-dashboard";
 import MyDeliveries from "@/pages/my-deliveries";
 import DeliveryHubs from "@/pages/delivery-hubs";
-import Hubs from "@/pages/hubs";
+import SingleHub from "@/pages/single-hub";
 import HubDetail from "@/pages/hub-detail";
 import AdminUsers from "@/pages/admin-users";
 import Customers from "@/pages/customers";
@@ -160,7 +160,7 @@ function App() {
 
             {/* Hubs — Master Admin & Super Hub */}
             <Route path="/hubs">
-              <ProtectedRoute component={Hubs} allowedRoles={HUB_OWNERS} />
+              <ProtectedRoute component={SingleHub} allowedRoles={HUB_OWNERS} />
             </Route>
             <Route path="/hubs/:id">
               <ProtectedRoute component={HubDetail} allowedRoles={HUB_OWNERS} />

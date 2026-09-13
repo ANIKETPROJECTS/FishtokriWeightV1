@@ -29,7 +29,6 @@ async function apiFetch(path: string, options: RequestInit = {}) {
   return data;
 }
 
-type SuperHub = { id: string; name: string; location?: string };
 type SubHub = { id: string; name: string; location?: string };
 type Batch = {
   id: string;
@@ -83,11 +82,8 @@ function LockedHubBadge({ label, name, location }: { label: string; name: string
 export default function InventoryPage() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
-  const [superHubs, setSuperHubs] = useState<SuperHub[]>([]);
   const [subHubs, setSubHubs] = useState<SubHub[]>([]);
-  const [selectedSuperHubId, setSelectedSuperHubId] = useState("");
   const [selectedSubHubId, setSelectedSubHubId] = useState("");
-  const [selectedSuperHub, setSelectedSuperHub] = useState<SuperHub | null>(null);
   const [selectedSubHub, setSelectedSubHub] = useState<SubHub | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
@@ -96,33 +92,13 @@ export default function InventoryPage() {
   const [inStockOnly, setInStockOnly] = useState(false);
 
   useEffect(() => {
-    apiFetch("/api/super-hubs")
-      .then((d) => setSuperHubs(d.superHubs ?? []))
-      .catch((err) => toast({ title: "Failed to load super hubs", description: err.message, variant: "destructive" }));
+    apiFetch("/api/sub-hubs")
+      .then((d) => setSubHubs(d.subHubs ?? []))
+      .catch((err) => toast({ title: "Failed to load Thane Hub", description: err.message, variant: "destructive" }));
   }, [toast]);
 
   const adminScope = useMemo(() => getCurrentAdminScope(), []);
 
-  // Auto-select first available super hub
-  useEffect(() => {
-    if (!superHubs.length) return;
-    if (selectedSuperHubId) return;
-    setSelectedSuperHubId(superHubs[0].id);
-    setSelectedSuperHub(superHubs[0]);
-  }, [superHubs]);
-
-  useEffect(() => {
-    if (!selectedSuperHubId) { setSubHubs([]); setSelectedSubHubId(""); setSelectedSuperHub(null); return; }
-    const sh = superHubs.find((h) => h.id === selectedSuperHubId);
-    if (sh) setSelectedSuperHub(sh);
-    apiFetch(`/api/super-hubs/${selectedSuperHubId}/sub-hubs`)
-      .then((d) => setSubHubs(d.subHubs ?? []))
-      .catch((err) => toast({ title: "Failed to load sub hubs", description: err.message, variant: "destructive" }));
-    setSelectedSubHubId("");
-    setSelectedSubHub(null);
-  }, [selectedSuperHubId, toast]);
-
-  // Auto-select first available sub hub
   useEffect(() => {
     if (!subHubs.length) return;
     if (selectedSubHubId) return;
@@ -199,9 +175,7 @@ export default function InventoryPage() {
   function handleProductClick(p: Product) {
     const params = new URLSearchParams({
       subHubId: selectedSubHubId,
-      superHubId: selectedSuperHubId,
       subHubName: selectedSubHub?.name ?? "",
-      superHubName: selectedSuperHub?.name ?? "",
       productName: p.name,
     });
     navigate(`/inventory/products/${p.id}?${params.toString()}`);
@@ -216,32 +190,9 @@ export default function InventoryPage() {
         <p className="text-[11px] text-gray-400 leading-tight hidden sm:block">Live stock levels for products in a sub-hub.</p>
       </div>
       <div className="flex items-center gap-2 flex-shrink-0">
-        {selectedSuperHub ? (
-          <LockedHubBadge label="Super Hub" name={selectedSuperHub.name} location={selectedSuperHub.location} />
-        ) : (
-          <div className="hidden" />
-        )}
-        {selectedSuperHub && selectedSubHub && (
-          <ChevronRight className="w-3.5 h-3.5 text-gray-300 flex-shrink-0" />
-        )}
         {selectedSubHub ? (
-          <LockedHubBadge label="Sub Hub" name={selectedSubHub.name} location={selectedSubHub.location} />
+          <LockedHubBadge label="Hub" name={selectedSubHub.name} location={selectedSubHub.location} />
         ) : null}
-        {/* Hidden selects keep the data-loading logic intact */}
-        <div className="hidden">
-          <Select value={selectedSuperHubId} onValueChange={setSelectedSuperHubId}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {superHubs.map((h) => <SelectItem key={h.id} value={h.id}>{h.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={selectedSubHubId} onValueChange={setSelectedSubHubId}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {subHubs.map((h) => <SelectItem key={h.id} value={h.id}>{h.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
       </div>
     </div>
   );
@@ -257,7 +208,7 @@ export default function InventoryPage() {
               <Boxes className="w-5 h-5 text-[#1A56DB]" />
             </div>
             <p className="text-sm font-semibold text-[#162B4D]">Loading hub data...</p>
-            <p className="text-xs text-gray-400 mt-1">Connecting to Mumbai · Thane inventory.</p>
+            <p className="text-xs text-gray-400 mt-1">Connecting to Thane Hub inventory.</p>
           </div>
         ) : (
           <>
