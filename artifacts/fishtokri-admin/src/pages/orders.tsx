@@ -2916,7 +2916,7 @@ export default function Orders() {
       {headerSlot && createPortal(
         <>
           <h1 className="text-lg font-bold text-black truncate flex-shrink-0">Orders Management</h1>
-          <div className="flex items-center flex-wrap gap-0 border-b border-transparent flex-1 min-w-0">
+          <div className="flex items-center flex-nowrap gap-0 border-b border-transparent flex-1 min-w-0 overflow-x-auto scrollbar-none">
             {TABS.map(({ key, label, count }) => (
               <button
                 key={key}
