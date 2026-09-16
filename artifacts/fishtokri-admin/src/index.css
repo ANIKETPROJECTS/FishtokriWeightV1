@@ -160,6 +160,12 @@
     @apply font-sans antialiased bg-background text-foreground;
   }
 
+  input::placeholder,
+  textarea::placeholder {
+    color: #64748b;
+    opacity: 1;
+  }
+
   button,
   input,
   textarea,

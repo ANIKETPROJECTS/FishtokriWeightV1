@@ -2943,7 +2943,7 @@ export default function Orders() {
     <div className="w-full bg-white">
       {headerSlot && createPortal(
         <>
-          <h1 className="text-lg font-bold text-black truncate flex-shrink-0">Orders</h1>
+          <h1 className="text-lg font-bold text-white truncate flex-shrink-0">Orders</h1>
           <div className="flex items-center flex-nowrap gap-0 border-b border-transparent flex-1 min-w-0 overflow-visible">
             {TABS.map(({ key, label, count }) => (
               <button
@@ -2951,12 +2951,12 @@ export default function Orders() {
                 onClick={() => { setActiveTab(key); setStatusFilter(""); }}
                 className={`flex min-w-0 flex-1 items-center justify-center gap-1 px-2 py-2 text-xs font-semibold border-b-2 transition-colors ${
                   activeTab === key
-                    ? "border-[#1A56DB] text-[#1A56DB]"
-                    : "border-transparent text-black hover:text-[#1A56DB]"
+                    ? "border-[#F05B4E] text-white"
+                    : "border-transparent text-white/85 hover:text-white"
                 }`}
               >
                 <span className="truncate">{label}</span>
-                <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${activeTab === key ? "bg-[#1A56DB] text-white" : "bg-gray-100 text-black"}`}>{count}</span>
+                <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${activeTab === key ? "bg-[#F05B4E] text-white" : "bg-white/20 text-white"}`}>{count}</span>
               </button>
             ))}
           </div>
@@ -2968,7 +2968,7 @@ export default function Orders() {
             <span
               className="block w-5 h-5"
               style={{
-                backgroundColor: "#1A56DB",
+                backgroundColor: "#FFFFFF",
                 WebkitMaskImage: `url(${recycleIcon})`,
                 maskImage: `url(${recycleIcon})`,
                 WebkitMaskRepeat: "no-repeat",
@@ -3951,50 +3951,10 @@ export default function Orders() {
           </span>
         </div>
 
-        {/* ══ MAIN BODY — 3 columns ══ */}
+         {/* ══ MAIN BODY — product workspace + order panel ══ */}
         <div className="flex flex-1 min-h-0 overflow-hidden">
 
-          {/* ── LEFT: CATEGORIES ── */}
-          <div className="w-16 flex-shrink-0 bg-[#364F9F] flex flex-col overflow-hidden">
-            <div className="px-1 pt-4 pb-2 flex-shrink-0 text-center">
-              <p className="text-[9px] font-bold text-white/50 uppercase tracking-widest">Cat.</p>
-            </div>
-            <div className="flex-1 overflow-y-auto pb-4">
-              <button
-                onClick={() => setPickerCategory(null)}
-                title="All Items"
-                className={`w-full flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-all text-left ${
-                  !pickerCategory ? "bg-[#F05B4E] text-white" : "text-white hover:bg-white/10"
-                }`}
-              >
-                <span className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center text-[10px] font-bold flex-shrink-0">ALL</span>
-              </button>
-              {loadingProducts ? (
-                <div className="px-4 py-6 text-xs text-white/40 text-center">Loading...</div>
-              ) : filteredCategories.map((cat) => (
-                <button
-                  key={cat.name}
-                  onClick={() => setPickerCategory(cat.name)}
-                  title={cat.name}
-                  className={`w-full flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-all text-left ${
-                    pickerCategory === cat.name ? "bg-[#F05B4E] text-white" : "text-white hover:bg-white/10"
-                  }`}
-                >
-                  <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${pickerCategory === cat.name ? "bg-[#162B4D] text-white" : "bg-white/10 text-white"}`}>
-                    {cat.name.slice(0, 3).toUpperCase()}
-                  </span>
-                </button>
-              ))}
-              {!loadingProducts && productCategories.length === 0 && selectedSubHubId && (
-                <p className="px-4 py-4 text-xs text-white/30 text-center">No products loaded</p>
-              )}
-              {!selectedSubHubId && (
-                <p className="px-4 py-4 text-xs text-white/30 text-center">Select a hub to load menu</p>
-              )}
-            </div>
-          </div>
-
-          {/* ── CENTER: PRODUCTS GRID ── */}
+           {/* ── PRODUCTS WORKSPACE ── */}
           <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-gray-50">
             {/* Search bar */}
             <div className="px-4 py-3 border-b border-gray-200 bg-white flex-shrink-0 flex items-center gap-3">
@@ -4018,6 +3978,49 @@ export default function Orders() {
               </span>
             </div>
 
+             {/* Categories sit below search so the product workspace stays
+                 wide while category selection remains immediately visible. */}
+             <div className="flex-shrink-0 border-b border-gray-200 bg-white px-4 py-2">
+               <div className="flex items-center gap-2 overflow-x-auto scrollbar-none">
+                 <button
+                   type="button"
+                   onClick={() => setPickerCategory(null)}
+                   className={`flex-shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                     !pickerCategory
+                       ? "bg-[#F05B4E] text-white shadow-sm"
+                       : "bg-[#EEF1F9] text-[#364F9F] hover:bg-[#D6DDF0]"
+                   }`}
+                 >
+                   All Items
+                   <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${!pickerCategory ? "bg-white/20 text-white" : "bg-white text-[#364F9F]"}`}>
+                     {productsForMode.length}
+                   </span>
+                 </button>
+                 {loadingProducts ? (
+                   <span className="px-2 text-xs font-medium text-[#64748B]">Loading categories...</span>
+                 ) : filteredCategories.map((cat) => (
+                   <button
+                     key={cat.name}
+                     type="button"
+                     onClick={() => setPickerCategory(cat.name)}
+                     className={`flex-shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold capitalize transition-colors ${
+                       pickerCategory === cat.name
+                         ? "bg-[#F05B4E] text-white shadow-sm"
+                         : "bg-[#EEF1F9] text-[#364F9F] hover:bg-[#D6DDF0]"
+                     }`}
+                   >
+                     {cat.name}
+                     <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${pickerCategory === cat.name ? "bg-white/20 text-white" : "bg-white text-[#364F9F]"}`}>
+                       {cat.count}
+                     </span>
+                   </button>
+                 ))}
+                 {!loadingProducts && productCategories.length === 0 && selectedSubHubId && (
+                   <span className="px-2 text-xs font-medium text-[#64748B]">No categories available</span>
+                 )}
+               </div>
+             </div>
+
             {/* Product grid */}
             <div className="flex-1 overflow-y-auto p-4">
               {!selectedSubHubId ? (
@@ -4029,7 +4032,7 @@ export default function Orders() {
                   <p className="text-sm text-gray-400 mt-1">Use the hub dropdowns in the top bar</p>
                 </div>
               ) : loadingProducts ? (
-                <div className="grid grid-cols-4 gap-3">
+                 <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
                   {Array.from({ length: 8 }).map((_, i) => (
                     <Skeleton key={i} className="h-36 rounded-xl" />
                   ))}
@@ -4047,7 +4050,7 @@ export default function Orders() {
                   )}
                 </div>
               ) : (
-                <div className="grid grid-cols-4 gap-3">
+                 <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
                   {filteredProducts.map((p) => {
                     const pid = String(p._id);
                     const cartItem = selectedProducts.find((sp) => sp.productId === pid);
@@ -4593,34 +4596,15 @@ export default function Orders() {
                 </div>
               )}
 
-              {/* POS Schedule: delivery scheduling or a future preorder pickup slot */}
+              {/* POS Schedule: future preorder pickup slot */}
               {(orderDeliveryType === "delivery" || posProductMode === "preorder") && (
                 <div className="px-4 pt-3 pb-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-sm font-normal text-gray-900 flex items-center gap-1.5"><img src="/icon-schedule.png" className="w-4 h-4 object-contain" alt="" />Schedule</p>
-                    {/* Normal / Express toggle */}
-                    <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs font-semibold">
-                      <button
-                        type="button"
-                        onClick={() => { setIsExpressOrder(false); }}
-                        className={`px-3 py-1.5 transition-all ${!isExpressOrder ? "bg-[#1A56DB] text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}
-                      >Normal</button>
-                      <button
-                        type="button"
-                        disabled={posProductMode === "preorder"}
-                        onClick={() => { if (posProductMode !== "preorder") { setIsExpressOrder(true); setSelectedTimeslotId(""); } }}
-                        className={`px-3 py-1.5 transition-all border-l border-gray-200 ${posProductMode === "preorder" ? "bg-gray-50 text-gray-300 cursor-not-allowed" : isExpressOrder ? "bg-orange-500 text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}
-                      >Express</button>
-                    </div>
-                  </div>
-                  {isExpressOrder ? (
-                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-orange-200 bg-orange-50">
-                      <Zap className="w-3.5 h-3.5 text-orange-500 flex-shrink-0" />
-                      <span className="text-xs font-semibold text-orange-700">Express order by Porter</span>
-                    </div>
-                  ) : (
-                    <>
-                      {posProductMode === "preorder" ? (
+                  <p className="text-sm font-semibold text-[#162B4D] flex items-center gap-1.5 mb-2">
+                    <img src="/icon-schedule.png" className="w-4 h-4 object-contain" alt="" />
+                    Pickup schedule
+                  </p>
+                  <>
+                    {posProductMode === "preorder" ? (
                         <div className="rounded-lg border border-orange-200 bg-orange-50 p-3">
                           <label className="block text-xs font-semibold text-orange-800 mb-1.5">
                             Future pickup date
@@ -4653,59 +4637,56 @@ export default function Orders() {
                             Choose a pickup slot available for the selected date.
                           </p>
                         </div>
-                      ) : (
-                        <>
-                          {/* Today / Tomorrow selector — only these two days are bookable */}
-                          <div className="flex gap-2 mb-2">
-                            {[
-                              { label: "Today", value: getTodayIST() },
-                              { label: "Tomorrow", value: getTomorrowIST() },
-                            ].map(({ label, value }) => {
-                              const isSelected = orderDate === value;
-                              return (
-                                <button
-                                  key={value}
-                                  type="button"
-                                  onClick={() => { setOrderDate(value); setSelectedTimeslotId(""); }}
-                                  className={`flex-1 h-9 rounded-lg border text-sm font-semibold transition-all ${
-                                    isSelected
-                                      ? "border-[#1A56DB] bg-blue-50 text-[#1A56DB]"
-                                      : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
-                                  }`}
-                                >
-                                  {label}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </>
-                      )}
-                      {orderScheduleType === "slot" && (
-                        loadingTimeslots ? <p className="text-xs text-gray-400">Loading slots...</p>
-                        : activeTimeslots.length === 0 ? <p className="text-xs text-amber-600 flex items-center gap-1"><Zap className="w-3 h-3" />No slots available for this date</p>
-                        : (
-                          <div className="grid grid-cols-2 gap-1.5">
-                            {activeTimeslots.map((t) => {
-                              const id = String(t._id);
-                              const isSelected = selectedTimeslotId === id;
-                              const extra = Number(t.extraCharge) || 0;
-                              const displayStart = t.startTime ?? "";
-                              const displayEnd = addMinutesToTimeStr(t.endTime, pincodeTimeDelay);
-                              return (
-                                <button key={id} type="button" onClick={() => setSelectedTimeslotId(id)}
-                                  className={`flex items-center justify-between px-3 py-2 rounded-lg border text-left transition-all ${isSelected ? "border-[#1A56DB] bg-blue-50" : "border-gray-200 bg-white hover:border-gray-300"}`}
-                                >
-                                  <span className={`text-xs font-semibold ${isSelected ? "text-[#1A56DB]" : "text-[#162B4D]"}`}>
-                                    {displayStart}–{displayEnd}{extra > 0 ? ` +₹${extra}` : ""}
-                                  </span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        )
-                       )}
-                    </>
-                  )}
+                    ) : (
+                      /* Today / Tomorrow selector — only these two days are bookable */
+                      <div className="flex gap-2 mb-2">
+                        {[
+                          { label: "Today", value: getTodayIST() },
+                          { label: "Tomorrow", value: getTomorrowIST() },
+                        ].map(({ label, value }) => {
+                          const isSelected = orderDate === value;
+                          return (
+                            <button
+                              key={value}
+                              type="button"
+                              onClick={() => { setOrderDate(value); setSelectedTimeslotId(""); }}
+                              className={`flex-1 h-9 rounded-lg border text-sm font-semibold transition-all ${
+                                isSelected
+                                  ? "border-[#1A56DB] bg-blue-50 text-[#1A56DB]"
+                                  : "border-gray-200 bg-white text-[#162B4D] hover:border-gray-300"
+                              }`}
+                            >
+                              {label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {orderScheduleType === "slot" && (
+                      loadingTimeslots ? <p className="text-xs text-[#64748B]">Loading slots...</p>
+                      : activeTimeslots.length === 0 ? <p className="text-xs text-orange-700 flex items-center gap-1"><Zap className="w-3 h-3" />No slots available for this date</p>
+                      : (
+                        <div className="grid grid-cols-2 gap-1.5">
+                          {activeTimeslots.map((t) => {
+                            const id = String(t._id);
+                            const isSelected = selectedTimeslotId === id;
+                            const extra = Number(t.extraCharge) || 0;
+                            const displayStart = t.startTime ?? "";
+                            const displayEnd = addMinutesToTimeStr(t.endTime, pincodeTimeDelay);
+                            return (
+                              <button key={id} type="button" onClick={() => setSelectedTimeslotId(id)}
+                                className={`flex items-center justify-between px-3 py-2 rounded-lg border text-left transition-all ${isSelected ? "border-[#1A56DB] bg-blue-50" : "border-gray-200 bg-white hover:border-gray-300"}`}
+                              >
+                                <span className={`text-xs font-semibold ${isSelected ? "text-[#1A56DB]" : "text-[#162B4D]"}`}>
+                                  {displayStart}–{displayEnd}{extra > 0 ? ` +₹${extra}` : ""}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )
+                    )}
+                  </>
                 </div>
               )}
             </div>

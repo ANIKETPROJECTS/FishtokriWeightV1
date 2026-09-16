@@ -73,7 +73,7 @@ function ExpandableNavItem({ href, label, icon: Icon, isActive, childActive, sub
           } ${
             isActive || childActive
               ? "bg-white/10 text-white border-[#F05B4E]"
-              : "text-white/60 hover:text-white hover:bg-white/5 border-transparent"
+              : "text-white/85 hover:text-white hover:bg-white/10 border-transparent"
           }`}
         >
           <Icon className="w-4 h-4 flex-shrink-0" />
@@ -311,7 +311,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         {/* Role Label — hidden for delivery */}
         {expanded && !isDelivery && (
           <div className="px-5 pt-2 pb-2">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">{roleLabel}</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-white/65">{roleLabel}</p>
           </div>
         )}
         {expanded && isDelivery && <div className="pt-4" />}
@@ -393,7 +393,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   } ${
                     isActive
                        ? "bg-white/15 text-white border-[#F05B4E]"
-                      : "text-white/60 hover:text-white hover:bg-white/5 border-transparent"
+                      : "text-white/85 hover:text-white hover:bg-white/10 border-transparent"
                   }`}
                 >
                   <div className="relative flex-shrink-0">
@@ -423,7 +423,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         {/* Profile Section */}
         <div className={`border-t border-white/10 ${expanded ? "px-5 pt-4 pb-3" : "py-3"}`}>
           {expanded && (
-            <p className="text-[10px] font-bold uppercase tracking-widest text-white/40 mb-3">Profile</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-white/65 mb-3">Profile</p>
           )}
 
           {/* User info card */}
@@ -447,7 +447,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               </div>
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-white truncate leading-tight">{adminName}</p>
-                <p className="text-[10px] text-white/40 mt-0.5">{roleLabel}</p>
+                 <p className="text-[10px] text-white/70 mt-0.5">{roleLabel}</p>
                 {admin?.email && (
                   <p className="text-[10px] text-white/30 truncate">{admin.email}</p>
                 )}
