@@ -3892,7 +3892,7 @@ function CouponModal({ isOpen, onClose, coupon, subHubId, onSaved }: any) {
   const [type, setType] = useState("percentage");
   const [discountValue, setDiscountValue] = useState(""); const [minOrderAmount, setMinOrderAmount] = useState("");
   const [maxUsage, setMaxUsage] = useState(""); const [isFirstTimeOnly, setIsFirstTimeOnly] = useState(false);
-  const [isActive, setIsActive] = useState(true); const [visibleOnWebsite, setVisibleOnWebsite] = useState(true);
+  const [isActive, setIsActive] = useState(true);
   const [expiresAt, setExpiresAt] = useState("");
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
@@ -3916,7 +3916,6 @@ function CouponModal({ isOpen, onClose, coupon, subHubId, onSaved }: any) {
       setType(coupon.type ?? "percentage"); setDiscountValue(String(coupon.discountValue ?? ""));
       setMinOrderAmount(String(coupon.minOrderAmount ?? "")); setMaxUsage(coupon.maxUsage ? String(coupon.maxUsage) : "");
       setIsFirstTimeOnly(coupon.isFirstTimeOnly === true); setIsActive(coupon.isActive !== false);
-      setVisibleOnWebsite(coupon.isActive !== false ? (coupon.visibleOnWebsite !== false) : false);
       setExpiresAt(coupon.expiresAt ? new Date(coupon.expiresAt).toISOString().split("T")[0] : "");
       setSelectedCategoryIds(Array.isArray(coupon.applicableCategories) ? coupon.applicableCategories : []);
       setSelectedProductIds(Array.isArray(coupon.applicableProducts) ? coupon.applicableProducts : []);
@@ -3924,7 +3923,7 @@ function CouponModal({ isOpen, onClose, coupon, subHubId, onSaved }: any) {
     } else {
       setCode(""); setTitle(""); setDescription(""); setType("percentage");
       setDiscountValue(""); setMinOrderAmount(""); setMaxUsage(""); setIsFirstTimeOnly(false);
-      setIsActive(true); setVisibleOnWebsite(true); setExpiresAt("");
+      setIsActive(true); setExpiresAt("");
       setSelectedCategoryIds([]); setSelectedProductIds([]); setSelectedCustomerIds([]);
     }
     setCategorySearch(""); setProductSearch(""); setCustomerSearch(""); setProductCatFilter("all");
@@ -3970,7 +3969,6 @@ function CouponModal({ isOpen, onClose, coupon, subHubId, onSaved }: any) {
       applicableProducts: selectedProductIds,
       applicableCustomers: selectedCustomerIds,
       isFirstTimeOnly, isActive,
-      visibleOnWebsite: isActive ? visibleOnWebsite : false,
     };
     if (isFirstTimeOnly) payload.maxUsage = 1;
     else if (maxUsage) payload.maxUsage = Number(maxUsage);
@@ -4199,21 +4197,14 @@ function CouponModal({ isOpen, onClose, coupon, subHubId, onSaved }: any) {
           </div>
 
           {/* Toggles row */}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
               <Label className="text-sm">First Time Only</Label>
               <Switch checked={isFirstTimeOnly} onCheckedChange={setIsFirstTimeOnly} className="data-[state=checked]:bg-[#1A56DB]" />
             </div>
             <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
               <Label className="text-sm">Active</Label>
-              <Switch checked={isActive} onCheckedChange={(v) => { setIsActive(v); if (!v) setVisibleOnWebsite(false); }} className="data-[state=checked]:bg-[#1A56DB]" />
-            </div>
-            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-              <div>
-                <Label className="text-sm">Visible on Website</Label>
-                <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">{!isActive ? "Requires Active on" : visibleOnWebsite ? "Visible to customers" : "Hidden from customers"}</p>
-              </div>
-              <Switch checked={visibleOnWebsite && isActive} onCheckedChange={(v) => { if (isActive) setVisibleOnWebsite(v); }} disabled={!isActive} className="data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-gray-400 disabled:opacity-40 disabled:cursor-not-allowed" />
+              <Switch checked={isActive} onCheckedChange={setIsActive} className="data-[state=checked]:bg-[#1A56DB]" />
             </div>
           </div>
 
