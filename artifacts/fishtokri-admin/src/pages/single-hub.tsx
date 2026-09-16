@@ -88,12 +88,12 @@ export default function SingleHub() {
   const header = (
     <div className="flex items-center justify-between w-full min-w-0">
       <div className="min-w-0">
-        <p className="text-sm font-bold text-[#162B4D] leading-tight">Thane Hub</p>
-        <p className="text-[11px] text-gray-400 leading-tight hidden sm:block">Products and operations for this hub.</p>
+        <p className="text-sm font-bold text-white leading-tight">Thane Hub</p>
+        <p className="text-[11px] text-white/75 leading-tight hidden sm:block">Products and operations for this hub.</p>
       </div>
       {hub && (
-        <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700">
-          <CheckCircle2 className="w-4 h-4" />
+        <div className="flex items-center gap-2 text-xs font-semibold text-white">
+          <CheckCircle2 className="w-4 h-4 text-white" />
           Active
         </div>
       )}

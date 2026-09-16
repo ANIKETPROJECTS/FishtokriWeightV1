@@ -901,6 +901,7 @@ export default function Orders() {
   const [subHubPincodes, setSubHubPincodes] = useState<any[]>([]);
   const [subHubProducts, setSubHubProducts] = useState<any[]>([]);
   const [subHubCombos, setSubHubCombos] = useState<any[]>([]);
+  const [subHubCategories, setSubHubCategories] = useState<any[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [productSearch, setProductSearch] = useState("");
   const [productPickerOpen, setProductPickerOpen] = useState(false);
@@ -1127,6 +1128,7 @@ export default function Orders() {
   useEffect(() => {
     if (!selectedSubHubId) {
       setSubHubProducts([]); setSubHubCombos([]); setCoupons([]); setTimeslots([]);
+      setSubHubCategories([]);
       setSubHubPincodes([]);
       setAppliedCouponIds([]); setSelectedTimeslotId("");
       return;
@@ -1139,6 +1141,9 @@ export default function Orders() {
     apiFetch(`/api/sub-hubs/${selectedSubHubId}/menu/combos`)
       .then((d) => setSubHubCombos(d.combos ?? []))
       .catch(() => setSubHubCombos([]));
+    apiFetch(`/api/sub-hubs/${selectedSubHubId}/menu/categories`)
+      .then((d) => setSubHubCategories(d.categories ?? []))
+      .catch(() => setSubHubCategories([]));
 
     setLoadingCoupons(true);
     apiFetch(`/api/sub-hubs/${selectedSubHubId}/menu/coupons`)
@@ -1275,19 +1280,76 @@ export default function Orders() {
   }, [subHubProducts, subHubCombos]);
 
   const isCouponApplicable = useCallback((c: any): boolean => {
-    const apProds = (Array.isArray(c.applicableProducts) ? c.applicableProducts : []).map((x: any) => String(x));
+    const normalizeRef = (value: any) => String(value?.$oid ?? value?._id ?? value ?? "").trim().toLowerCase();
+    const apProds = (Array.isArray(c.applicableProducts) ? c.applicableProducts : []).map(normalizeRef);
     const apCats = (Array.isArray(c.applicableCategories) ? c.applicableCategories : []).map((x: any) => String(x).toLowerCase());
     if (apProds.length === 0 && apCats.length === 0) return true;
     if (selectedProducts.length === 0) return false;
     for (const sp of selectedProducts) {
-      if (apProds.includes(String(sp.productId))) return true;
+      if (apProds.includes(normalizeRef(sp.productId))) return true;
       const prod = subHubProducts.find((x) => String(x._id) === sp.productId)
         ?? subHubCombos.find((x) => String(x._id) === sp.productId);
-      const cat = String(prod?.category ?? "").toLowerCase();
-      if ((cat && apCats.includes(cat)) || (sp.isCombo && apCats.includes("combos"))) return true;
+      const rawCategory = prod?.category;
+      const categoryName = String(
+        rawCategory && typeof rawCategory === "object" ? rawCategory.name ?? "" : rawCategory ?? "",
+      ).trim().toLowerCase();
+      const categoryId = normalizeRef(
+        prod?.categoryId ??
+        prod?.categoryID ??
+        prod?.category_id ??
+        (rawCategory && typeof rawCategory === "object" ? rawCategory._id : ""),
+      );
+      const categoryDoc = subHubCategories.find((category) =>
+        apCats.includes(normalizeRef(category?._id)) && String(category?.name ?? "").trim().toLowerCase() === categoryName,
+      );
+      if (
+        (categoryName && apCats.includes(categoryName)) ||
+        (categoryId && apCats.includes(categoryId)) ||
+        Boolean(categoryDoc) ||
+        (sp.isCombo && apCats.includes("combos"))
+      ) return true;
     }
     return false;
-  }, [selectedProducts, subHubProducts, subHubCombos]);
+  }, [selectedProducts, subHubProducts, subHubCombos, subHubCategories]);
+
+  const couponEligibleSubtotal = useCallback((c: any): number => {
+    const normalizeRef = (value: any) => String(value?.$oid ?? value?._id ?? value ?? "").trim().toLowerCase();
+    const apProds = (Array.isArray(c.applicableProducts) ? c.applicableProducts : []).map(normalizeRef);
+    const apCats = (Array.isArray(c.applicableCategories) ? c.applicableCategories : []).map((x: any) => normalizeRef(x));
+    const unrestricted = apProds.length === 0 && apCats.length === 0;
+    if (unrestricted) return itemsSubtotal;
+
+    const productSubtotal = selectedProducts.reduce((sum, sp) => {
+      const prod = subHubProducts.find((x) => String(x._id) === String(sp.productId))
+        ?? subHubCombos.find((x) => String(x._id) === String(sp.productId));
+      const rawCategory = prod?.category;
+      const categoryName = String(
+        rawCategory && typeof rawCategory === "object" ? rawCategory.name ?? "" : rawCategory ?? "",
+      ).trim().toLowerCase();
+      const categoryId = normalizeRef(
+        prod?.categoryId ??
+        prod?.categoryID ??
+        prod?.category_id ??
+        (rawCategory && typeof rawCategory === "object" ? rawCategory._id : ""),
+      );
+      const categoryDoc = subHubCategories.find((category) =>
+        apCats.includes(normalizeRef(category?._id)) && String(category?.name ?? "").trim().toLowerCase() === categoryName,
+      );
+      const matchesProduct = apProds.includes(normalizeRef(sp.productId));
+      const matchesCategory =
+        (categoryName && apCats.includes(categoryName)) ||
+        (categoryId && apCats.includes(categoryId)) ||
+        Boolean(categoryDoc) ||
+        (sp.isCombo && apCats.includes("combos"));
+      return matchesProduct || matchesCategory
+        ? sum + (Number(sp.price) || 0) * (Number(sp.quantity) || 0)
+        : sum;
+    }, 0);
+
+    // Custom order lines have no product/category identity, so restricted
+    // coupons must not silently discount them.
+    return productSubtotal;
+  }, [itemsSubtotal, selectedProducts, subHubProducts, subHubCombos, subHubCategories]);
 
   const activeTimeslots = useMemo(() => {
     const todayISO = getTodayIST();
@@ -1511,15 +1573,17 @@ export default function Orders() {
       const min = Number(c.minOrderAmount) || 0;
       if (itemsSubtotal < min) continue;
       if (!isCouponApplicable(c)) continue;
+      const eligibleSubtotal = couponEligibleSubtotal(c);
+      if (eligibleSubtotal <= 0) continue;
       const v = Number(c.discountValue) || 0;
       if (c.type === "percentage") {
-        total += Math.round((itemsSubtotal * v) / 100);
+        total += Math.round((eligibleSubtotal * v) / 100);
       } else {
-        total += v;
+        total += Math.min(eligibleSubtotal, v);
       }
     }
     return Math.min(itemsSubtotal, total);
-  }, [appliedCoupons, itemsSubtotal, isCouponApplicable]);
+  }, [appliedCoupons, itemsSubtotal, isCouponApplicable, couponEligibleSubtotal]);
 
   const selectedTimeslot = useMemo(
     () => activeTimeslots.find((t) => String(t._id) === selectedTimeslotId) || null,
