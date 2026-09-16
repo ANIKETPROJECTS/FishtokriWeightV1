@@ -297,7 +297,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Sidebar — drawer on mobile, fixed column on md+ */}
       <aside
-        className={`fixed inset-y-0 left-0 bg-[#364F9F] text-white flex flex-col overflow-hidden transition-transform md:transition-all duration-300 ease-in-out z-40 md:z-20 w-[240px] md:w-[var(--sidebar-w)] ${
+        className={`fixed inset-y-0 left-0 bg-[#364F9F] text-white border-r border-[#2C418A] flex flex-col overflow-hidden transition-transform md:transition-all duration-300 ease-in-out z-40 md:z-20 w-[240px] md:w-[var(--sidebar-w)] ${
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         } md:translate-x-0`}
       >
