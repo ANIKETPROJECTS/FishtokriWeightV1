@@ -4055,6 +4055,7 @@ export default function Orders() {
                     const pid = String(p._id);
                     const cartItem = selectedProducts.find((sp) => sp.productId === pid);
                     const stock = Number(p.quantity) || 0;
+                     const stockUnit = String(p.unit || "kg").trim() || "kg";
                     const outOfStock = stock <= 0;
                     const lowStock = stock > 0 && stock <= 5;
                     const atMax = cartItem ? cartItem.quantity >= stock : false;
@@ -4094,7 +4095,11 @@ export default function Orders() {
                           <div className="flex items-center justify-between mt-auto pt-1.5 gap-1">
                             <div className="min-w-0 flex-1">
                               <p className="text-sm font-semibold text-[#1A56DB]">₹{Number(p.price).toLocaleString("en-IN")}</p>
-                              {lowStock && !outOfStock && <p className="text-[10px] font-medium text-amber-500 leading-none">Only {stock} left</p>}
+                               {!outOfStock && (
+                                 <p className={`text-[10px] font-medium leading-none ${lowStock ? "text-amber-600" : "text-[#364F9F]"}`}>
+                                   {stock.toLocaleString("en-IN", { maximumFractionDigits: 2 })} {stockUnit} left
+                                 </p>
+                               )}
                               {outOfStock && <p className="text-[10px] font-bold text-red-500 leading-none">Out of stock</p>}
                             </div>
                             {cartItem ? (
