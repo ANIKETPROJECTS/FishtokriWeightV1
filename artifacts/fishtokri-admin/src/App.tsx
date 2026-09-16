@@ -15,7 +15,6 @@ import HubDetail from "@/pages/hub-detail";
 import AdminUsers from "@/pages/admin-users";
 import Customers from "@/pages/customers";
 import Orders from "@/pages/orders";
-import POS from "@/pages/pos";
 import ComingSoon from "@/pages/coming-soon";
 import SubHubMenuAdmin from "@/pages/sub-hub-menu-admin";
 import Vendors from "@/pages/vendors";
@@ -178,7 +177,7 @@ function App() {
               <ProtectedRoute component={Orders} allowedRoles={ALL_ADMIN_ROLES} />
             </Route>
             <Route path="/pos">
-              <ProtectedRoute component={POS} allowedRoles={ALL_ADMIN_ROLES} />
+              <ProtectedRoute component={() => <RedirectTo to="/orders/new" />} allowedRoles={ALL_ADMIN_ROLES} />
             </Route>
 
             {/* Vendor Management — Master Admin & Super Hub */}

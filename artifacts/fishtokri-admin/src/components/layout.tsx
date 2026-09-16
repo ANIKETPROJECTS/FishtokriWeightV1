@@ -12,7 +12,7 @@ const masterAdminNavItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/hubs", label: "Hubs", icon: Warehouse },
   { href: "/orders", label: "Orders", icon: ClipboardList },
-  { href: "/pos", label: "POS", icon: Receipt },
+  { href: "/orders/new", label: "POS", icon: Receipt },
   {
     href: "/inventory",
     label: "Inventory Management",
@@ -165,7 +165,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     return () => mq.removeEventListener("change", apply);
   }, []);
   // On mobile the drawer should always render in "expanded" mode (with labels)
-  const isPos = location === "/pos";
+  const isPos = location === "/pos" || location === "/orders/new";
   const expanded = isMobile ? true : (isPos ? false : sidebarOpen);
   // Close drawer on route change
   useEffect(() => {
@@ -229,7 +229,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     "/dashboard",
     "/hubs",
     "/orders",
-    "/pos",
+    "/orders/new",
     "/fish-calculator",
     "/inventory",
     "/banking",
@@ -240,7 +240,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const subHubAllowedHrefs = new Set([
     "/dashboard",
     "/orders",
-    "/pos",
+    "/orders/new",
     "/inventory",
     "/customers",
     "/delivery-report",
@@ -541,7 +541,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               : `overflow-y-auto overflow-x-hidden ${
                 location.startsWith("/day-end-report")
                   ? "p-0"
-                    : location === "/pos"
+                    : (location === "/pos" || location === "/orders/new")
                       ? "p-3"
                   : location.startsWith("/orders")
                     ? "px-4 py-3"

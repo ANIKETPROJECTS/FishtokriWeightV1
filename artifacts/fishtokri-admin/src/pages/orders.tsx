@@ -868,7 +868,8 @@ export default function Orders() {
   const [chosenCustomer, setChosenCustomer] = useState<any>(null);
   const [newCustomer, setNewCustomer] = useState({ name: "", phone: "", email: "", dateOfBirth: "" });
   const [orderItems, setOrderItems] = useState<{ name: string; price: string; quantity: string; unit: string }[]>([]);
-  const [orderDeliveryType, setOrderDeliveryType] = useState<"delivery" | "takeaway">("delivery");
+  // The unified POS editor only creates and edits hub takeaway orders.
+  const [orderDeliveryType, setOrderDeliveryType] = useState<"delivery" | "takeaway">("takeaway");
   const [orderAddressMode, setOrderAddressMode] = useState<"saved" | "new">("saved");
   const [selectedAddressIdx, setSelectedAddressIdx] = useState<number | null>(null);
   const [editedSavedAddress, setEditedSavedAddress] = useState({ label: "Home", name: "", phone: "", building: "", street: "", area: "", landmark: "", pincode: "", city: "", state: "" });
@@ -953,7 +954,7 @@ export default function Orders() {
     setCustomerSearch(""); setChosenCustomer(null); setCustomerDropdownOpen(false);
     setNewCustomer({ name: "", phone: "", email: "", dateOfBirth: "" });
     setOrderItems([]);
-    setOrderDeliveryType("delivery");
+    setOrderDeliveryType("takeaway");
     setOrderAddressMode("saved"); setSelectedAddressIdx(null);
     setNewAddress({
       label: "Home", name: "", phone: "",
@@ -987,7 +988,7 @@ export default function Orders() {
   useEffect(() => {
     if (!isCreatePage) return;
     if (posProductMode === "preorder") {
-      setOrderDeliveryType("delivery");
+      setOrderDeliveryType("takeaway");
       setIsExpressOrder(false);
       setOrderScheduleType("slot");
       // Keep the saved slot when an existing preorder is being edited. New
@@ -1823,19 +1824,25 @@ export default function Orders() {
     const superHub = superHubs.find((h) => h.id === selectedSuperHubId);
     const subHub = subHubs.find((h) => h.id === selectedSubHubId);
 
-    // Validate scheduling (only for delivery orders — takeaway is instant for today)
-    if (orderDeliveryType === "delivery") {
+    // Normal POS sales are immediate takeaways. POS preorders still use the
+    // selected future date and hub timeslot, even though they are takeaways.
+    const isPreorderSale = posProductMode === "preorder";
+    if (isPreorderSale || orderDeliveryType === "delivery") {
+      if (isPreorderSale && !orderDate) {
+        toast({ title: "Pick a preorder date", variant: "destructive" });
+        return;
+      }
       if (!isExpressOrder && orderScheduleType === "slot" && timeslots.length > 0) {
         if (activeTimeslots.length === 0) {
-          toast({ title: "No common delivery slot", description: "The selected preorder products do not share an available timeslot for this date.", variant: "destructive" });
+          toast({ title: "No common pickup slot", description: "The selected preorder products do not share an available timeslot for this date.", variant: "destructive" });
           return;
         }
         if (!selectedTimeslotId || !activeTimeslots.some((slot) => String(slot._id) === selectedTimeslotId)) {
-          toast({ title: "Pick a delivery slot", description: "Please select a time slot available for every preorder product in this order.", variant: "destructive" });
+          toast({ title: "Pick a pickup slot", description: "Please select a time slot available for every preorder product in this order.", variant: "destructive" });
           return;
         }
       }
-      if (!orderDate) {
+      if (orderDeliveryType === "delivery" && !orderDate) {
         toast({ title: "Pick a delivery date", variant: "destructive" });
         return;
       }
@@ -1880,8 +1887,8 @@ export default function Orders() {
         subHubName: subHub?.name ?? "",
         notes: orderNotes.trim(),
         // On edits, omit status entirely so the backend keeps the existing stage.
-        // On new orders, set the initial status based on delivery type.
-        ...(!editingOrderId && { status: orderDeliveryType === "takeaway" ? "takeaway" : "pending" }),
+        // On new orders, set the initial POS status.
+        ...(!editingOrderId && { status: isPreorderSale ? "created" : "takeaway" }),
         createCustomerIfMissing: customerMode === "new" || isNewCustomerEntry,
         newCustomerExtras: (customerMode === "new" || isNewCustomerEntry) ? {
           dateOfBirth: newCustomer.dateOfBirth.trim(),
@@ -1944,16 +1951,17 @@ export default function Orders() {
                 amount: Number(p.amount) || 0,
                 reference: p.reference?.trim() || "",
               })),
-        // Schedule (takeaway is forced to instant fulfillment for today)
+        // Normal takeaway sales are instant; preorders retain their future
+        // date and pickup slot while remaining takeaway orders.
         isExpress: isExpressOrder,
-        scheduleType: orderDeliveryType === "takeaway" ? "instant" : isExpressOrder ? "express" : orderScheduleType,
-        deliveryDate: orderDeliveryType === "takeaway"
-          ? getTodayIST()
-          : orderDate,
-        timeslotId: (orderDeliveryType === "takeaway" || isExpressOrder) ? undefined : (selectedTimeslot ? String(selectedTimeslot._id) : undefined),
-        timeslotLabel: orderDeliveryType === "takeaway" ? undefined : isExpressOrder ? "Express order by Porter" : selectedTimeslot?.label,
-        timeslotStart: (orderDeliveryType === "takeaway" || isExpressOrder) ? undefined : selectedTimeslot?.startTime,
-        timeslotEnd: (orderDeliveryType === "takeaway" || isExpressOrder) ? undefined : selectedTimeslot?.endTime,
+        scheduleType: isPreorderSale ? "slot" : orderDeliveryType === "takeaway" ? "instant" : isExpressOrder ? "express" : orderScheduleType,
+        deliveryDate: isPreorderSale ? orderDate : orderDeliveryType === "takeaway" ? getTodayIST() : orderDate,
+        timeslotId: (isPreorderSale || (orderDeliveryType !== "takeaway" && !isExpressOrder))
+          ? (selectedTimeslot ? String(selectedTimeslot._id) : undefined)
+          : undefined,
+        timeslotLabel: isPreorderSale ? selectedTimeslot?.label : orderDeliveryType === "takeaway" ? undefined : isExpressOrder ? "Express order by Porter" : selectedTimeslot?.label,
+        timeslotStart: isPreorderSale ? selectedTimeslot?.startTime : (orderDeliveryType === "takeaway" || isExpressOrder) ? undefined : selectedTimeslot?.startTime,
+        timeslotEnd: isPreorderSale ? selectedTimeslot?.endTime : (orderDeliveryType === "takeaway" || isExpressOrder) ? undefined : selectedTimeslot?.endTime,
       };
       // The edit route is authoritative while the order/customer data is
       // loading. Fall back to its URL id so an edit can never become a new
@@ -2724,23 +2732,12 @@ export default function Orders() {
       }));
     setSelectedProducts(products);
     setOrderItems(customs);
-    // Delivery
-    const dt = o.deliveryType === "takeaway" ? "takeaway" : "delivery";
+    // This shared POS editor is takeaway-only. Legacy delivery orders are
+    // still visible in the Orders list, but are not edited through this POS.
+    const dt = "takeaway" as const;
     setOrderDeliveryType(dt);
-    if (dt === "delivery") {
-      const d = o.deliveryAddressDetail || {};
-      setOrderAddressMode("new");
-      setSelectedAddressIdx(null);
-      setNewAddress({
-        label: d.label ?? "Home",
-        name: d.name ?? d.contactName ?? "",
-        phone: d.phone ?? o.phone ?? "",
-        building: [d.houseNo, d.building].filter(Boolean).join(", ") || d.building || "",
-        street: d.street ?? "",
-        area: d.area ?? o.deliveryArea ?? "",
-        pincode: d.pincode ?? "",
-      });
-    }
+    setOrderAddressMode("saved");
+    setSelectedAddressIdx(null);
     setOrderNotes(o.notes ?? "");
     // Coupons
     const couponIds = Array.isArray(o.couponIds) && o.couponIds.length
@@ -3948,7 +3945,7 @@ export default function Orders() {
               type="button"
               onClick={() => {
                 setPosProductMode("preorder");
-                setOrderDeliveryType("delivery");
+                setOrderDeliveryType("takeaway");
                 setOrderDate(getTomorrowIST());
                 setSelectedProducts([]);
                 setPickerCategory(null);
@@ -3961,23 +3958,9 @@ export default function Orders() {
             </button>
           </div>
           <div className="w-px h-6 bg-white/20 flex-shrink-0" />
-          <div className="flex items-center gap-1 flex-shrink-0 bg-white/10 rounded-full p-0.5">
-            <button
-              type="button"
-              onClick={() => setOrderDeliveryType("delivery")}
-              className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all ${orderDeliveryType === "delivery" ? "bg-[#F05B4E] text-white shadow-sm" : "text-white"}`}
-            >
-              Delivery
-            </button>
-            <button
-              type="button"
-              disabled={posProductMode === "preorder"}
-              onClick={() => setOrderDeliveryType("takeaway")}
-              className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all ${posProductMode === "preorder" ? "text-white/30 cursor-not-allowed" : orderDeliveryType === "takeaway" ? "bg-[#F05B4E] text-white shadow-sm" : "text-white"}`}
-            >
-              Takeaway
-            </button>
-          </div>
+          <span className="flex items-center rounded-full bg-[#F05B4E] px-4 py-1.5 text-sm font-semibold text-white shadow-sm">
+            Takeaway
+          </span>
         </div>
 
         {/* ══ MAIN BODY — 3 columns ══ */}
@@ -4596,8 +4579,8 @@ export default function Orders() {
                 </div>
               )}
 
-              {/* Delivery Schedule */}
-              {orderDeliveryType === "delivery" && (
+              {/* POS Schedule: delivery scheduling or a future preorder pickup slot */}
+              {(orderDeliveryType === "delivery" || posProductMode === "preorder") && (
                 <div className="px-4 pt-3 pb-3">
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-sm font-normal text-gray-900 flex items-center gap-1.5"><img src="/icon-schedule.png" className="w-4 h-4 object-contain" alt="" />Schedule</p>
@@ -4626,7 +4609,7 @@ export default function Orders() {
                       {posProductMode === "preorder" ? (
                         <div className="rounded-lg border border-orange-200 bg-orange-50 p-3">
                           <label className="block text-xs font-semibold text-orange-800 mb-1.5">
-                            Future delivery date
+                            Future pickup date
                           </label>
                           <Popover open={showPreorderDatePicker} onOpenChange={setShowPreorderDatePicker}>
                             <PopoverTrigger asChild>
@@ -4653,7 +4636,7 @@ export default function Orders() {
                             </PopoverContent>
                           </Popover>
                           <p className="text-[11px] text-orange-700 mt-1.5">
-                            Choose a delivery slot available for the selected date.
+                            Choose a pickup slot available for the selected date.
                           </p>
                         </div>
                       ) : (
