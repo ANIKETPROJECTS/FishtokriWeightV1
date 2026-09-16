@@ -281,7 +281,7 @@ export default function POS() {
     }
     let cancelled = false;
     setLoadingTimeslots(true);
-    apiFetch(`/api/sub-hubs/${hub.id}/timeslots?deliveryDate=${encodeURIComponent(preorderDate)}`)
+    apiFetch(`/api/sub-hubs/${hub.id}/menu/timeslots?deliveryDate=${encodeURIComponent(preorderDate)}`)
       .then((response) => {
         if (!cancelled) setTimeslots(Array.isArray(response?.timeslots) ? response.timeslots : []);
       })

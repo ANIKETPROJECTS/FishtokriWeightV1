@@ -12,6 +12,8 @@ router.use(loadScope as any);
 // User administration is restricted to the Master Admin only.
 router.use(denyIfNotMaster as any);
 
+const ONLY_MASTER_ACCOUNT_MESSAGE = "Only the Master Admin account is supported.";
+
 const PHONE_REGEX = /^\d{10}$/;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -72,6 +74,9 @@ router.get("/", async (req, res) => {
 });
 
 router.post("/", async (req, res) => {
+  res.status(403).json({ error: "Forbidden", message: ONLY_MASTER_ACCOUNT_MESSAGE });
+  return;
+  /*
   try {
     const { name, email, phone, profileImageUrl, role, superHubId, superHubIds, subHubId, subHubIds, status, password } = req.body;
 
@@ -133,9 +138,13 @@ router.post("/", async (req, res) => {
     req.log.error({ err }, "Failed to create user");
     res.status(500).json({ error: "InternalError", message: "Failed to create user" });
   }
+  */
 });
 
 router.put("/:id", async (req, res) => {
+  res.status(403).json({ error: "Forbidden", message: ONLY_MASTER_ACCOUNT_MESSAGE });
+  return;
+  /*
   try {
     const user = await HubUser.findById(req.params.id);
     if (!user) { res.status(404).json({ error: "NotFound", message: "User not found" }); return; }
@@ -195,9 +204,13 @@ router.put("/:id", async (req, res) => {
     req.log.error({ err }, "Failed to update user");
     res.status(500).json({ error: "InternalError", message: "Failed to update user" });
   }
+  */
 });
 
 router.delete("/:id", async (req, res) => {
+  res.status(403).json({ error: "Forbidden", message: ONLY_MASTER_ACCOUNT_MESSAGE });
+  return;
+  /*
   try {
     const user = await HubUser.findById(req.params.id);
     if (!user) { res.status(404).json({ error: "NotFound", message: "User not found" }); return; }
@@ -207,9 +220,13 @@ router.delete("/:id", async (req, res) => {
     req.log.error({ err }, "Failed to delete user");
     res.status(500).json({ error: "InternalError", message: "Failed to delete user" });
   }
+  */
 });
 
 router.patch("/:id/toggle-status", async (req, res) => {
+  res.status(403).json({ error: "Forbidden", message: ONLY_MASTER_ACCOUNT_MESSAGE });
+  return;
+  /*
   try {
     const user = await HubUser.findById(req.params.id);
     if (!user) { res.status(404).json({ error: "NotFound", message: "User not found" }); return; }
@@ -221,6 +238,7 @@ router.patch("/:id/toggle-status", async (req, res) => {
     req.log.error({ err }, "Failed to toggle user status");
     res.status(500).json({ error: "InternalError", message: "Failed to toggle status" });
   }
+  */
 });
 
 export default router;
