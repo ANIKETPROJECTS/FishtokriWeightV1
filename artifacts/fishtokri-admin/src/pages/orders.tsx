@@ -133,13 +133,14 @@ function isHistoryOrder(o: any) {
 // For takeaway orders that are still in the active flow (pending/confirmed/preparing/out_for_delivery),
 // show a single "Takeaway" badge so it's clear there's no delivery involved. Once delivered or cancelled,
 // the actual final status is shown.
-function displayStatus(status: string, deliveryType?: string) {
+function displayStatus(status: string, deliveryType?: string, orderType?: string) {
+  if (String(orderType ?? "").toLowerCase() === "preorder") return status;
   if (deliveryType === "takeaway" && ACTIVE_STATUSES.includes(status)) return "takeaway";
   return status;
 }
 
-function StatusBadge({ status, deliveryType }: { status: string; deliveryType?: string }) {
-  const eff = displayStatus(status, deliveryType);
+function StatusBadge({ status, deliveryType, orderType }: { status: string; deliveryType?: string; orderType?: string }) {
+  const eff = displayStatus(status, deliveryType, orderType);
   const cfg = STATUS_CONFIG[eff] ?? { label: eff, color: "text-gray-600", bg: "bg-gray-50 border-gray-200", icon: Clock };
   const Icon = cfg.icon;
   return (
@@ -159,8 +160,8 @@ const SOLID_STATUS_BG: Record<string, string> = {
   cancelled: "bg-red-600",
 };
 
-function SolidStatusBadge({ status, deliveryType }: { status: string; deliveryType?: string }) {
-  const eff = displayStatus(status, deliveryType);
+function SolidStatusBadge({ status, deliveryType, orderType }: { status: string; deliveryType?: string; orderType?: string }) {
+  const eff = displayStatus(status, deliveryType, orderType);
   const cfg = STATUS_CONFIG[eff] ?? { label: eff };
   const bg = SOLID_STATUS_BG[eff] ?? "bg-gray-500";
   return (
@@ -261,6 +262,23 @@ function formatTimeSlot(o: any): string | null {
     return label;
   }
   return null;
+}
+
+function preorderHandoverOpen(order: any): boolean {
+  const deliveryDate = String(order?.deliveryDate ?? "").slice(0, 10);
+  const start = String(order?.timeslotStart ?? "").trim();
+  const match = start.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+  if (!deliveryDate || !match) return false;
+  let hour = Number(match[1]);
+  const minute = Number(match[2]);
+  const period = match[3]?.toUpperCase();
+  if (period === "PM" && hour !== 12) hour += 12;
+  if (period === "AM" && hour === 12) hour = 0;
+  const now = new Date();
+  const ist = new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
+  const today = `${ist.getUTCFullYear()}-${String(ist.getUTCMonth() + 1).padStart(2, "0")}-${String(ist.getUTCDate()).padStart(2, "0")}`;
+  if (deliveryDate < today) return true;
+  return deliveryDate === today && ist.getUTCHours() * 60 + ist.getUTCMinutes() >= hour * 60 + minute;
 }
 
 /** Returns today's date as YYYY-MM-DD in IST (UTC+5:30). */
@@ -3197,7 +3215,7 @@ export default function Orders() {
                             ? <span className="text-xs text-gray-500">{o.subHubName}</span>
                             : <span className="text-gray-300 text-xs">—</span>}
                         </td>
-                        <td className="px-4 py-3"><StatusBadge status={o.status} deliveryType={o.deliveryType} /></td>
+                        <td className="px-4 py-3"><StatusBadge status={o.status} deliveryType={o.deliveryType} orderType={o.orderType} /></td>
                         <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">{formatDate(o.createdAt)}</td>
                         <td className="px-4 py-3 text-right">
                           <Button
@@ -3320,21 +3338,28 @@ export default function Orders() {
                           ? <span className="text-sm font-medium text-black">{o.subHubName}</span>
                           : <span className="text-sm text-black">—</span>}
                       </td>
-                      <td className="px-3 py-4">
-                        {o.deliveryType === "takeaway" ? (
-                          <span className="text-sm text-black italic">Takeaway</span>
-                        ) : slot ? (
-                          <span className="text-sm font-medium text-black whitespace-nowrap">{slot}</span>
-                        ) : (
-                          <span className="text-sm text-black">—</span>
-                        )}
-                      </td>
+                       <td className="px-3 py-4">
+                         {String(o.orderType ?? "").toLowerCase() === "preorder" ? (
+                           slot ? (
+                             <div className="whitespace-nowrap">
+                               <p className="text-sm font-medium text-black">{slot}</p>
+                               {o.deliveryDate && <p className="text-[11px] font-semibold text-[#364F9F]">{formatDeliveryDate(o.deliveryDate)}</p>}
+                             </div>
+                           ) : <span className="text-sm text-black">—</span>
+                         ) : o.deliveryType === "takeaway" ? (
+                           <span className="text-sm text-black italic">Takeaway</span>
+                         ) : slot ? (
+                           <span className="text-sm font-medium text-black whitespace-nowrap">{slot}</span>
+                         ) : (
+                           <span className="text-sm text-black">—</span>
+                         )}
+                       </td>
                       <td className="px-3 py-4">
                         {o.deliveryArea
                           ? <span className="text-sm text-black">{o.deliveryArea}</span>
                           : <span className="text-sm text-black">—</span>}
                       </td>
-                      <td className="px-4 py-4"><SolidStatusBadge status={o.status} deliveryType={o.deliveryType} /></td>
+                      <td className="px-4 py-4"><SolidStatusBadge status={o.status} deliveryType={o.deliveryType} orderType={o.orderType} /></td>
                       <td className="px-4 py-4">
                         {activeTab === "deleted" ? (
                           <span className="text-sm text-gray-400 italic">Deleted</span>
@@ -3366,6 +3391,10 @@ export default function Orders() {
                               </span>
                             )}
                           </div>
+                        ) : String(o.orderType ?? "").toLowerCase() === "preorder" ? (
+                          <span className="text-sm text-emerald-700 font-semibold italic">
+                            {o.status === "confirmed" ? "Scheduled for handover" : "Handover at slot"}
+                          </span>
                         ) : o.deliveryType === "takeaway" ? (
                           <span className="text-sm text-gray-400 italic">Not required</span>
                         ) : deliveryPersons.length > 0 ? (
@@ -3387,7 +3416,7 @@ export default function Orders() {
                             title="View"
                             onClick={() => {
                               setSelectedOrder(o);
-                              setEditStatus(displayStatus(o.status, o.deliveryType));
+                              setEditStatus(displayStatus(o.status, o.deliveryType, o.orderType));
                               setSelectedDeliveryPersonId(o.assignedDeliveryPersonId ?? "");
                               setShowAllPersons(false);
                               setShowPorterFallback(false);
@@ -3588,7 +3617,7 @@ export default function Orders() {
                   <p className="text-xs text-gray-500">
                     {Array.isArray(deletingOrder.items) ? deletingOrder.items.length : 0} item(s) ·{" "}
                     {formatRupees(effectiveOrderTotal(deletingOrder))} ·{" "}
-                    <StatusBadge status={deletingOrder.status} deliveryType={deletingOrder.deliveryType} />
+                    <StatusBadge status={deletingOrder.status} deliveryType={deletingOrder.deliveryType} orderType={deletingOrder.orderType} />
                   </p>
                 </div>
               </div>
@@ -5030,7 +5059,7 @@ export default function Orders() {
                     <p className="text-sm font-medium text-black mt-2">Placed: {formatDate(selectedOrder.createdAt)}</p>
                   </div>
                   <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                    <SolidStatusBadge status={selectedOrder.status} deliveryType={selectedOrder.deliveryType} />
+                    <SolidStatusBadge status={selectedOrder.status} deliveryType={selectedOrder.deliveryType} orderType={selectedOrder.orderType} />
                     <span className="text-xl font-extrabold text-[#F05B4E]">
                       {formatRupees((() => {
                         const _s = Number(selectedOrder.subtotal) > 0 ? Number(selectedOrder.subtotal) : orderTotal(selectedOrder.items);
@@ -5603,7 +5632,7 @@ export default function Orders() {
                       <MaskIcon src={iconClipboardCheck} color="#364F9F" className="w-[20px] h-[20px]" />
                       <span className="text-xs font-bold text-[#364F9F] uppercase tracking-widest">Update Status</span>
                     </div>
-                    <SolidStatusBadge status={selectedOrder.status} deliveryType={selectedOrder.deliveryType} />
+                    <SolidStatusBadge status={selectedOrder.status} deliveryType={selectedOrder.deliveryType} orderType={selectedOrder.orderType} />
                   </div>
                   <div className="space-y-3">
                     {(() => {
@@ -5621,10 +5650,15 @@ export default function Orders() {
                         selectedOrder.deliveryDate === getTomorrowIST()
                       );
                       const otherDayBlocked = new Set(["out_for_delivery", "delivered"]);
-                      const statusOptions = isTakeaway
-                        ? ["takeaway", "cancelled"]
+                       const statusOptions = isPreorder
+                         ? ["pending", "confirmed", "takeaway", "cancelled"]
+                         : isTakeaway
+                         ? ["takeaway", "cancelled"]
                         : ALL_STATUSES.filter((s) => s !== "takeaway" && !(isOtherDay && otherDayBlocked.has(s)));
-                      const blocked = requiresAssignee(editStatus) || (isOtherDay && otherDayBlocked.has(editStatus));
+                       const handoverOpen = !isPreorder || preorderHandoverOpen(selectedOrder);
+                       const blocked = requiresAssignee(editStatus) ||
+                         (isOtherDay && otherDayBlocked.has(editStatus)) ||
+                         (isPreorder && editStatus === "takeaway" && !handoverOpen);
                       return (
                         <>
                           <div className="flex gap-2">
@@ -5632,12 +5666,13 @@ export default function Orders() {
                               <SelectTrigger className="h-11 flex-1 text-sm rounded-xl font-semibold"><SelectValue /></SelectTrigger>
                               <SelectContent>
                                 {statusOptions.map((s) => {
-                                  const disabled = requiresAssignee(s);
+                                   const disabled = requiresAssignee(s) || (isPreorder && s === "takeaway" && !handoverOpen);
                                   return (
                                     <SelectItem key={s} value={s} disabled={disabled}>
                                       <span className="flex items-center gap-2 font-semibold">
                                         {STATUS_CONFIG[s].label}
                                         {disabled && <span className="text-xs text-black font-medium">(assign partner first)</span>}
+                                         {isPreorder && s === "takeaway" && !handoverOpen && <span className="text-xs text-black font-medium">(at slot time)</span>}
                                       </span>
                                     </SelectItem>
                                   );
@@ -5646,7 +5681,7 @@ export default function Orders() {
                             </Select>
                             <Button
                               onClick={handleStatusUpdate}
-                              disabled={savingStatus || blocked || editStatus === displayStatus(selectedOrder.status, selectedOrder.deliveryType)}
+                              disabled={savingStatus || blocked || editStatus === displayStatus(selectedOrder.status, selectedOrder.deliveryType, selectedOrder.orderType)}
                               className="bg-[#F05B4E] hover:bg-[#D94A3D] h-11 px-5 text-white font-bold rounded-xl"
                             >
                               {savingStatus ? "Saving..." : "Update"}
@@ -5659,7 +5694,9 @@ export default function Orders() {
                           )}
                           {!isOtherDay && blocked && (
                             <p className="text-sm font-semibold text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2.5">
-                              Assign a delivery partner above before marking as Out for Delivery or Delivered.
+                               {isPreorder && editStatus === "takeaway"
+                                 ? `This preorder can be marked handed over from ${selectedOrder.timeslotStart || "the scheduled slot"} on ${selectedOrder.deliveryDate}.`
+                                 : "Assign a delivery partner above before marking as Out for Delivery or Delivered."}
                             </p>
                           )}
                         </>

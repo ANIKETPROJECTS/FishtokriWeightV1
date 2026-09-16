@@ -15,6 +15,7 @@ import {
 import { requireAuth } from "../middlewares/auth.js";
 import { loadScope, type ScopedRequest } from "../middlewares/scope.js";
 import { HubUser } from "../db/models/hub-user.js";
+import { SubHub } from "../db/models/sub-hub.js";
 import { sendOrderConfirmed, sendOutForDelivery, sendOrderCancelled } from "../services/whatsapp.js";
 
 const router = Router();
@@ -231,6 +232,91 @@ async function pushWalletTx(
 
 function toId(id: string): mongoose.mongo.BSON.ObjectId | null {
   try { return new mongoose.mongo.ObjectId(id); } catch { return null; }
+}
+
+const PREORDER_DAY_NAMES = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+
+function dateDayOfWeek(date: string): number {
+  const [year, month, day] = date.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+}
+
+function activeTimeslotDays(raw: any): number[] {
+  if (!Array.isArray(raw) || raw.length === 0) return [0, 1, 2, 3, 4, 5, 6];
+  if (typeof raw[0] === "object" && raw[0] !== null) {
+    return raw
+      .filter((item: any) => item.status === "on")
+      .map((item: any) => PREORDER_DAY_NAMES.indexOf(String(item.day).toLowerCase()))
+      .filter((day: number) => day >= 0);
+  }
+  const numericDays = raw.map(Number).filter((day: number) => day >= 0 && day <= 6);
+  return numericDays.length > 0 ? numericDays : [0, 1, 2, 3, 4, 5, 6];
+}
+
+function parseSlotMinutes(value: any): number | null {
+  const match = String(value ?? "").trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+  if (!match) return null;
+  let hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (minute > 59 || hour > 23) return null;
+  const period = match[3]?.toUpperCase();
+  if (period === "PM" && hour !== 12) hour += 12;
+  if (period === "AM" && hour === 12) hour = 0;
+  return hour * 60 + minute;
+}
+
+function currentISTDateAndMinutes(): { date: string; minutes: number } {
+  const ist = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+  const date = `${ist.getUTCFullYear()}-${String(ist.getUTCMonth() + 1).padStart(2, "0")}-${String(ist.getUTCDate()).padStart(2, "0")}`;
+  return { date, minutes: ist.getUTCHours() * 60 + ist.getUTCMinutes() };
+}
+
+function isPreorderHandoverOpen(order: any): boolean {
+  const deliveryDate = String(order?.deliveryDate ?? "").slice(0, 10);
+  const startMinutes = parseSlotMinutes(order?.timeslotStart);
+  if (!deliveryDate || startMinutes === null) return false;
+  const now = currentISTDateAndMinutes();
+  if (deliveryDate < now.date) return true;
+  return deliveryDate === now.date && now.minutes >= startMinutes;
+}
+
+async function validatePreorderTimeslot(input: {
+  subHubId?: string;
+  deliveryDate: string;
+  timeslotId?: string;
+  ordersDb?: any;
+}) {
+  if (!input.subHubId || !input.timeslotId) {
+    return { error: "Choose a timeslot for every preorder." };
+  }
+  const subHub = await SubHub.findById(input.subHubId).lean();
+  if (!subHub?.dbName) return { error: "The selected hub does not have a menu database." };
+  const subHubDb = await getSubHubDbConnection(String(subHub.dbName));
+  const slot = await subHubDb.db.collection("timeslots").findOne({ _id: toId(String(input.timeslotId)) });
+  if (!slot) return { error: "The selected timeslot no longer exists." };
+  if (slot.isActive === false) return { error: "The selected timeslot is inactive." };
+  if (!activeTimeslotDays(slot.activeDays).includes(dateDayOfWeek(input.deliveryDate))) {
+    return { error: "The selected timeslot is not available on that preorder date." };
+  }
+
+  const orderLimit = Number(slot.orderLimit) || 0;
+  if (orderLimit > 0 && input.ordersDb) {
+    const booked = await input.ordersDb.db.collection(COLLECTION).countDocuments({
+      orderType: "preorder",
+      deliveryDate: input.deliveryDate,
+      timeslotId: String(input.timeslotId),
+      status: { $ne: "cancelled" },
+    });
+    if (booked >= orderLimit) return { error: "This timeslot is full. Choose another timeslot." };
+  }
+
+  return {
+    slot,
+    timeslotId: String(slot._id),
+    timeslotLabel: String(slot.label ?? `${slot.startTime ?? ""} - ${slot.endTime ?? ""}`),
+    timeslotStart: String(slot.startTime ?? ""),
+    timeslotEnd: String(slot.endTime ?? ""),
+  };
 }
 
 const ORDER_QR_PREFIX = "fishtokri-order-v1";
@@ -1165,10 +1251,25 @@ router.post("/", async (req: ScopedRequest, res) => {
       return;
     }
     const normalizedOrderType = orderType === "preorder" ? "preorder" : "normal";
+    let validatedPreorderTimeslot: any = null;
     if (normalizedOrderType === "preorder") {
       const preorderDate = String(deliveryDate ?? "").trim();
       if (!/^\d{4}-\d{2}-\d{2}$/.test(preorderDate) || preorderDate <= getTodayISODate()) {
         res.status(400).json({ error: "ValidationError", message: "Preorder delivery date must be a future date" });
+        return;
+      }
+      if (dt !== "takeaway") {
+        res.status(400).json({ error: "ValidationError", message: "FishTokri preorders must use hub takeaway." });
+        return;
+      }
+      validatedPreorderTimeslot = await validatePreorderTimeslot({
+        subHubId: subHubId ? String(subHubId) : undefined,
+        deliveryDate: preorderDate,
+        timeslotId: timeslotId ? String(timeslotId) : undefined,
+        ordersDb: await getOrdersDb(),
+      });
+      if (validatedPreorderTimeslot.error) {
+        res.status(400).json({ error: "ValidationError", message: validatedPreorderTimeslot.error });
         return;
       }
     }
@@ -1310,11 +1411,11 @@ router.post("/", async (req: ScopedRequest, res) => {
       // Schedule
       scheduleType: scheduleType === "instant" ? "instant" : scheduleType === "express" ? "express" : "slot",
       isExpress: !!isExpress,
-      deliveryDate: deliveryDate ? String(deliveryDate) : undefined,
-      timeslotId: timeslotId ? String(timeslotId) : undefined,
-      timeslotLabel: timeslotLabel ?? undefined,
-      timeslotStart: timeslotStart ?? undefined,
-      timeslotEnd: timeslotEnd ?? undefined,
+       deliveryDate: deliveryDate ? String(deliveryDate) : undefined,
+       timeslotId: validatedPreorderTimeslot?.timeslotId ?? (timeslotId ? String(timeslotId) : undefined),
+       timeslotLabel: validatedPreorderTimeslot?.timeslotLabel ?? (timeslotLabel ?? undefined),
+       timeslotStart: validatedPreorderTimeslot?.timeslotStart ?? (timeslotStart ?? undefined),
+       timeslotEnd: validatedPreorderTimeslot?.timeslotEnd ?? (timeslotEnd ?? undefined),
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -1934,6 +2035,44 @@ router.put("/:id", async (req: ScopedRequest, res) => {
       const nextDeliveryDate = deliveryDate !== undefined ? String(deliveryDate).trim() : String(prev.deliveryDate ?? "").slice(0, 10);
       if (!/^\d{4}-\d{2}-\d{2}$/.test(nextDeliveryDate)) {
         res.status(400).json({ error: "ValidationError", message: "Preorder delivery date must be a valid date" });
+        return;
+      }
+      if (nextDeliveryType !== "takeaway") {
+        res.status(400).json({ error: "ValidationError", message: "FishTokri preorders must use hub takeaway." });
+        return;
+      }
+
+      const nextTimeslotId = timeslotId !== undefined ? String(timeslotId) : String(prev.timeslotId ?? "");
+      const slotChanged = deliveryDate !== undefined || timeslotId !== undefined || subHubId !== undefined;
+      if (slotChanged || !prev.timeslotStart || !prev.timeslotEnd) {
+        const validatedSlot = await validatePreorderTimeslot({
+          subHubId: subHubId !== undefined ? String(subHubId) : String(prev.subHubId ?? ""),
+          deliveryDate: nextDeliveryDate,
+          timeslotId: nextTimeslotId,
+          ordersDb: conn,
+        });
+        if (validatedSlot.error) {
+          res.status(400).json({ error: "ValidationError", message: validatedSlot.error });
+          return;
+        }
+        update.timeslotId = validatedSlot.timeslotId;
+        update.timeslotLabel = validatedSlot.timeslotLabel;
+        update.timeslotStart = validatedSlot.timeslotStart;
+        update.timeslotEnd = validatedSlot.timeslotEnd;
+      }
+
+      const nextStatus = status !== undefined ? String(status) : String(prev.status ?? "");
+      if (nextStatus === "takeaway" && !isPreorderHandoverOpen({
+        ...prev,
+        ...update,
+        deliveryDate: nextDeliveryDate,
+        timeslotStart: update.timeslotStart ?? prev.timeslotStart,
+      })) {
+        const start = String(update.timeslotStart ?? prev.timeslotStart ?? "the scheduled start");
+        res.status(400).json({
+          error: "PreorderHandoverTooEarly",
+          message: `This preorder can be marked handed over from ${start} on ${nextDeliveryDate}.`,
+        });
         return;
       }
     }
