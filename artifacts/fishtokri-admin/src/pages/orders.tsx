@@ -466,10 +466,21 @@ function effectiveOrderTotal(o: any): number {
 function formatOrderId(o: any, dailySeq?: number): string {
   const d = o?.createdAt ? new Date(o.createdAt) : null;
   const datePart = d
-    ? `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`
+    ? `${String(d.getDate()).padStart(2, "0")}${String(d.getMonth() + 1).padStart(2, "0")}${d.getFullYear()}`
     : "00000000";
   const seqStr = dailySeq != null ? String(dailySeq).padStart(2, "0") : "??";
-  return `FT${datePart}${seqStr}`;
+  return `#FTS${datePart}${seqStr}`;
+}
+
+function displayOrderId(rawOrderId: unknown, order: any, dailySeq?: number): string {
+  const raw = String(rawOrderId ?? "").trim();
+  const legacy = raw.replace(/^#/, "").match(/^FTS(\d{8})(\d+)$/i);
+  if (legacy) {
+    const [, yyyymmdd, sequence] = legacy;
+    const dayMonthYear = `${yyyymmdd.slice(6, 8)}${yyyymmdd.slice(4, 6)}${yyyymmdd.slice(0, 4)}`;
+    return `#FTS${dayMonthYear}${sequence.padStart(2, "0")}`;
+  }
+  return raw || formatOrderId(order, dailySeq);
 }
 
 function numberToWords(n: number): string {
@@ -3284,7 +3295,7 @@ export default function Orders() {
                           <p className="text-xs text-[#364F9F] font-semibold whitespace-nowrap">Delivery: {formatDeliveryDate(o.deliveryDate)}</p>
                         )}
                         {o.orderId && (
-                          <p className="text-[10px] font-mono font-bold text-[#364F9F] mt-0.5">{o.orderId}</p>
+                          <p className="text-[10px] font-mono font-bold text-[#364F9F] mt-0.5">{displayOrderId(o.orderId, o, dailySeqMap.get(String(o._id)))}</p>
                         )}
                       </td>
                       <td className="px-3 py-4">
@@ -5056,7 +5067,7 @@ export default function Orders() {
                       Order Details
                     </SheetTitle>
                     <p className="text-2xl font-extrabold text-[#364F9F] tracking-tight leading-none">
-                      {selectedOrder.orderId || formatOrderId(selectedOrder, dailySeqMap.get(String(selectedOrder._id)))}
+                      {displayOrderId(selectedOrder.orderId, selectedOrder, dailySeqMap.get(String(selectedOrder._id)))}
                     </p>
                     <p className="text-sm font-medium text-black mt-2">Placed: {formatDate(selectedOrder.createdAt)}</p>
                   </div>
@@ -5098,7 +5109,7 @@ export default function Orders() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-extrabold text-black text-[18px] leading-tight">{selectedOrder.customerName}</p>
                         {selectedOrder.orderId && (
-                          <span className="font-mono text-[11px] font-bold text-[#364F9F] bg-[#EEF1F9] px-2 py-0.5 rounded-md">{selectedOrder.orderId}</span>
+                          <span className="font-mono text-[11px] font-bold text-[#364F9F] bg-[#EEF1F9] px-2 py-0.5 rounded-md">{displayOrderId(selectedOrder.orderId, selectedOrder, dailySeqMap.get(String(selectedOrder._id)))}</span>
                         )}
                       </div>
                       {selectedOrder.phone && (

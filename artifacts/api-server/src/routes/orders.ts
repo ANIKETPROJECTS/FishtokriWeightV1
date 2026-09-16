@@ -572,7 +572,7 @@ function getTomorrowISODate(): string {
 
 /**
  * Atomically generates the next sequential FishTokri order ID for today.
- * Format: #FTSYYYYMMDD{N}  e.g. #FTS202605261, #FTS202605262 …
+ * Format: #FTSDDMMYYYYNN  e.g. #FTS1609202601, #FTS1609202602 …
  * Counter resets each calendar day (IST).
  */
 async function generateOrderId(db: any): Promise<string> {
@@ -583,7 +583,8 @@ async function generateOrderId(db: any): Promise<string> {
     { upsert: true, returnDocument: "after" },
   );
   const seq: number = counter?.seq ?? 1;
-  return `#FTS${dateStr}${seq}`;
+  const [year, month, day] = dateStr.split("-");
+  return `#FTS${day}${month}${year}${String(seq).padStart(2, "0")}`;
 }
 
 /**
