@@ -170,6 +170,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
   // Close drawer on route change
   useEffect(() => {
     setMobileOpen(false);
+    if (location.startsWith("/orders/edit/")) {
+      setSidebarOpen(true);
+    }
   }, [location]);
   // Lock body scroll when drawer is open
   useEffect(() => {
