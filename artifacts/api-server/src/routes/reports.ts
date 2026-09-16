@@ -49,6 +49,12 @@ router.get("/day-end/orders", async (req: ScopedRequest, res) => {
       // The FishTokri Admin day-end report is for counter sales only.
       // POS/admin invoices use the FTS order prefix; storefront orders use FTW/FTN.
       filter.orderId = { $regex: /^#?FTS/i };
+      // A future preorder is not a completed counter sale yet. Include it only
+      // after it reaches a handover-complete status.
+      filter.$and = [
+        ...(filter.$and ?? []),
+        { $or: [{ orderType: { $ne: "preorder" } }, { orderType: "preorder", status: { $in: ["takeaway", "delivered"] } }] },
+      ];
     }
 
     if (from || to) {
@@ -62,12 +68,13 @@ router.get("/day-end/orders", async (req: ScopedRequest, res) => {
       const createdAtClause: any = {};
       if (from) createdAtClause.$gte = new Date(`${from}T00:00:00.000Z`);
       if (to) createdAtClause.$lte = new Date(`${to}T23:59:59.999Z`);
-      filter.$and = [{
-        $or: [
+      filter.$and = [
+        ...(filter.$and ?? []),
+        { $or: [
           { deliveryDate: dateClause },
           { deliveryType: "takeaway", createdAt: createdAtClause },
-        ],
-      }];
+        ] },
+      ];
     }
 
     if (subHubIdFilter) {

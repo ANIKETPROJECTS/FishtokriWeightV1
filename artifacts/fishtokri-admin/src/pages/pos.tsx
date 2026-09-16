@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   Banknote,
+  CalendarDays,
   Check,
   ChevronRight,
   CreditCard,
@@ -29,6 +30,14 @@ type Product = {
   imageUrl?: string;
   status?: string;
   isArchived?: boolean;
+  preorderMode?: string;
+  preorderAvailability?: {
+    type?: string;
+    weekdays?: number[];
+    startDate?: string;
+    endDate?: string;
+    timeslotIdsByWeekday?: Record<string, string[]>;
+  };
 };
 
 type Category = { _id: string; name: string };
@@ -39,6 +48,14 @@ type PricingBasis = {
   isWeightBased: boolean;
   basisGrams: number;
   label: string;
+};
+type SaleMode = "normal" | "preorder";
+type Timeslot = {
+  _id: string;
+  label?: string;
+  startTime?: string;
+  endTime?: string;
+  extraCharge?: number;
 };
 
 const coral = "#F05B4E";
@@ -101,6 +118,45 @@ function productMatchesCategory(product: Product, selectedCategory: string, cate
 
 function formatQty(value: number) {
   return Number(value).toLocaleString("en-IN", { maximumFractionDigits: 3 });
+}
+
+function getTomorrowDateISO() {
+  const now = new Date();
+  const ist = new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
+  ist.setUTCDate(ist.getUTCDate() + 1);
+  return `${ist.getUTCFullYear()}-${String(ist.getUTCMonth() + 1).padStart(2, "0")}-${String(ist.getUTCDate()).padStart(2, "0")}`;
+}
+
+function isPreorderOnlyProduct(product: Product) {
+  const mode = String(product.preorderMode || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+  return ["preorder_only", "preorderonly", "preorder", "pre_order_only"].includes(mode);
+}
+
+function isProductAvailableForPreorder(product: Product, date: string) {
+  const availability = product.preorderAvailability;
+  if (!availability) return true;
+  const type = String(availability.type || "all");
+  const usesDateRange = type === "date_range" || type === "date_range_and_weekdays";
+  const usesWeekdays = type === "weekdays" || type === "date_range_and_weekdays";
+  if (usesDateRange && (
+    !availability.startDate ||
+    !availability.endDate ||
+    date < availability.startDate ||
+    date > availability.endDate
+  )) return false;
+  if (usesWeekdays) {
+    const day = new Date(`${date}T00:00:00Z`).getUTCDay();
+    if (!Array.isArray(availability.weekdays) || !availability.weekdays.map(Number).includes(day)) return false;
+  }
+  return true;
+}
+
+function isProductTimeslotAllowedForPreorder(product: Product, date: string, timeslotId: string) {
+  const rules = product.preorderAvailability?.timeslotIdsByWeekday;
+  if (!rules || typeof rules !== "object") return true;
+  const day = new Date(`${date}T00:00:00Z`).getUTCDay();
+  const allowed = rules[String(day)];
+  return !Array.isArray(allowed) || allowed.map(String).includes(String(timeslotId));
 }
 
 function stockLabel(product: Product) {
@@ -175,6 +231,11 @@ export default function POS() {
   const [cart, setCart] = useState<CartLine[]>([]);
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
+  const [saleMode, setSaleMode] = useState<SaleMode>("normal");
+  const [preorderDate, setPreorderDate] = useState(getTomorrowDateISO);
+  const [timeslots, setTimeslots] = useState<Timeslot[]>([]);
+  const [selectedTimeslotId, setSelectedTimeslotId] = useState("");
+  const [loadingTimeslots, setLoadingTimeslots] = useState(false);
   const [customerName, setCustomerName] = useState("");
   const [phone, setPhone] = useState("");
   const [paymentMode, setPaymentMode] = useState<PaymentMode>("cash");
@@ -212,15 +273,46 @@ export default function POS() {
     void loadMenu();
   }, [loadMenu]);
 
+  useEffect(() => {
+    if (saleMode !== "preorder" || !hub) {
+      setTimeslots([]);
+      setSelectedTimeslotId("");
+      return;
+    }
+    let cancelled = false;
+    setLoadingTimeslots(true);
+    apiFetch(`/api/sub-hubs/${hub.id}/timeslots?deliveryDate=${encodeURIComponent(preorderDate)}`)
+      .then((response) => {
+        if (!cancelled) setTimeslots(Array.isArray(response?.timeslots) ? response.timeslots : []);
+      })
+      .catch(() => {
+        if (!cancelled) setTimeslots([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingTimeslots(false);
+      });
+    return () => { cancelled = true; };
+  }, [hub, preorderDate, saleMode]);
+
   const filteredProducts = useMemo(() => {
     const query = search.trim().toLowerCase();
     return products.filter((product) => {
       const active = product.status !== "unavailable" && !product.isArchived;
+      const modeMatch = saleMode === "preorder"
+        ? isPreorderOnlyProduct(product) && isProductAvailableForPreorder(product, preorderDate)
+        : !isPreorderOnlyProduct(product);
       const categoryMatch = productMatchesCategory(product, selectedCategory, categories);
       const searchMatch = !query || product.name.toLowerCase().includes(query) || getCategoryName(product, categories).toLowerCase().includes(query);
-      return active && categoryMatch && searchMatch;
+      return active && modeMatch && categoryMatch && searchMatch;
     });
-  }, [categories, products, search, selectedCategory]);
+  }, [categories, preorderDate, products, saleMode, search, selectedCategory]);
+
+  useEffect(() => {
+    setCart([]);
+    setSelectedCategory("all");
+    setSearch("");
+    setSelectedTimeslotId("");
+  }, [preorderDate, saleMode]);
 
   const subtotal = useMemo(
     () => cart.reduce((sum, line) => sum + lineTotal(line), 0),
@@ -268,6 +360,10 @@ export default function POS() {
 
   const submitSale = async () => {
     if (!hub || !customerName.trim() || cart.length === 0 || subtotal <= 0) return;
+    if (saleMode === "preorder" && (!selectedTimeslot || !preorderSlotAllowed)) {
+      setSubmitError("Choose a timeslot available for every preorder product.");
+      return;
+    }
     setSubmitting(true);
     setSubmitError("");
     setSuccessReference("");
@@ -288,14 +384,22 @@ export default function POS() {
           deliveryType: "takeaway",
           subHubId: hub.id,
           subHubName: hub.name,
-          status: "takeaway",
+           status: saleMode === "preorder" ? "pending" : "takeaway",
           paymentStatus: "paid",
           paymentMode,
           paidAmount: total,
           subtotal,
           discount: discountAmount,
           total,
-          orderType: "normal",
+           orderType: saleMode,
+           ...(saleMode === "preorder" ? {
+             scheduleType: "slot",
+             deliveryDate: preorderDate,
+             timeslotId: selectedTimeslotId,
+             timeslotLabel: selectedTimeslot?.label || `${selectedTimeslot?.startTime || ""}–${selectedTimeslot?.endTime || ""}`,
+             timeslotStart: selectedTimeslot?.startTime || "",
+             timeslotEnd: selectedTimeslot?.endTime || "",
+           } : {}),
         }),
       });
       const order = result?.order || result;
@@ -333,23 +437,38 @@ export default function POS() {
 
   const canSubmit = Boolean(hub && customerName.trim() && cart.length && subtotal > 0 && !submitting);
   const phoneError = phone.length > 0 && phone.length !== 10;
-  const canCompleteSale = canSubmit && !phoneError;
+  const selectedTimeslot = timeslots.find((slot) => String(slot._id) === selectedTimeslotId);
+  const preorderSlotAllowed = saleMode === "preorder" && selectedTimeslot
+    ? cart.every((line) => isProductTimeslotAllowedForPreorder(line, preorderDate, selectedTimeslotId))
+    : true;
+  const canCompleteSale = canSubmit && !phoneError && (saleMode === "normal" || Boolean(selectedTimeslotId && preorderSlotAllowed));
 
   return (
     <div className="min-h-full bg-[#FAF7F3] pb-3" data-testid="page-pos">
       <div className="mx-auto max-w-[1500px]">
         {successReference && (
-          <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-[#BFE3CC] bg-[#F0FAF3] px-4 py-2.5 text-sm text-[#26734A]" role="status" data-testid="status-sale-success">
-            <div className="flex items-center gap-2"><span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#2B8A57] text-white"><Check className="h-4 w-4" /></span><span>Sale completed. Reference <strong>{successReference}</strong></span></div>
+            <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-[#BFE3CC] bg-[#F0FAF3] px-4 py-2.5 text-sm text-[#26734A]" role="status" data-testid="status-sale-success">
+             <div className="flex items-center gap-2"><span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#2B8A57] text-white"><Check className="h-4 w-4" /></span><span>{saleMode === "preorder" ? "Preorder created." : "Sale completed."} Reference <strong>{successReference}</strong></span></div>
             <button type="button" onClick={() => setSuccessReference("")} className="rounded p-1 hover:bg-[#DDF1E4]" aria-label="Dismiss sale confirmation" data-testid="button-dismiss-sale-success"><X className="h-4 w-4" /></button>
           </div>
         )}
 
-        <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_360px]">
+         <div className="mb-3 flex items-center justify-between gap-3 rounded-2xl border border-[#D7E0EE] bg-white p-3 shadow-[0_4px_18px_rgba(22,43,77,0.04)]">
+           <div>
+             <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#51617A]">Sale type</p>
+             <p className="mt-0.5 text-[11px] text-[#8B95A5]">{saleMode === "preorder" ? "Future handover" : "Immediate takeaway"}</p>
+           </div>
+           <div className="flex rounded-lg border border-[#D8E0EA] bg-[#F8FAFD] p-0.5">
+             <button type="button" onClick={() => setSaleMode("normal")} className={`rounded-md px-3 py-1.5 text-xs font-bold ${saleMode === "normal" ? "bg-[#162B4D] text-white" : "text-[#68758A]"}`} data-testid="button-sale-mode-normal">Today&apos;s Sale</button>
+             <button type="button" onClick={() => setSaleMode("preorder")} className={`rounded-md px-3 py-1.5 text-xs font-bold ${saleMode === "preorder" ? "bg-[#F05B4E] text-white" : "text-[#68758A]"}`} data-testid="button-sale-mode-preorder">Preorder</button>
+           </div>
+         </div>
+
+         <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_360px]">
           <section className="min-w-0 rounded-2xl border border-[#E9E0D8] bg-white p-3 shadow-[0_4px_18px_rgba(22,43,77,0.04)] sm:p-4" data-testid="section-menu">
             <div className="mb-3 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <h2 className="text-base font-bold text-[#162B4D]">Today&apos;s menu</h2>
+                 <h2 className="text-base font-bold text-[#162B4D]">{saleMode === "preorder" ? "Preorder menu" : "Today&apos;s menu"}</h2>
                 <p className="mt-0.5 text-xs text-[#8B95A5]">{filteredProducts.length} available {filteredProducts.length === 1 ? "item" : "items"}</p>
               </div>
               <label className="relative block w-full lg:max-w-[270px]">
@@ -455,7 +574,23 @@ export default function POS() {
                   <div className="flex items-end justify-between border-t border-dashed border-[#D8E0EA] pt-2"><span className="text-xs font-bold uppercase tracking-[0.14em] text-[#51617A]">Total due</span><span className="text-xl font-bold tracking-tight text-[#162B4D]" data-testid="text-pos-total">{formatRupees(total)}</span></div>
                 </div>
 
-              <div className="space-y-2">
+               {saleMode === "preorder" && (
+                 <div className="mb-3 rounded-xl border border-[#F3C7C1] bg-[#FFF6F4] p-3">
+                   <p className="mb-2 text-xs font-bold text-[#8D3D36]">Future handover</p>
+                   <label className="mb-1 block text-[11px] font-semibold text-[#8D3D36]" htmlFor="pos-preorder-date">Handover date</label>
+                   <input id="pos-preorder-date" type="date" min={getTomorrowDateISO()} value={preorderDate} onChange={(event) => setPreorderDate(event.target.value)} className="h-9 w-full rounded-lg border border-[#E9B8B1] bg-white px-3 text-sm text-[#162B4D] outline-none focus:border-[#F05B4E]" data-testid="input-preorder-date" />
+                   <label className="mb-1 mt-3 block text-[11px] font-semibold text-[#8D3D36]" htmlFor="pos-preorder-timeslot">Handover slot</label>
+                   <select id="pos-preorder-timeslot" value={selectedTimeslotId} onChange={(event) => setSelectedTimeslotId(event.target.value)} disabled={loadingTimeslots || timeslots.length === 0} className="h-9 w-full rounded-lg border border-[#E9B8B1] bg-white px-3 text-sm text-[#162B4D] outline-none focus:border-[#F05B4E]" data-testid="select-preorder-timeslot">
+                     <option value="">{loadingTimeslots ? "Loading slots..." : timeslots.length ? "Select a slot" : "No slots available"}</option>
+                     {timeslots.filter((slot) => cart.every((line) => isProductTimeslotAllowedForPreorder(line, preorderDate, String(slot._id)))).map((slot) => (
+                       <option key={slot._id} value={slot._id}>{slot.label || `${slot.startTime || ""}–${slot.endTime || ""}`}</option>
+                     ))}
+                   </select>
+                   {!loadingTimeslots && timeslots.length === 0 && <p className="mt-1 text-[11px] text-[#A25952]">Create an active timeslot before taking preorders.</p>}
+                 </div>
+               )}
+
+               <div className="space-y-2">
                 <div><label htmlFor="pos-customer-name" className="mb-1.5 block text-xs font-bold text-[#51617A]">Customer name <span className="text-[#D94A3D]">*</span></label><div className="relative"><UserRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#98A4B4]" /><input id="pos-customer-name" value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Enter customer name" className="h-10 w-full rounded-lg border border-[#D8E0EA] bg-white pl-9 pr-3 text-sm text-[#162B4D] outline-none placeholder:text-[#A4AFBC] focus:border-[#F05B4E] focus:ring-2 focus:ring-[#F05B4E]/10" data-testid="input-customer-name" /></div></div>
                 <div>
                   <label htmlFor="pos-customer-phone" className="mb-1.5 block text-xs font-bold text-[#51617A]">Phone <span className="font-normal text-[#A0A9B7]">optional</span></label>
@@ -478,8 +613,8 @@ export default function POS() {
               </div>
 
               {submitError && <div className="mt-3 flex gap-2 rounded-lg border border-[#F2C2BC] bg-[#FFF4F2] px-3 py-2.5 text-xs leading-5 text-[#B8443B]" role="alert" data-testid="status-sale-error"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /> <span>{submitError}</span></div>}
-              <button type="button" onClick={() => void submitSale()} disabled={!canCompleteSale} className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-[#F05B4E] text-sm font-bold text-white shadow-[0_6px_12px_rgba(240,91,78,0.22)] transition-all hover:bg-[#D94A3D] active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-[#D7DDE5] disabled:text-[#8A95A5] disabled:shadow-none" data-testid="button-complete-sale">
-                {submitting ? <><Loader2 className="h-4 w-4 animate-spin" /> Completing sale</> : <>Complete takeaway sale <ChevronRight className="h-4 w-4" /></>}
+               <button type="button" onClick={() => void submitSale()} disabled={!canCompleteSale} className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-[#F05B4E] text-sm font-bold text-white shadow-[0_6px_12px_rgba(240,91,78,0.22)] transition-all hover:bg-[#D94A3D] active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-[#D7DDE5] disabled:text-[#8A95A5] disabled:shadow-none" data-testid="button-complete-sale">
+                 {submitting ? <><Loader2 className="h-4 w-4 animate-spin" /> {saleMode === "preorder" ? "Creating preorder" : "Completing sale"}</> : <>{saleMode === "preorder" ? "Create preorder" : "Complete takeaway sale"} <ChevronRight className="h-4 w-4" /></>}
               </button>
               {cart.length > 0 && !customerName.trim() && <p className="mt-2 text-center text-[11px] text-[#A25952]" data-testid="text-name-required">Customer name is required to complete the sale.</p>}
             </div>

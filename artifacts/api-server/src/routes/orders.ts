@@ -641,9 +641,10 @@ router.get("/", async (req: ScopedRequest, res) => {
     }
 
     if (!isDeletedTab) {
-      // Tab semantics: takeaway-deliveryType orders are always treated as completed (History).
-      // - "current": active statuses AND deliveryType != takeaway
-      // - "history": history statuses OR deliveryType == takeaway
+      // Tab semantics: completed takeaway sales are History, but future preorder
+      // takeaways remain Current until they are handed over.
+      // - "current": active statuses AND (deliveryType != takeaway OR preorder)
+      // - "history": history statuses OR completed non-preorder takeaway
       const ACTIVE = ["pending", "confirmed", "out_for_delivery"];
       const HISTORY = ["delivered", "cancelled"];
 
@@ -654,13 +655,22 @@ router.get("/", async (req: ScopedRequest, res) => {
       if (tab === "current") {
         const list = statusList.length ? statusList.filter((s) => ACTIVE.includes(s)) : ACTIVE;
         filter.status = { $in: list };
-        filter.deliveryType = { $ne: "takeaway" };
+        filter.$and = [
+          ...(filter.$and ?? []),
+          { $or: [{ deliveryType: { $ne: "takeaway" } }, { deliveryType: "takeaway", orderType: "preorder" }] },
+        ];
       } else if (tab === "history") {
         const list = statusList.length ? statusList.filter((s) => HISTORY.includes(s)) : HISTORY;
         filter.$or = [
           ...(filter.$or ?? []).map((c: any) => ({ ...c })),
         ];
-        const historyClause = { $or: [{ status: { $in: list } }, { deliveryType: "takeaway" }] };
+        const historyClause = {
+          $or: [
+            { status: { $in: list } },
+            { deliveryType: "takeaway", orderType: { $ne: "preorder" } },
+            { deliveryType: "takeaway", orderType: "preorder", status: "takeaway" },
+          ],
+        };
         if (filter.$or && filter.$or.length) {
           filter.$and = [{ $or: filter.$or }, historyClause];
           delete filter.$or;
@@ -757,7 +767,7 @@ router.get("/stats", async (req: ScopedRequest, res) => {
     const pipeline: any[] = [];
     // Always exclude soft-deleted orders from normal stats.
     pipeline.push({ $match: { ...scopeClause, isDeleted: { $ne: true } } });
-    pipeline.push({ $group: { _id: { status: "$status", deliveryType: "$deliveryType" }, count: { $sum: 1 } } });
+    pipeline.push({ $group: { _id: { status: "$status", deliveryType: "$deliveryType", orderType: "$orderType" }, count: { $sum: 1 } } });
     const agg = await conn.db.collection(COLLECTION).aggregate(pipeline).toArray();
 
     const ACTIVE = ["pending", "confirmed", "out_for_delivery"];
@@ -774,9 +784,10 @@ router.get("/stats", async (req: ScopedRequest, res) => {
     for (const row of agg) {
       const st = row._id?.status ?? "unknown";
       const dt = row._id?.deliveryType ?? "delivery";
+      const ot = row._id?.orderType ?? "normal";
       const c = row.count ?? 0;
       rawStats[st] = (rawStats[st] ?? 0) + c;
-      if (dt === "takeaway") {
+      if (dt === "takeaway" && ot !== "preorder") {
         if (HISTORY.includes(st)) {
           // Delivered/cancelled takeaway orders count under their final status,
           // not under the Takeaway bucket.
@@ -785,6 +796,9 @@ router.get("/stats", async (req: ScopedRequest, res) => {
         } else {
           takeawayActive += c;
         }
+      } else if (dt === "takeaway" && ot === "preorder" && st === "takeaway") {
+        stats[st] = (stats[st] ?? 0) + c;
+        takeawayHistory += c;
       } else {
         stats[st] = (stats[st] ?? 0) + c;
       }
@@ -793,7 +807,7 @@ router.get("/stats", async (req: ScopedRequest, res) => {
 
     const total = Object.values(rawStats).reduce((a, b) => a + b, 0);
     const currentTotal = ACTIVE.reduce((s, k) => s + (stats[k] ?? 0), 0);
-    const historyTotal = HISTORY.reduce((s, k) => s + (stats[k] ?? 0), 0) + takeawayActive;
+    const historyTotal = HISTORY.reduce((s, k) => s + (stats[k] ?? 0), 0) + takeawayActive + takeawayHistory;
 
     // Current / next-day counts for the tab badges
     // Current Orders = today, past, or no date set
@@ -804,16 +818,21 @@ router.get("/stats", async (req: ScopedRequest, res) => {
       ...scopeClause,
       isDeleted: { $ne: true },
       status: { $in: ACTIVE },
-      deliveryType: { $ne: "takeaway" },
+      $and: [
+        { $or: [{ deliveryType: { $ne: "takeaway" } }, { deliveryType: "takeaway", orderType: "preorder" }] },
+      ],
     };
     const [todayTotal, otherDayTotal] = await Promise.all([
       conn.db.collection(COLLECTION).countDocuments({
         ...activeNonTakeaway,
-        $or: [
-          { deliveryDate: null },
-          { deliveryDate: "" },
-          { deliveryDate: { $exists: false } },
-          { deliveryDate: { $lte: todayISO } },
+        $and: [
+          ...(activeNonTakeaway.$and ?? []),
+          { $or: [
+            { deliveryDate: null },
+            { deliveryDate: "" },
+            { deliveryDate: { $exists: false } },
+            { deliveryDate: { $lte: todayISO } },
+          ] },
         ],
       }),
       conn.db.collection(COLLECTION).countDocuments({
@@ -1115,10 +1134,6 @@ router.post("/", async (req: ScopedRequest, res) => {
       const preorderDate = String(deliveryDate ?? "").trim();
       if (!/^\d{4}-\d{2}-\d{2}$/.test(preorderDate) || preorderDate <= getTodayISODate()) {
         res.status(400).json({ error: "ValidationError", message: "Preorder delivery date must be a future date" });
-        return;
-      }
-      if (dt !== "delivery") {
-        res.status(400).json({ error: "ValidationError", message: "Preorders must use delivery" });
         return;
       }
     }
@@ -1882,10 +1897,6 @@ router.put("/:id", async (req: ScopedRequest, res) => {
     if (nextOrderType === "preorder") {
       const nextDeliveryType = deliveryType !== undefined ? String(deliveryType) : String(prev.deliveryType ?? "");
       const nextDeliveryDate = deliveryDate !== undefined ? String(deliveryDate).trim() : String(prev.deliveryDate ?? "").slice(0, 10);
-      if (nextDeliveryType === "takeaway") {
-        res.status(400).json({ error: "ValidationError", message: "Preorders must use delivery" });
-        return;
-      }
       if (!/^\d{4}-\d{2}-\d{2}$/.test(nextDeliveryDate)) {
         res.status(400).json({ error: "ValidationError", message: "Preorder delivery date must be a valid date" });
         return;
