@@ -7,7 +7,7 @@ import {
 } from "@workspace/api-client-react";
 import {
   Building2, MapPin, Users,
-  CheckCircle2, ShoppingBag, Truck, Clock,
+  CheckCircle2, ShoppingBag, Clock,
   XCircle, RefreshCw, Phone, User,
   ArrowRight,
 } from "lucide-react";
@@ -43,11 +43,12 @@ function formatDate(d: any) {
 const HUB_COLORS   = ["#1A56DB", "#10B981", "#F59E0B", "#8B5CF6", "#EF4444"];
 
 const ORDER_STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; chart: string; icon: any }> = {
-  pending:          { label: "Pending",         color: "text-amber-600",  bg: "bg-amber-50 border-amber-200",  chart: "#F59E0B", icon: Clock },
-  confirmed:        { label: "Confirmed",        color: "text-blue-600",   bg: "bg-blue-50 border-blue-200",    chart: "#1A56DB", icon: CheckCircle2 },
-  out_for_delivery: { label: "Out for Delivery", color: "text-indigo-600", bg: "bg-indigo-50 border-indigo-200",chart: "#6366F1", icon: Truck },
-  delivered:        { label: "Delivered",        color: "text-green-600",  bg: "bg-green-50 border-green-200",  chart: "#10B981", icon: CheckCircle2 },
-  cancelled:        { label: "Cancelled",        color: "text-red-500",    bg: "bg-red-50 border-red-200",      chart: "#EF4444", icon: XCircle },
+  pending:          { label: "Awaiting Action", color: "text-amber-600",  bg: "bg-amber-50 border-amber-200",  chart: "#F59E0B", icon: Clock },
+  confirmed:        { label: "Confirmed",       color: "text-blue-600",   bg: "bg-blue-50 border-blue-200",    chart: "#1A56DB", icon: CheckCircle2 },
+  out_for_delivery: { label: "Ready for Handover", color: "text-indigo-600", bg: "bg-indigo-50 border-indigo-200", chart: "#6366F1", icon: CheckCircle2 },
+  delivered:        { label: "Handed Over",     color: "text-green-600",  bg: "bg-green-50 border-green-200",  chart: "#10B981", icon: CheckCircle2 },
+  takeaway:         { label: "Today's Sale",    color: "text-orange-600", bg: "bg-orange-50 border-orange-200", chart: "#F97316", icon: ShoppingBag },
+  cancelled:        { label: "Cancelled",       color: "text-red-500",    bg: "bg-red-50 border-red-200",      chart: "#EF4444", icon: XCircle },
 };
 
 // ─── CUSTOM TOOLTIP ───────────────────────────────────────────────────────────
@@ -125,6 +126,7 @@ export default function Dashboard() {
   });
 
   const [orderStats, setOrderStats]           = useState<Record<string, number>>({});
+  const [orderSummary, setOrderSummary]       = useState({ todayPosSales: 0, activePreorderSales: 0 });
   const [recentOrders, setRecentOrders]       = useState<any[]>([]);
   const [customers, setCustomers]             = useState<{ total: number }>({ total: 0 });
   const [extraLoading, setExtraLoading]       = useState(true);
@@ -137,7 +139,13 @@ export default function Dashboard() {
         apiFetch("/api/orders?limit=6&sort=createdAt&order=desc"),
         apiFetch("/api/customers?limit=1"),
       ]);
-      if (oStats.status === "fulfilled")   setOrderStats(oStats.value.stats ?? {});
+      if (oStats.status === "fulfilled") {
+        setOrderStats(oStats.value.stats ?? {});
+        setOrderSummary({
+          todayPosSales: Number(oStats.value.todayPosSales ?? 0),
+          activePreorderSales: Number(oStats.value.activePreorderSales ?? 0),
+        });
+      }
       if (oRecent.status === "fulfilled")  setRecentOrders(oRecent.value.orders ?? []);
       if (cust.status === "fulfilled")     setCustomers({ total: cust.value.total ?? 0 });
     } finally { setExtraLoading(false); }
@@ -176,7 +184,6 @@ export default function Dashboard() {
 
   // ── Hub bar data ─────────────────────────────────────────────────────────
   const awaitingAction = (orderStats.pending ?? 0) + (orderStats.confirmed ?? 0);
-  const readyForHandover = orderStats.out_for_delivery ?? 0;
   const itemsHandedOver = (orderStats.delivered ?? 0) + (orderStats.takeaway ?? 0);
 
   return (
@@ -210,9 +217,9 @@ export default function Dashboard() {
           <ShoppingBag className="w-3 h-3" /> Operations
         </p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <StatCard loading={extraLoading} title="Total Orders"       value={totalOrders}              sub={`${activeOrders} active`}                         icon={ShoppingBag} iconColor="text-orange-600"   iconBg="bg-orange-50"  border="border-orange-100"  badge={`${pendingOrders} pending`} badgeColor={pendingOrders > 0 ? "bg-amber-50 text-amber-600" : "bg-gray-50 text-gray-400"} />
-          <StatCard loading={extraLoading} title="Awaiting Action" value={awaitingAction} sub="received, not handed over" icon={Clock} iconColor="text-amber-600" iconBg="bg-amber-50" border="border-amber-100" badge="Needs action" badgeColor="bg-amber-50 text-amber-600" />
-          <StatCard loading={extraLoading} title="Items Handed Over" value={itemsHandedOver} sub="delivery and takeaway" icon={CheckCircle2} iconColor="text-green-600" iconBg="bg-green-50" border="border-green-100" badge="Completed" badgeColor="bg-green-50 text-green-600" />
+          <StatCard loading={extraLoading} title="Today's POS Sales" value={orderSummary.todayPosSales} sub="completed takeaway sales" icon={ShoppingBag} iconColor="text-orange-600" iconBg="bg-orange-50" border="border-orange-100" badge="FTS sales" badgeColor="bg-orange-50 text-orange-600" />
+          <StatCard loading={extraLoading} title="Active Preorders" value={orderSummary.activePreorderSales} sub="future handovers" icon={Clock} iconColor="text-purple-600" iconBg="bg-purple-50" border="border-purple-100" badge="Future" badgeColor="bg-purple-50 text-purple-600" />
+          <StatCard loading={extraLoading} title="Awaiting Action" value={awaitingAction} sub="orders needing staff action" icon={Clock} iconColor="text-amber-600" iconBg="bg-amber-50" border="border-amber-100" badge={`${pendingOrders} pending`} badgeColor={pendingOrders > 0 ? "bg-amber-50 text-amber-600" : "bg-gray-50 text-gray-400"} />
           <StatCard loading={extraLoading} title="Total Customers" value={customers.total} sub="registered accounts" icon={User} iconColor="text-sky-600" iconBg="bg-sky-50" border="border-sky-100" badge="Customers" badgeColor="bg-sky-50 text-sky-600" />
         </div>
       </div>
@@ -286,7 +293,7 @@ export default function Dashboard() {
                       </div>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-[10px] text-gray-400 flex items-center gap-0.5"><Phone className="w-2.5 h-2.5" />{o.phone}</span>
-                        {o.deliveryArea && <span className="text-[10px] text-gray-400 flex items-center gap-0.5"><MapPin className="w-2.5 h-2.5" />{o.deliveryArea}</span>}
+                        <span className="text-[10px] text-gray-400">{o.orderType === "preorder" ? "Preorder" : "Today's Sale"}</span>
                       </div>
                     </div>
                     <div className="text-right flex-shrink-0">
@@ -304,14 +311,14 @@ export default function Dashboard() {
       {/* ── Order handover summary + Hub performance ─────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-        {/* Order pipeline card */}
+        {/* POS order summary card */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <SectionHeader icon={ShoppingBag} iconColor="text-indigo-500" title="Order Handover Summary" />
+          <SectionHeader icon={ShoppingBag} iconColor="text-indigo-500" title="POS Order Summary" />
           <div className="space-y-3">
             {[
-              { key: "received", label: "Orders Received", icon: ShoppingBag, color: "text-blue-600", bg: "bg-blue-50", bar: "bg-blue-500", count: totalOrders },
+              { key: "today-sales", label: "Today's POS Sales", icon: ShoppingBag, color: "text-orange-600", bg: "bg-orange-50", bar: "bg-orange-500", count: orderSummary.todayPosSales },
+              { key: "preorders", label: "Active Preorders", icon: Clock, color: "text-purple-600", bg: "bg-purple-50", bar: "bg-purple-500", count: orderSummary.activePreorderSales },
               { key: "awaiting", label: "Awaiting Action", icon: Clock, color: "text-amber-600", bg: "bg-amber-50", bar: "bg-amber-400", count: awaitingAction },
-              { key: "ready", label: "Ready for Handover", icon: Truck, color: "text-indigo-600", bg: "bg-indigo-50", bar: "bg-indigo-500", count: readyForHandover },
               { key: "handed", label: "Items Handed Over", icon: CheckCircle2, color: "text-green-600", bg: "bg-green-50", bar: "bg-green-500", count: itemsHandedOver },
               { key: "cancelled", label: "Cancelled", icon: XCircle, color: "text-red-500", bg: "bg-red-50", bar: "bg-red-400", count: orderStats.cancelled ?? 0 },
             ].map(({ key, label, icon: Icon, color, bg, bar, count }) => {

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
-import { Plus, Search, Edit2, Trash2, Mail, Phone, Eye, EyeOff, ArrowUpDown, SlidersHorizontal, X, LayoutGrid, LayoutList } from "lucide-react";
+import { Plus, Search, Edit2, Trash2, Mail, Phone, Eye, EyeOff, ArrowUpDown, SlidersHorizontal, X, LayoutGrid, LayoutList, ShieldCheck } from "lucide-react";
 import { ImageUpload } from "@/components/image-upload";
 import PasswordResetInbox from "@/components/password-reset-inbox";
 import { PaginationBar } from "@/components/pagination-bar";
@@ -144,6 +144,36 @@ export default function AdminUsers() {
       },
     });
   };
+
+  return (
+    <div className="space-y-6 max-w-4xl mx-auto">
+      <div>
+        <h2 className="text-2xl font-bold text-[#162B4D]">Master Admin Account</h2>
+        <p className="text-gray-500 text-sm mt-1">
+          FishTokri is configured with one system login. Additional admin, hub, staff, and delivery accounts are disabled.
+        </p>
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+            <ShieldCheck className="w-6 h-6" />
+          </div>
+          <div>
+            <p className="font-semibold text-[#162B4D]">Master Admin</p>
+            <p className="text-sm text-gray-500">Single active system account</p>
+          </div>
+        </div>
+        <span className="inline-flex items-center rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
+          Active
+        </span>
+      </div>
+
+      <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-4 text-sm text-blue-800">
+        The Master Admin login is handled by the server-side authentication configuration and is not stored in the <code className="font-semibold">hub_users</code> collection.
+      </div>
+    </div>
+  );
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">

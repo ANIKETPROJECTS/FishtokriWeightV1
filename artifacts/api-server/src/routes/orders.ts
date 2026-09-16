@@ -849,7 +849,42 @@ router.get("/stats", async (req: ScopedRequest, res) => {
       orderType: "preorder",
     });
 
-    res.json({ stats, rawStats, total, currentTotal, historyTotal, todayTotal, otherDayTotal, preorderTotal, deletedTotal });
+    const todayStart = new Date(`${todayISO}T00:00:00+05:30`);
+    const tomorrowStart = new Date(`${tomorrowISO}T00:00:00+05:30`);
+    const posInvoiceClause = {
+      ...scopeClause,
+      isDeleted: { $ne: true },
+      orderId: { $regex: /^#?FTS/i },
+      deliveryType: "takeaway",
+    };
+    const [todayPosSales, activePreorderSales] = await Promise.all([
+      conn.db.collection(COLLECTION).countDocuments({
+        ...posInvoiceClause,
+        orderType: { $ne: "preorder" },
+        status: "takeaway",
+        createdAt: { $gte: todayStart, $lt: tomorrowStart },
+      }),
+      conn.db.collection(COLLECTION).countDocuments({
+        ...posInvoiceClause,
+        orderType: "preorder",
+        status: { $in: ACTIVE },
+        deliveryDate: { $gt: todayISO },
+      }),
+    ]);
+
+    res.json({
+      stats,
+      rawStats,
+      total,
+      currentTotal,
+      historyTotal,
+      todayTotal,
+      otherDayTotal,
+      preorderTotal,
+      deletedTotal,
+      todayPosSales,
+      activePreorderSales,
+    });
   } catch (err) {
     req.log.error({ err }, "Failed to get order stats");
     res.status(500).json({ error: "InternalError", message: "Failed to fetch order stats" });
