@@ -5724,7 +5724,7 @@ export default function Orders() {
                         </Button>
                       </div>
                       {deliveryPersons.length === 0 && (
-                        <p className="text-sm font-semibold text-black italic">No delivery persons found. Add them via Admin Users.</p>
+                        <p className="text-sm font-semibold text-black italic">No delivery persons found. Add them via hub access management.</p>
                       )}
                     </div>
                   </div>

@@ -47,7 +47,7 @@ export default function SingleHub() {
       const selected = hubs.find((item) => item.name.toLowerCase().includes("thane")) ?? hubs[0] ?? null;
       setHub(selected);
     } catch (err: any) {
-      toast({ title: "Failed to load Thane Hub", description: err.message, variant: "destructive" });
+      toast({ title: "Failed to load hub", description: err.message, variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -88,7 +88,7 @@ export default function SingleHub() {
   const header = (
     <div className="flex items-center justify-between w-full min-w-0">
       <div className="min-w-0">
-        <p className="text-sm font-bold text-white leading-tight">Thane Hub</p>
+        <p className="text-sm font-bold text-white leading-tight">{hub?.name || "Hub"}</p>
         <p className="text-[11px] text-white/75 leading-tight hidden sm:block">Products and operations for this hub.</p>
       </div>
       {hub && (
@@ -107,7 +107,7 @@ export default function SingleHub() {
         {loading ? (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-14 text-center">
             <RefreshCw className="w-8 h-8 text-[#1A56DB] animate-spin mx-auto mb-3" />
-            <p className="text-sm font-semibold text-[#162B4D]">Loading Thane Hub...</p>
+            <p className="text-sm font-semibold text-[#162B4D]">Loading hub...</p>
           </div>
         ) : hub ? (
           <>
@@ -136,7 +136,7 @@ export default function SingleHub() {
               >
                 <Package className="w-6 h-6 text-[#1A56DB] mb-3" />
                 <p className="font-bold text-[#162B4D]">Manage Products</p>
-                <p className="text-sm text-gray-500 mt-1">Add and edit the products sold by Thane Hub.</p>
+                <p className="text-sm text-gray-500 mt-1">Add and edit the products sold by {hub.name}.</p>
               </button>
               <button
                 onClick={() => navigate("/inventory/products")}

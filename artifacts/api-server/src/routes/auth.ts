@@ -177,9 +177,10 @@ router.get("/master-admin/settings", requireAuth as any, requireMasterAdmin as a
 const settingsSchema = z.object({
   name: z.string().trim().min(1).max(100),
   email: z.string().trim().email().max(200),
-  recoveryEmail: z.string().trim().email().max(200),
+  recoveryEmail: z.string().trim().email().max(200).optional(),
   hubName: z.string().trim().min(1).max(100),
   currentPassword: z.string().min(1).max(200),
+  newPassword: z.string().max(200).optional(),
 });
 
 router.put("/master-admin/settings", requireAuth as any, requireMasterAdmin as any, async (req: AuthenticatedRequest, res) => {
@@ -196,7 +197,8 @@ router.put("/master-admin/settings", requireAuth as any, requireMasterAdmin as a
     }
     settings.name = parsed.data.name;
     settings.email = parsed.data.email.toLowerCase();
-    settings.recoveryEmail = parsed.data.recoveryEmail.toLowerCase();
+    if (parsed.data.recoveryEmail) settings.recoveryEmail = parsed.data.recoveryEmail.toLowerCase();
+    if (parsed.data.newPassword) settings.passwordHash = await bcrypt.hash(parsed.data.newPassword, 12);
     await settings.save();
     const primaryHub = await getPrimaryHub();
     if (primaryHub) {

@@ -556,7 +556,7 @@ function SuperHubForm({ hub, onBack }: { hub: any | null; onBack: () => void }) 
                 <span className="text-xs font-semibold text-[#1A56DB] bg-blue-50 px-2 py-0.5 rounded-full">{users.length} added</span>
               )}
             </div>
-            <p className="text-xs text-gray-500">Optionally add users to manage this hub. You can also add them later from Admin Users.</p>
+            <p className="text-xs text-gray-500">Optionally add users to manage this hub. Access can also be managed later.</p>
 
             <div className="space-y-3 p-3 bg-gray-50 rounded-lg">
               <div className="grid grid-cols-2 gap-2">

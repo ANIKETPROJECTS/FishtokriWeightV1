@@ -239,7 +239,7 @@ function App() {
               <ProtectedRoute component={BankingPayments} allowedRoles={HUB_OWNERS} />
             </Route>
 
-            {/* Admin Users — Master Admin only */}
+            {/* Hub Settings — Master Admin only */}
             <Route path="/hub-settings">
               <ProtectedRoute component={SettingsPage} allowedRoles={MASTER_ONLY} />
             </Route>

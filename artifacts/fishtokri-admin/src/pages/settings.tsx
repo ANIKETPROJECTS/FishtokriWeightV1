@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { AlertCircle, CheckCircle2, KeyRound, Mail, Save, ShieldCheck } from "lucide-react";
+import { Eye, EyeOff, Save, ShieldCheck } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import PasswordResetInbox from "@/components/password-reset-inbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,8 +9,6 @@ import { Label } from "@/components/ui/label";
 type Settings = {
   name: string;
   email: string;
-  recoveryEmail: string;
-  mailConfigured: boolean;
   hub: { id: string; name: string; location: string; superHubName: string } | null;
 };
 
@@ -37,14 +34,53 @@ async function api(path: string, options: RequestInit = {}) {
   return data;
 }
 
+function PasswordInput({
+  value,
+  onChange,
+  placeholder,
+  disabled,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  disabled?: boolean;
+}) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <div className="relative">
+      <Input
+        type={visible ? "text" : "password"}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        disabled={disabled}
+        className="pr-10"
+      />
+      <button
+        type="button"
+        onClick={() => setVisible((current) => !current)}
+        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-[#1A56DB]"
+        aria-label={visible ? "Hide password" : "Show password"}
+      >
+        {visible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+      </button>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const { toast } = useToast();
   const headerSlot = document.getElementById("page-header-slot");
   const [settings, setSettings] = useState<Settings | null>(null);
-  const [form, setForm] = useState({ hubName: "", name: "", email: "", recoveryEmail: "", currentPassword: "" });
+  const [form, setForm] = useState({
+    hubName: "",
+    name: "",
+    email: "",
+    currentPassword: "",
+    newPassword: "",
+  });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [sendingReset, setSendingReset] = useState(false);
 
   useEffect(() => {
     api("/api/auth/master-admin/settings")
@@ -56,10 +92,9 @@ export default function SettingsPage() {
           hubName: next.hub?.name || "",
           name: next.name || "",
           email: next.email || "",
-          recoveryEmail: next.recoveryEmail || "",
         }));
       })
-      .catch((error) => toast({ title: "Could not load settings", description: error.message, variant: "destructive" }))
+      .catch((error) => toast({ title: "Could not load Hub Settings", description: error.message, variant: "destructive" }))
       .finally(() => setLoading(false));
   }, [toast]);
 
@@ -76,26 +111,14 @@ export default function SettingsPage() {
         body: JSON.stringify(form),
       });
       setSettings(data.settings);
-      setForm((current) => ({ ...current, currentPassword: "" }));
+      setForm((current) => ({ ...current, currentPassword: "", newPassword: "" }));
       if (data.token) localStorage.setItem("fishtokri_token", data.token);
       if (data.admin) localStorage.setItem("fishtokri_admin", JSON.stringify(data.admin));
-      toast({ title: "Settings saved", description: "Your Master Admin details were updated." });
+      toast({ title: "Hub Settings saved", description: "Your hub and login details were updated." });
     } catch (error: any) {
-      toast({ title: "Could not save settings", description: error.message, variant: "destructive" });
+      toast({ title: "Could not save Hub Settings", description: error.message, variant: "destructive" });
     } finally {
       setSaving(false);
-    }
-  };
-
-  const sendReset = async () => {
-    setSendingReset(true);
-    try {
-      const data = await api("/api/auth/master-admin/send-password-reset", { method: "POST" });
-      toast({ title: "Reset email sent", description: `Instructions were sent to ${data.recoveryEmail}.` });
-    } catch (error: any) {
-      toast({ title: "Could not send reset email", description: error.message, variant: "destructive" });
-    } finally {
-      setSendingReset(false);
     }
   };
 
@@ -115,83 +138,60 @@ export default function SettingsPage() {
       </div>
 
       {loading ? (
-        <div className="rounded-xl border border-gray-100 bg-white p-8 text-sm text-gray-500">Loading settings…</div>
+        <div className="rounded-xl border border-gray-100 bg-white p-8 text-sm text-gray-500">Loading Hub Settings…</div>
       ) : (
-        <>
-          <form onSubmit={save} className="rounded-xl border border-gray-100 bg-white shadow-sm p-6 space-y-5">
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-xl bg-blue-50 text-[#1A56DB] flex items-center justify-center">
-                <ShieldCheck className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-[#162B4D]">Hub identity and login details</h3>
-                <p className="text-sm text-gray-500">The hub name can be changed here. The password is never shown; use the reset email section to change it.</p>
-              </div>
+        <form onSubmit={save} className="rounded-xl border border-gray-100 bg-white shadow-sm p-6 space-y-5">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-50 text-[#1A56DB] flex items-center justify-center">
+              <ShieldCheck className="w-5 h-5" />
             </div>
+            <div>
+              <h3 className="font-semibold text-[#162B4D]">Hub identity and login details</h3>
+              <p className="text-sm text-gray-500">Enter your current password to save. The stored password is protected and cannot be displayed; use the new-password field to change it.</p>
+            </div>
+          </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label>Hub name</Label>
-                <Input value={form.hubName} onChange={(e) => update("hubName", e.target.value)} disabled={saving} />
-                <p className="text-xs text-gray-400">This updates the active hub label without changing its stored data.</p>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Admin name</Label>
-                <Input value={form.name} onChange={(e) => update("name", e.target.value)} disabled={saving} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Login email</Label>
-                <Input type="email" value={form.email} onChange={(e) => update("email", e.target.value)} disabled={saving} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Reset email</Label>
-                <Input type="email" value={form.recoveryEmail} onChange={(e) => update("recoveryEmail", e.target.value)} disabled={saving} />
-                <p className="text-xs text-gray-400">Password reset links are sent to this address.</p>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Current password</Label>
-                <Input
-                  type="password"
-                  value={form.currentPassword}
-                  onChange={(e) => update("currentPassword", e.target.value)}
-                  placeholder="Required to save changes"
-                  disabled={saving}
-                />
-              </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label>Hub name</Label>
+              <Input value={form.hubName} onChange={(e) => update("hubName", e.target.value)} disabled={saving} />
+              <p className="text-xs text-gray-400">Updates the active hub label without changing its stored data.</p>
             </div>
+            <div className="space-y-1.5">
+              <Label>Admin name</Label>
+              <Input value={form.name} onChange={(e) => update("name", e.target.value)} disabled={saving} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Login email</Label>
+              <Input type="email" value={form.email} onChange={(e) => update("email", e.target.value)} disabled={saving} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Current password</Label>
+              <PasswordInput
+                value={form.currentPassword}
+                onChange={(value) => update("currentPassword", value)}
+                placeholder="Enter current password"
+                disabled={saving}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>New password</Label>
+              <PasswordInput
+                value={form.newPassword}
+                onChange={(value) => update("newPassword", value)}
+                placeholder="Leave blank to keep it unchanged"
+                disabled={saving}
+              />
+              <p className="text-xs text-gray-400">Use at least 8 characters. The eye icon only reveals what you typed.</p>
+            </div>
+          </div>
 
-            <div className="flex justify-end">
-              <Button type="submit" disabled={saving} className="bg-[#1A56DB] hover:bg-[#1447B4]">
-                <Save className="w-4 h-4 mr-2" /> {saving ? "Saving…" : "Save settings"}
-              </Button>
-            </div>
-          </form>
-
-          <section className="rounded-xl border border-gray-100 bg-white shadow-sm p-6 space-y-4">
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
-                <KeyRound className="w-5 h-5" />
-              </div>
-              <div className="flex-1">
-                <h3 className="font-semibold text-[#162B4D]">Reset Master Admin password</h3>
-                <p className="text-sm text-gray-500">Send a one-time password reset link that expires after 30 minutes.</p>
-              </div>
-            </div>
-            <div className={`flex items-start gap-2 rounded-lg p-3 text-sm ${settings?.mailConfigured ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-800"}`}>
-              {settings?.mailConfigured ? <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0" /> : <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />}
-              <span>
-                {settings?.mailConfigured
-                  ? <>Email delivery is configured. Reset links will be sent to <strong>{settings.recoveryEmail}</strong>.</>
-                  : <>Email delivery is not configured yet. Add SMTP settings in Replit Secrets before sending a reset email.</>}
-              </span>
-            </div>
-            <Button type="button" onClick={sendReset} disabled={sendingReset || !settings?.mailConfigured} variant="outline">
-              <Mail className="w-4 h-4 mr-2" /> {sendingReset ? "Sending…" : "Send password reset email"}
+          <div className="flex justify-end">
+            <Button type="submit" disabled={saving} className="bg-[#1A56DB] hover:bg-[#1447B4]">
+              <Save className="w-4 h-4 mr-2" /> {saving ? "Saving…" : "Save Hub Settings"}
             </Button>
-          </section>
-
-          <PasswordResetInbox />
-        </>
+          </div>
+        </form>
       )}
     </div>
   );
