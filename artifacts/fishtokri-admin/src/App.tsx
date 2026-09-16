@@ -12,7 +12,8 @@ import MyDeliveries from "@/pages/my-deliveries";
 import DeliveryHubs from "@/pages/delivery-hubs";
 import SingleHub from "@/pages/single-hub";
 import HubDetail from "@/pages/hub-detail";
-import AdminUsers from "@/pages/admin-users";
+import SettingsPage from "@/pages/settings";
+import ResetAdminPassword from "@/pages/reset-admin-password";
 import Customers from "@/pages/customers";
 import Orders from "@/pages/orders";
 import ComingSoon from "@/pages/coming-soon";
@@ -151,6 +152,7 @@ function App() {
           <Switch>
             <Route path="/" component={RoleSelect} />
             <Route path="/login" component={Login} />
+            <Route path="/reset-admin-password" component={ResetAdminPassword} />
 
             {/* ── Unified admin routes ───────────────────────────────────── */}
             {/* Dashboard — every admin role lands here */}
@@ -238,8 +240,11 @@ function App() {
             </Route>
 
             {/* Admin Users — Master Admin only */}
+            <Route path="/settings">
+              <ProtectedRoute component={SettingsPage} allowedRoles={MASTER_ONLY} />
+            </Route>
             <Route path="/admin-users">
-              <ProtectedRoute component={AdminUsers} allowedRoles={MASTER_ONLY} />
+              <RedirectTo to="/settings" />
             </Route>
 
             {/* Customers — all admin roles */}

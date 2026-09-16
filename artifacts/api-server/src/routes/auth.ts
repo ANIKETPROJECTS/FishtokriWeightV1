@@ -1,15 +1,19 @@
 import { Router, type IRouter } from "express";
+import crypto from "node:crypto";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
+import nodemailer from "nodemailer";
 import { z } from "zod";
 import { HubUser } from "../db/models/hub-user.js";
 import { PasswordResetRequest } from "../db/models/password-reset-request.js";
+import { MasterAdminSettings } from "../db/models/master-admin-settings.js";
+import { MasterAdminPasswordReset } from "../db/models/master-admin-password-reset.js";
 import { requireAuth, requireMasterAdmin, type AuthenticatedRequest } from "../middlewares/auth.js";
 
 const router: IRouter = Router();
 
-const ADMIN_EMAIL = "admin@fishtokri.com";
-const ADMIN_PASSWORD = "FishTokri@Admin2024";
+const LEGACY_ADMIN_EMAIL = "admin@fishtokri.com";
+const LEGACY_ADMIN_PASSWORD = "FishTokri@Admin2024";
 const JWT_SECRET = process.env.SESSION_SECRET;
 
 if (!JWT_SECRET) {
@@ -21,6 +25,87 @@ const loginSchema = z.object({
   password: z.string().min(1),
   loginRole: z.enum(["master_admin", "super_hub", "sub_hub", "delivery_person"]).optional(),
 });
+
+async function getMasterAdminSettings() {
+  let settings = await MasterAdminSettings.findOne({ key: "primary" });
+  if (!settings) {
+    const email = (process.env.MASTER_ADMIN_EMAIL || LEGACY_ADMIN_EMAIL).trim().toLowerCase();
+    const password = process.env.MASTER_ADMIN_PASSWORD || LEGACY_ADMIN_PASSWORD;
+    settings = await MasterAdminSettings.create({
+      key: "primary",
+      name: "Master Admin",
+      email,
+      recoveryEmail: (process.env.MASTER_ADMIN_RECOVERY_EMAIL || email).trim().toLowerCase(),
+      passwordHash: await bcrypt.hash(password, 12),
+    });
+  }
+  return settings;
+}
+
+function publicSettings(settings: any) {
+  return {
+    name: settings.name,
+    email: settings.email,
+    recoveryEmail: settings.recoveryEmail,
+    mailConfigured: Boolean(process.env.SMTP_HOST && process.env.SMTP_FROM),
+  };
+}
+
+function hashResetToken(token: string) {
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
+
+function getMailTransport() {
+  const host = process.env.SMTP_HOST;
+  const from = process.env.SMTP_FROM;
+  if (!host || !from) return null;
+  const port = Number(process.env.SMTP_PORT || 587);
+  return {
+    from,
+    transporter: nodemailer.createTransport({
+      host,
+      port,
+      secure: String(process.env.SMTP_SECURE || "").toLowerCase() === "true" || port === 465,
+      auth: process.env.SMTP_USER && process.env.SMTP_PASS
+        ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+        : undefined,
+    }),
+  };
+}
+
+function getAppBaseUrl(req: any) {
+  return String(process.env.PUBLIC_APP_URL || `${req.protocol}://${req.get("host")}`).replace(/\/$/, "");
+}
+
+async function sendMasterAdminResetEmail(req: any, settings: any) {
+  const mail = getMailTransport();
+  if (!mail) throw new Error("SMTP is not configured. Add SMTP_HOST and SMTP_FROM in Replit Secrets.");
+
+  const token = crypto.randomBytes(32).toString("hex");
+  await MasterAdminPasswordReset.deleteMany({
+    $or: [{ expiresAt: { $lte: new Date() } }, { usedAt: { $ne: null } }],
+  });
+  await MasterAdminPasswordReset.create({
+    tokenHash: hashResetToken(token),
+    expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+  });
+
+  const resetUrl = `${getAppBaseUrl(req)}/reset-admin-password?token=${encodeURIComponent(token)}`;
+  await mail.transporter.sendMail({
+    from: mail.from,
+    to: settings.recoveryEmail,
+    subject: "FishTokri Master Admin password reset",
+    text: [
+      `Hello ${settings.name || "Master Admin"},`,
+      "",
+      "A password reset was requested for your FishTokri Master Admin account.",
+      `Reset your password within 30 minutes: ${resetUrl}`,
+      "",
+      "If you did not request this, you can ignore this email.",
+    ].join("\n"),
+    html: `<p>Hello ${settings.name || "Master Admin"},</p><p>A password reset was requested for your FishTokri Master Admin account.</p><p><a href="${resetUrl}">Reset your password</a> (valid for 30 minutes)</p><p>If you did not request this, you can ignore this email.</p>`,
+  });
+}
 
 router.post("/login", async (req, res) => {
   const parsed = loginSchema.safeParse(req.body);
@@ -36,23 +121,109 @@ router.post("/login", async (req, res) => {
     return;
   }
 
-  // Master Admin portal: credentials come from environment secrets.
   if (!loginRole || loginRole === "master_admin") {
-    if (!ADMIN_EMAIL || !ADMIN_PASSWORD) {
-      res.status(503).json({ error: "NotConfigured", message: "Master admin credentials are not configured. Set MASTER_ADMIN_EMAIL and MASTER_ADMIN_PASSWORD." });
-      return;
+    try {
+      const settings = await getMasterAdminSettings();
+      const validPassword = await bcrypt.compare(password, settings.passwordHash);
+      if (email.trim().toLowerCase() !== settings.email || !validPassword) {
+        res.status(401).json({ error: "Unauthorized", message: "Invalid email or password" });
+        return;
+      }
+      const admin = { id: "master-admin-1", email: settings.email, name: settings.name, role: "master_admin" };
+      const token = jwt.sign({ adminId: admin.id, email: admin.email, role: admin.role }, JWT_SECRET, { expiresIn: "7d" });
+      res.json({ token, admin });
+    } catch {
+      res.status(500).json({ error: "InternalError", message: "Could not load master admin account" });
     }
-    if (email !== ADMIN_EMAIL || password !== ADMIN_PASSWORD) {
-      res.status(401).json({ error: "Unauthorized", message: "Invalid email or password" });
-      return;
-    }
-    const admin = { id: "master-admin-1", email: ADMIN_EMAIL, name: "Master Admin", role: "master_admin" };
-    const token = jwt.sign({ adminId: admin.id, email: admin.email, role: admin.role }, JWT_SECRET, { expiresIn: "7d" });
-    res.json({ token, admin });
     return;
   }
 
   res.status(403).json({ error: "Forbidden", message: "Only Master Admin login is available." });
+});
+
+// ─── Master Admin Settings ──────────────────────────────────────────
+router.get("/master-admin/settings", requireAuth as any, requireMasterAdmin as any, async (_req, res) => {
+  try {
+    const settings = await getMasterAdminSettings();
+    res.json({ settings: publicSettings(settings) });
+  } catch {
+    res.status(500).json({ error: "InternalError", message: "Could not load settings" });
+  }
+});
+
+const settingsSchema = z.object({
+  name: z.string().trim().min(1).max(100),
+  email: z.string().trim().email().max(200),
+  recoveryEmail: z.string().trim().email().max(200),
+  currentPassword: z.string().min(1).max(200),
+});
+
+router.put("/master-admin/settings", requireAuth as any, requireMasterAdmin as any, async (req: AuthenticatedRequest, res) => {
+  const parsed = settingsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "ValidationError", message: "Name, login email, recovery email, and current password are required." });
+    return;
+  }
+  try {
+    const settings = await getMasterAdminSettings();
+    if (!(await bcrypt.compare(parsed.data.currentPassword, settings.passwordHash))) {
+      res.status(401).json({ error: "Unauthorized", message: "Current password is incorrect." });
+      return;
+    }
+    settings.name = parsed.data.name;
+    settings.email = parsed.data.email.toLowerCase();
+    settings.recoveryEmail = parsed.data.recoveryEmail.toLowerCase();
+    await settings.save();
+    const admin = { id: "master-admin-1", email: settings.email, name: settings.name, role: "master_admin" };
+    const token = jwt.sign({ adminId: admin.id, email: admin.email, role: admin.role }, JWT_SECRET, { expiresIn: "7d" });
+    res.json({ settings: publicSettings(settings), token, admin });
+  } catch {
+    res.status(500).json({ error: "InternalError", message: "Could not save settings" });
+  }
+});
+
+router.post("/master-admin/send-password-reset", requireAuth as any, requireMasterAdmin as any, async (req, res) => {
+  try {
+    const settings = await getMasterAdminSettings();
+    await sendMasterAdminResetEmail(req, settings);
+    res.json({ ok: true, recoveryEmail: settings.recoveryEmail });
+  } catch (err: any) {
+    const message = err?.message || "Could not send reset email";
+    res.status(message.startsWith("SMTP") ? 503 : 500).json({ error: "EmailError", message });
+  }
+});
+
+const masterResetSchema = z.object({
+  token: z.string().min(40).max(200),
+  newPassword: z.string().min(8).max(200),
+});
+
+router.post("/master-admin/reset-password", async (req, res) => {
+  const parsed = masterResetSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "ValidationError", message: "The reset link or new password is invalid." });
+    return;
+  }
+  try {
+    const reset = await MasterAdminPasswordReset.findOne({
+      tokenHash: hashResetToken(parsed.data.token),
+      usedAt: null,
+      expiresAt: { $gt: new Date() },
+    });
+    if (!reset) {
+      res.status(400).json({ error: "InvalidToken", message: "This reset link is invalid or has expired." });
+      return;
+    }
+    const settings = await getMasterAdminSettings();
+    settings.passwordHash = await bcrypt.hash(parsed.data.newPassword, 12);
+    await settings.save();
+    reset.usedAt = new Date();
+    await reset.save();
+    await MasterAdminPasswordReset.deleteMany({ _id: { $ne: reset._id } });
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: "InternalError", message: "Could not reset password" });
+  }
 });
 
 // ─── Forgot Password ────────────────────────────────────────────────
@@ -71,9 +242,14 @@ router.post("/forgot-password", async (req, res) => {
   const note = parsed.data.note?.trim() || "";
 
   try {
-    // Master admin email → no DB record; just respond generic.
-    if (email === ADMIN_EMAIL) {
-      res.json({ ok: true, message: "If the account exists, your administrator has been notified." });
+    const masterSettings = await getMasterAdminSettings();
+    if (email === masterSettings.email) {
+      try {
+        await sendMasterAdminResetEmail(req, masterSettings);
+      } catch {
+        // Keep this response generic so the endpoint does not reveal account state.
+      }
+      res.json({ ok: true, message: "If the account exists, reset instructions have been sent." });
       return;
     }
 
