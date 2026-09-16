@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import {
   useGetStatsSummary,
   getGetStatsSummaryQueryKey,
@@ -185,20 +186,29 @@ export default function Dashboard() {
   // ── Hub bar data ─────────────────────────────────────────────────────────
   const awaitingAction = (orderStats.pending ?? 0) + (orderStats.confirmed ?? 0);
   const itemsHandedOver = (orderStats.delivered ?? 0) + (orderStats.takeaway ?? 0);
+  const headerSlot = document.getElementById("page-header-slot");
 
   return (
     <div className="space-y-7 max-w-7xl mx-auto">
-
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-extrabold text-[#162B4D]">Dashboard</h2>
-          <p className="text-gray-400 text-sm mt-0.5">Overview of your hub operations</p>
-        </div>
-        <Button variant="outline" size="sm" onClick={handleRefresh} className="h-8 gap-1.5 text-gray-500">
-          <RefreshCw className="w-3.5 h-3.5" /> Refresh
-        </Button>
-      </div>
+      {headerSlot && createPortal(
+        <div className="flex items-center justify-between w-full min-w-0">
+          <div className="min-w-0">
+            <h1 className="text-sm font-bold text-white leading-tight">Dashboard</h1>
+            <p className="text-[11px] text-white/75 leading-tight hidden sm:block">
+              Overview of your hub operations
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            className="h-8 gap-1.5 border-white/30 bg-white/10 text-white hover:bg-white/20 hover:text-white flex-shrink-0"
+          >
+            <RefreshCw className="w-3.5 h-3.5" /> Refresh
+          </Button>
+        </div>,
+        headerSlot,
+      )}
 
       {/* ── Row 1: Network stats ─────────────────────────────────────────────── */}
       <div>
