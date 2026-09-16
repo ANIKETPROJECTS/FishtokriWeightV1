@@ -1279,6 +1279,12 @@ export default function Orders() {
     return Infinity;
   }, [subHubProducts, subHubCombos]);
 
+  const itemsSubtotal = useMemo(() => {
+    const customSum = orderItems.reduce((s, it) => s + (Number(it.price) || 0) * (Number(it.quantity) || 0), 0);
+    const productSum = selectedProducts.reduce((s, p) => s + (Number(p.price) || 0) * (Number(p.quantity) || 0), 0);
+    return customSum + productSum;
+  }, [orderItems, selectedProducts]);
+
   const isCouponApplicable = useCallback((c: any): boolean => {
     const normalizeRef = (value: any) => String(value?.$oid ?? value?._id ?? value ?? "").trim().toLowerCase();
     const apProds = (Array.isArray(c.applicableProducts) ? c.applicableProducts : []).map(normalizeRef);
@@ -1547,12 +1553,6 @@ export default function Orders() {
     const phoneMatches = allCustomers.filter((c: any) => (c.phone || "").replace(/\D/g, "").includes(digits));
     return phoneMatches.length === 0;
   }, [customerSearch, allCustomers]);
-
-  const itemsSubtotal = useMemo(() => {
-    const customSum = orderItems.reduce((s, it) => s + (Number(it.price) || 0) * (Number(it.quantity) || 0), 0);
-    const productSum = selectedProducts.reduce((s, p) => s + (Number(p.price) || 0) * (Number(p.quantity) || 0), 0);
-    return customSum + productSum;
-  }, [orderItems, selectedProducts]);
 
   const totalItemCount = useMemo(() => {
     const cust = orderItems.filter((it) => it.name.trim() && Number(it.quantity) > 0).length;
