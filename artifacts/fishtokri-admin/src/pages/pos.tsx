@@ -384,7 +384,7 @@ export default function POS() {
           deliveryType: "takeaway",
           subHubId: hub.id,
           subHubName: hub.name,
-           status: saleMode === "preorder" ? "pending" : "takeaway",
+            status: saleMode === "preorder" ? "created" : "takeaway",
           paymentStatus: "paid",
           paymentMode,
           paidAmount: total,

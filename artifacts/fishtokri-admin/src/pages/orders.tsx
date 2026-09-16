@@ -113,15 +113,17 @@ async function apiFetch(path: string, opts: RequestInit = {}) {
 
 // ─── STATUS CONFIG ─────────────────────────────────────────────────────────────
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; icon: any }> = {
+  created:   { label: "Created",   color: "text-amber-600",   bg: "bg-amber-50 border-amber-200",   icon: Clock },
   pending:   { label: "Pending",   color: "text-amber-600",   bg: "bg-amber-50 border-amber-200",   icon: Clock },
   confirmed: { label: "Confirmed", color: "text-blue-600",    bg: "bg-blue-50 border-blue-200",     icon: CheckCircle2 },
   out_for_delivery: { label: "Out for Delivery", color: "text-indigo-600", bg: "bg-indigo-50 border-indigo-200", icon: Truck },
   takeaway:  { label: "Takeaway",  color: "text-emerald-700", bg: "bg-emerald-50 border-emerald-200", icon: ShoppingBag },
+  handed_over: { label: "Handed Over", color: "text-emerald-700", bg: "bg-emerald-50 border-emerald-200", icon: CheckCircle2 },
   delivered: { label: "Delivered", color: "text-green-600",   bg: "bg-green-50 border-green-200",   icon: CheckCircle2 },
   cancelled: { label: "Cancelled", color: "text-red-600",     bg: "bg-red-50 border-red-200",       icon: XCircle },
 };
 
-const ACTIVE_STATUSES = ["pending", "confirmed", "out_for_delivery"];
+const ACTIVE_STATUSES = ["created", "pending", "confirmed", "out_for_delivery"];
 const HISTORY_STATUSES = ["delivered", "cancelled"];
 const ALL_STATUSES = Object.keys(STATUS_CONFIG);
 
@@ -134,7 +136,11 @@ function isHistoryOrder(o: any) {
 // show a single "Takeaway" badge so it's clear there's no delivery involved. Once delivered or cancelled,
 // the actual final status is shown.
 function displayStatus(status: string, deliveryType?: string, orderType?: string) {
-  if (String(orderType ?? "").toLowerCase() === "preorder") return status;
+  if (String(orderType ?? "").toLowerCase() === "preorder") {
+    if (status === "pending" || status === "confirmed") return "created";
+    if (status === "takeaway") return "handed_over";
+    return status;
+  }
   if (deliveryType === "takeaway" && ACTIVE_STATUSES.includes(status)) return "takeaway";
   return status;
 }
@@ -152,10 +158,12 @@ function StatusBadge({ status, deliveryType, orderType }: { status: string; deli
 }
 
 const SOLID_STATUS_BG: Record<string, string> = {
+  created: "bg-amber-500",
   pending: "bg-amber-500",
   confirmed: "bg-blue-600",
   out_for_delivery: "bg-indigo-600",
   takeaway: "bg-emerald-600",
+  handed_over: "bg-emerald-600",
   delivered: "bg-green-600",
   cancelled: "bg-red-600",
 };
@@ -3363,6 +3371,10 @@ export default function Orders() {
                       <td className="px-4 py-4">
                         {activeTab === "deleted" ? (
                           <span className="text-sm text-gray-400 italic">Deleted</span>
+                        ) : String(o.orderType ?? "").toLowerCase() === "preorder" ? (
+                          <span className="text-sm text-emerald-700 font-semibold italic">
+                            {["takeaway", "handed_over"].includes(String(o.status)) ? "Handed over" : "POS order created"}
+                          </span>
                         ) : o.status === "pending" ? (
                           <div className="flex items-center gap-1.5">
                             <button
@@ -5300,11 +5312,13 @@ export default function Orders() {
                   );
                 })()}
 
-                {/* ── 4. DELIVERY & HUB ── */}
+                 {/* ── 4. PICKUP / DELIVERY & HUB ── */}
                 <div className="px-6 py-6">
                   <div className="flex items-center gap-2.5 mb-5">
                     <MaskIcon src={iconMotorbike} color="#364F9F" className="w-[20px] h-[20px]" />
-                    <span className="text-xs font-bold text-[#364F9F] uppercase tracking-widest">Delivery & Hub</span>
+                     <span className="text-xs font-bold text-[#364F9F] uppercase tracking-widest">
+                       {selectedOrder.deliveryType === "takeaway" ? "Pickup & Hub" : "Delivery & Hub"}
+                     </span>
                   </div>
                   <div className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
                     <div>
@@ -5312,7 +5326,9 @@ export default function Orders() {
                       <p className="font-bold text-black capitalize">{selectedOrder.deliveryType ?? "—"}</p>
                     </div>
                     <div>
-                      <p className="text-xs font-bold tracking-wider text-black mb-1">DELIVERY DATE</p>
+                       <p className="text-xs font-bold tracking-wider text-black mb-1">
+                         {selectedOrder.deliveryType === "takeaway" ? "PICKUP DATE" : "DELIVERY DATE"}
+                       </p>
                       <p className="font-bold text-black">{formatDeliveryDate(selectedOrder.deliveryDate) || formatDate(selectedOrder.createdAt)}</p>
                     </div>
                     {selectedOrder.timeslotLabel && (
@@ -5342,41 +5358,63 @@ export default function Orders() {
                   </div>
                 </div>
 
-                {/* ── 5. DELIVERY TIMELINE ── */}
-                <div className="px-6 py-6">
-                  <div className="flex items-center gap-2.5 mb-5">
-                    <Clock className="w-5 h-5 text-[#364F9F]" />
-                    <span className="text-xs font-bold text-[#364F9F] uppercase tracking-widest">Delivery Timeline</span>
+                {/* ── 5. POS TIMELINE / DELIVERY TIMELINE ── */}
+                {selectedOrder.deliveryType === "takeaway" ? (
+                  <div className="px-6 py-6">
+                    <div className="flex items-center gap-2.5 mb-5">
+                      <Clock className="w-5 h-5 text-[#364F9F]" />
+                      <span className="text-xs font-bold text-[#364F9F] uppercase tracking-widest">POS Timeline</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {[
+                        { label: "ORDERED AT", value: selectedOrder.createdAt, color: "text-[#364F9F]", bg: "bg-[#EEF1F9]" },
+                        { label: "HANDED OVER AT", value: selectedOrder.posHandedOverAt, color: "text-emerald-700", bg: "bg-emerald-50" },
+                      ].map((event) => (
+                        <div key={event.label} className={`rounded-xl px-3 py-3 ${event.bg}`}>
+                          <p className="text-[10px] font-bold tracking-wider text-black/50 mb-1">{event.label}</p>
+                          <p className={`text-sm font-bold ${event.value ? event.color : "text-black/30"}`}>
+                            {formatLifecycleTime(event.value)}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    {[
-                      { label: "ASSIGNED AT", value: selectedOrder.deliveryAssignedAt, color: "text-[#364F9F]", bg: "bg-[#EEF1F9]" },
-                      { label: "PICKED UP AT", value: selectedOrder.deliveryPickedUpAt, color: "text-indigo-700", bg: "bg-indigo-50" },
-                      { label: "DELIVERED AT", value: selectedOrder.deliveryDeliveredAt, color: "text-emerald-700", bg: "bg-emerald-50" },
-                    ].map((event) => (
-                      <div key={event.label} className={`rounded-xl px-3 py-3 ${event.bg}`}>
-                        <p className="text-[10px] font-bold tracking-wider text-black/50 mb-1">{event.label}</p>
-                        <p className={`text-sm font-bold ${event.value ? event.color : "text-black/30"}`}>
-                          {formatLifecycleTime(event.value)}
-                        </p>
-                      </div>
-                    ))}
+                ) : (
+                  <div className="px-6 py-6">
+                    <div className="flex items-center gap-2.5 mb-5">
+                      <Clock className="w-5 h-5 text-[#364F9F]" />
+                      <span className="text-xs font-bold text-[#364F9F] uppercase tracking-widest">Delivery Timeline</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {[
+                        { label: "ASSIGNED AT", value: selectedOrder.deliveryAssignedAt, color: "text-[#364F9F]", bg: "bg-[#EEF1F9]" },
+                        { label: "PICKED UP AT", value: selectedOrder.deliveryPickedUpAt, color: "text-indigo-700", bg: "bg-indigo-50" },
+                        { label: "DELIVERED AT", value: selectedOrder.deliveryDeliveredAt, color: "text-emerald-700", bg: "bg-emerald-50" },
+                      ].map((event) => (
+                        <div key={event.label} className={`rounded-xl px-3 py-3 ${event.bg}`}>
+                          <p className="text-[10px] font-bold tracking-wider text-black/50 mb-1">{event.label}</p>
+                          <p className={`text-sm font-bold ${event.value ? event.color : "text-black/30"}`}>
+                            {formatLifecycleTime(event.value)}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* ── 6. DELIVERY PARTNER ── */}
                 {selectedOrder.deliveryType === "takeaway" ? (
                   <div className="px-6 py-6">
                     <div className="flex items-center gap-2.5 mb-5">
-                      <MaskIcon src={iconGroup} color="#364F9F" className="w-[20px] h-[20px]" />
-                      <span className="text-xs font-bold text-[#364F9F] uppercase tracking-widest">Delivery Partner</span>
+                      <ShoppingBag className="w-5 h-5 text-[#364F9F]" />
+                      <span className="text-xs font-bold text-[#364F9F] uppercase tracking-widest">Pickup Details</span>
                     </div>
                     <div className="flex items-center gap-4">
                       <div className="w-12 h-12 rounded-full bg-emerald-50 flex items-center justify-center flex-shrink-0">
                         <ShoppingBag className="w-5 h-5 text-emerald-600" />
                       </div>
                       <div>
-                        <p className="text-base font-bold text-black">Takeaway order</p>
+                        <p className="text-base font-bold text-black">Hub pickup order</p>
                         <p className="text-sm font-medium text-black mt-0.5">Customer picks up from {selectedOrder.pickupLocation || selectedOrder.subHubName || "the store"}.</p>
                       </div>
                     </div>
@@ -5651,14 +5689,14 @@ export default function Orders() {
                       );
                       const otherDayBlocked = new Set(["out_for_delivery", "delivered"]);
                        const statusOptions = isPreorder
-                         ? ["pending", "confirmed", "takeaway", "cancelled"]
+                         ? ["created", "handed_over", "cancelled"]
                          : isTakeaway
                          ? ["takeaway", "cancelled"]
                         : ALL_STATUSES.filter((s) => s !== "takeaway" && !(isOtherDay && otherDayBlocked.has(s)));
                        const handoverOpen = !isPreorder || preorderHandoverOpen(selectedOrder);
                        const blocked = requiresAssignee(editStatus) ||
                          (isOtherDay && otherDayBlocked.has(editStatus)) ||
-                         (isPreorder && editStatus === "takeaway" && !handoverOpen);
+                         (isPreorder && editStatus === "handed_over" && !handoverOpen);
                       return (
                         <>
                           <div className="flex gap-2">
@@ -5666,13 +5704,13 @@ export default function Orders() {
                               <SelectTrigger className="h-11 flex-1 text-sm rounded-xl font-semibold"><SelectValue /></SelectTrigger>
                               <SelectContent>
                                 {statusOptions.map((s) => {
-                                   const disabled = requiresAssignee(s) || (isPreorder && s === "takeaway" && !handoverOpen);
+                                   const disabled = requiresAssignee(s) || (isPreorder && s === "handed_over" && !handoverOpen);
                                   return (
                                     <SelectItem key={s} value={s} disabled={disabled}>
                                       <span className="flex items-center gap-2 font-semibold">
                                         {STATUS_CONFIG[s].label}
                                         {disabled && <span className="text-xs text-black font-medium">(assign partner first)</span>}
-                                         {isPreorder && s === "takeaway" && !handoverOpen && <span className="text-xs text-black font-medium">(at slot time)</span>}
+                                         {isPreorder && s === "handed_over" && !handoverOpen && <span className="text-xs text-black font-medium">(at slot time)</span>}
                                       </span>
                                     </SelectItem>
                                   );
@@ -5694,7 +5732,7 @@ export default function Orders() {
                           )}
                           {!isOtherDay && blocked && (
                             <p className="text-sm font-semibold text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2.5">
-                               {isPreorder && editStatus === "takeaway"
+                               {isPreorder && editStatus === "handed_over"
                                  ? `This preorder can be marked handed over from ${selectedOrder.timeslotStart || "the scheduled slot"} on ${selectedOrder.deliveryDate}.`
                                  : "Assign a delivery partner above before marking as Out for Delivery or Delivered."}
                             </p>

@@ -53,7 +53,7 @@ router.get("/day-end/orders", async (req: ScopedRequest, res) => {
       // after it reaches a handover-complete status.
       filter.$and = [
         ...(filter.$and ?? []),
-        { $or: [{ orderType: { $ne: "preorder" } }, { orderType: "preorder", status: { $in: ["takeaway", "delivered"] } }] },
+        { $or: [{ orderType: { $ne: "preorder" } }, { orderType: "preorder", status: { $in: ["takeaway", "handed_over", "delivered"] } }] },
       ];
     }
 

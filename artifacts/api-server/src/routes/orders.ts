@@ -23,6 +23,7 @@ router.use(requireAuth as any);
 router.use(loadScope as any);
 
 const VALID_ORDER_STATUSES = new Set([
+  "created",
   "pending",
   "confirmed",
   "out_for_delivery",
@@ -30,6 +31,7 @@ const VALID_ORDER_STATUSES = new Set([
   "cancelled",
   "rejected",
   "takeaway",
+  "handed_over",
 ]);
 
 /**
@@ -108,6 +110,13 @@ function addDeliveryLifecycleTimestamps(update: any, existing: any, body: any, n
     (String(existing?.status ?? "") !== "delivered" || !existing?.deliveryDeliveredAt)
   ) {
     update.deliveryDeliveredAt = now;
+  }
+
+  if (
+    body.status === "handed_over" &&
+    (String(existing?.status ?? "") !== "handed_over" || !existing?.posHandedOverAt)
+  ) {
+    update.posHandedOverAt = now;
   }
 }
 
@@ -374,7 +383,7 @@ function extractOrderCoupons(order: any): Array<{ couponId: string; couponCode: 
 }
 
 /** Statuses where the order is live (not yet delivered or cancelled). */
-const ACTIVE_ORDER_STATUSES = new Set(["pending", "confirmed", "out_for_delivery", "takeaway"]);
+const ACTIVE_ORDER_STATUSES = new Set(["created", "pending", "confirmed", "out_for_delivery", "takeaway", "handed_over"]);
 
 /**
  * Upserts an activeCoupons entry for a customer.
@@ -731,7 +740,7 @@ router.get("/", async (req: ScopedRequest, res) => {
       // takeaways remain Current until they are handed over.
       // - "current": active statuses AND (deliveryType != takeaway OR preorder)
       // - "history": history statuses OR completed non-preorder takeaway
-      const ACTIVE = ["pending", "confirmed", "out_for_delivery"];
+      const ACTIVE = ["created", "pending", "confirmed", "out_for_delivery"];
       const HISTORY = ["delivered", "cancelled"];
 
       const statusList = status
@@ -754,7 +763,7 @@ router.get("/", async (req: ScopedRequest, res) => {
           $or: [
             { status: { $in: list } },
             { deliveryType: "takeaway", orderType: { $ne: "preorder" } },
-            { deliveryType: "takeaway", orderType: "preorder", status: "takeaway" },
+            { deliveryType: "takeaway", orderType: "preorder", status: { $in: ["takeaway", "handed_over"] } },
           ],
         };
         if (filter.$or && filter.$or.length) {
@@ -856,7 +865,7 @@ router.get("/stats", async (req: ScopedRequest, res) => {
     pipeline.push({ $group: { _id: { status: "$status", deliveryType: "$deliveryType", orderType: "$orderType" }, count: { $sum: 1 } } });
     const agg = await conn.db.collection(COLLECTION).aggregate(pipeline).toArray();
 
-    const ACTIVE = ["pending", "confirmed", "out_for_delivery"];
+    const ACTIVE = ["created", "pending", "confirmed", "out_for_delivery"];
     const HISTORY = ["delivered", "cancelled"];
 
     // Raw per-status counts (used by some legacy callers).
@@ -882,7 +891,7 @@ router.get("/stats", async (req: ScopedRequest, res) => {
         } else {
           takeawayActive += c;
         }
-      } else if (dt === "takeaway" && ot === "preorder" && st === "takeaway") {
+      } else if (dt === "takeaway" && ot === "preorder" && ["takeaway", "handed_over"].includes(st)) {
         stats[st] = (stats[st] ?? 0) + c;
         takeawayHistory += c;
       } else {
@@ -947,7 +956,7 @@ router.get("/stats", async (req: ScopedRequest, res) => {
       conn.db.collection(COLLECTION).countDocuments({
         ...posInvoiceClause,
         orderType: { $ne: "preorder" },
-        status: "takeaway",
+        status: { $in: ["takeaway", "handed_over"] },
         createdAt: { $gte: todayStart, $lt: tomorrowStart },
       }),
       conn.db.collection(COLLECTION).countDocuments({
@@ -1375,7 +1384,7 @@ router.post("/", async (req: ScopedRequest, res) => {
       deliveryAddressDetail: dt === "delivery" && deliveryAddressDetail ? deliveryAddressDetail : undefined,
       pickupLocation: dt === "takeaway" ? (subHubName || "FishTokri Store") : "",
       notes: notes ? String(notes).trim() : "",
-      status: status || "pending",
+      status: normalizedOrderType === "preorder" ? "created" : (status || "pending"),
       source: "admin_manual",
       subHubId: subHubId ? String(subHubId) : undefined,
       subHubName: subHubName ?? undefined,
@@ -1556,7 +1565,7 @@ router.post("/", async (req: ScopedRequest, res) => {
     // This prevents the background deduction job from racing between the insert and the flag
     // being set — without this guard, both the POST handler and the background job could both
     // see inventoryDeducted=false and each deduct independently, causing a double deduction.
-    const ORDER_DEDUCT_STATUSES = new Set(["pending", "confirmed", "out_for_delivery", "delivered", "takeaway"]);
+    const ORDER_DEDUCT_STATUSES = new Set(["created", "pending", "confirmed", "out_for_delivery", "delivered", "takeaway", "handed_over"]);
     const shouldDeductOnCreate =
       ORDER_DEDUCT_STATUSES.has(String(orderDoc.status)) &&
       !!orderDoc.subHubId &&
@@ -2042,6 +2051,14 @@ router.put("/:id", async (req: ScopedRequest, res) => {
         return;
       }
 
+      const requestedStatus = status !== undefined ? String(status) : "";
+      const nextStatus = requestedStatus === "pending" || requestedStatus === "confirmed"
+        ? "created"
+        : requestedStatus === "takeaway"
+          ? "handed_over"
+          : requestedStatus || String(prev.status ?? "");
+      if (requestedStatus) update.status = nextStatus;
+
       const nextTimeslotId = timeslotId !== undefined ? String(timeslotId) : String(prev.timeslotId ?? "");
       const slotChanged = deliveryDate !== undefined || timeslotId !== undefined || subHubId !== undefined;
       if (slotChanged || !prev.timeslotStart || !prev.timeslotEnd) {
@@ -2061,8 +2078,7 @@ router.put("/:id", async (req: ScopedRequest, res) => {
         update.timeslotEnd = validatedSlot.timeslotEnd;
       }
 
-      const nextStatus = status !== undefined ? String(status) : String(prev.status ?? "");
-      if (nextStatus === "takeaway" && !isPreorderHandoverOpen({
+      if (nextStatus === "handed_over" && !isPreorderHandoverOpen({
         ...prev,
         ...update,
         deliveryDate: nextDeliveryDate,
@@ -2076,6 +2092,7 @@ router.put("/:id", async (req: ScopedRequest, res) => {
         return;
       }
     }
+    addDeliveryLifecycleTimestamps(update, prev, { status: update.status ?? status, assignedDeliveryPersonId }, updateTime);
     // Hub admins cannot reassign an order to a sub hub outside their scope.
     if (req.scope && !req.scope.isMaster && update.subHubId !== undefined) {
       const targetSub = update.subHubId ? String(update.subHubId) : "";
