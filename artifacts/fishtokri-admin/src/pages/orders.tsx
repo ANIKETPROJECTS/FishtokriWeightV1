@@ -769,7 +769,7 @@ export default function Orders() {
   const [location, setLocation] = useLocation();
   const isEditPage = location.startsWith("/orders/edit/");
   const editIdFromUrl = isEditPage ? location.replace("/orders/edit/", "") : "";
-  const isCreatePage = location === "/orders/new" || location.endsWith("/orders/new") || isEditPage;
+  const isCreatePage = location === "/orders/new" || location.endsWith("/orders/new");
 
   const [activeTab, setActiveTab] = useState<"current" | "otherday" | "history" | "all" | "invoices" | "preorder" | "deleted">("current");
   const [invoiceOrder, setInvoiceOrder] = useState<any | null>(null);
@@ -2888,9 +2888,20 @@ export default function Orders() {
     }
   }, [allCustomers]);
 
+  const prepareEditDialog = useCallback((o: any) => {
+    setEditingOrder(o);
+    setEditForm({
+      customerName: String(o.customerName ?? ""),
+      phone: String(o.phone ?? o.customerPhone ?? ""),
+      address: String(o.address ?? o.deliveryAddress ?? o.customerAddress ?? ""),
+      deliveryArea: String(o.deliveryArea ?? o.area ?? ""),
+      notes: String(o.notes ?? o.orderNotes ?? ""),
+      status: String(o.status ?? "pending"),
+    });
+  }, []);
+
   const openEditOrder = (o: any) => {
-    populateCreateFormFromOrder(o);
-    setLocation(`/orders/edit/${o._id}`);
+    prepareEditDialog(o);
   };
 
   // When the customers list finishes loading after we've already pre-populated
@@ -2915,7 +2926,10 @@ export default function Orders() {
       try {
         const data = await apiFetch(`/api/orders/${editIdFromUrl}`);
         const o = data?.order ?? data;
-        if (!cancelled && o && o._id) populateCreateFormFromOrder(o);
+         if (!cancelled && o && o._id) {
+           prepareEditDialog(o);
+           setLocation("/orders");
+         }
       } catch {
         if (!cancelled) {
           toast({ title: "Order not found", variant: "destructive" });
@@ -2924,7 +2938,7 @@ export default function Orders() {
       }
     })();
     return () => { cancelled = true; };
-  }, [isEditPage, editIdFromUrl, editingOrderId, populateCreateFormFromOrder, setLocation, toast]);
+  }, [isEditPage, editIdFromUrl, prepareEditDialog, setLocation, toast]);
 
   const handleSaveEdit = async () => {
     if (!editingOrder) return;
