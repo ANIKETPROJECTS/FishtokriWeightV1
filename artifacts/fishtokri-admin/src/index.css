@@ -66,22 +66,22 @@
 }
 
 :root {
-  --background: 0 0% 100%;
+  --background: 220 33% 97%;
   --foreground: 214 52% 24%;
-  --border: 220 13% 91%;
-  --input: 220 13% 91%;
-  --ring: 221 83% 53%;
+  --border: 220 20% 90%;
+  --input: 220 20% 90%;
+  --ring: 4 85% 62%;
   
   --card: 0 0% 100%;
   --card-foreground: 214 52% 24%;
   --card-border: 220 13% 91%;
   
-  --sidebar: 214 52% 24%;
+  --sidebar: 228 49% 42%;
   --sidebar-foreground: 0 0% 100%;
   --sidebar-border: 214 52% 20%;
-  --sidebar-primary: 221 83% 53%;
+  --sidebar-primary: 4 85% 62%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 214 52% 28%;
+  --sidebar-accent: 228 49% 48%;
   --sidebar-accent-foreground: 0 0% 100%;
   --sidebar-ring: 221 83% 53%;
   
@@ -89,22 +89,22 @@
   --popover-foreground: 214 52% 24%;
   --popover-border: 220 13% 91%;
   
-  --primary: 221 83% 53%;
+  --primary: 4 85% 62%;
   --primary-foreground: 0 0% 100%;
   
-  --secondary: 214 100% 97%;
-  --secondary-foreground: 221 83% 53%;
+  --secondary: 228 49% 42%;
+  --secondary-foreground: 0 0% 100%;
   
   --muted: 220 14% 96%;
   --muted-foreground: 220 9% 46%;
   
-  --accent: 214 100% 97%;
-  --accent-foreground: 221 83% 53%;
+  --accent: 4 85% 96%;
+  --accent-foreground: 4 85% 42%;
   
   --destructive: 0 76% 51%;
   --destructive-foreground: 0 0% 100%;
 
-  --app-font-sans: 'Inter', system-ui, sans-serif;
+  --app-font-sans: 'Poppins', system-ui, sans-serif;
   --app-font-serif: Georgia, serif;
   --app-font-mono: Menlo, monospace;
   --radius: 0.5rem;
@@ -112,22 +112,22 @@
 
 /* No dark mode overrides, just mirror root to prevent issues if class is added */
 .dark {
-  --background: 0 0% 100%;
+  --background: 220 33% 97%;
   --foreground: 214 52% 24%;
-  --border: 220 13% 91%;
-  --input: 220 13% 91%;
-  --ring: 221 83% 53%;
+  --border: 220 20% 90%;
+  --input: 220 20% 90%;
+  --ring: 4 85% 62%;
   
   --card: 0 0% 100%;
   --card-foreground: 214 52% 24%;
   --card-border: 220 13% 91%;
   
-  --sidebar: 214 52% 24%;
+  --sidebar: 228 49% 42%;
   --sidebar-foreground: 0 0% 100%;
   --sidebar-border: 214 52% 20%;
-  --sidebar-primary: 221 83% 53%;
+  --sidebar-primary: 4 85% 62%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 214 52% 28%;
+  --sidebar-accent: 228 49% 48%;
   --sidebar-accent-foreground: 0 0% 100%;
   --sidebar-ring: 221 83% 53%;
   
@@ -135,17 +135,17 @@
   --popover-foreground: 214 52% 24%;
   --popover-border: 220 13% 91%;
   
-  --primary: 221 83% 53%;
+  --primary: 4 85% 62%;
   --primary-foreground: 0 0% 100%;
   
-  --secondary: 214 100% 97%;
-  --secondary-foreground: 221 83% 53%;
+  --secondary: 228 49% 42%;
+  --secondary-foreground: 0 0% 100%;
   
   --muted: 220 14% 96%;
   --muted-foreground: 220 9% 46%;
   
-  --accent: 214 100% 97%;
-  --accent-foreground: 221 83% 53%;
+  --accent: 4 85% 96%;
+  --accent-foreground: 4 85% 42%;
   
   --destructive: 0 76% 51%;
   --destructive-foreground: 0 0% 100%;
@@ -158,6 +158,13 @@
 
   body {
     @apply font-sans antialiased bg-background text-foreground;
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    font-family: inherit;
   }
 }
 

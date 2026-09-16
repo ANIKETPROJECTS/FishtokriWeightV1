@@ -2918,6 +2918,10 @@ export default function Orders() {
   const totalOtherDay = statsTotals.otherDayTotal ?? 0;
   const totalPreorder = statsTotals.preorderTotal ?? 0;
   const totalDeleted = statsTotals.deletedTotal ?? 0;
+  const posHubName =
+    subHubs.find((h: any) => String(h.id) === String(selectedSubHubId))?.name ||
+    superHubs.find((h: any) => String(h.id) === String(selectedSuperHubId))?.name ||
+    "Thane Hub";
   const TABS = [
     { key: "current" as const, label: "Current Orders", count: totalToday, icon: Clock, color: "text-blue-600" },
     { key: "otherday" as const, label: "Next Day Orders", count: totalOtherDay, icon: Calendar, color: "text-orange-600" },
@@ -3887,7 +3891,7 @@ export default function Orders() {
 
       {/* Create Order Page — Full-screen POS (portal bypasses layout header+sidebar) */}
       {isCreatePage && createPortal(
-      <div className="fixed inset-0 z-50 flex flex-col bg-white overflow-hidden" style={{ fontFamily: "'Poppins', sans-serif" }}>
+       <div className="fixed top-0 right-0 bottom-0 left-[56px] z-30 flex flex-col bg-white overflow-hidden" style={{ fontFamily: "'Poppins', sans-serif" }}>
 
         {/* ══ TOP HEADER ══ */}
         <div className="flex-shrink-0 bg-[#364F9F] flex items-center gap-3 px-4 h-14">
@@ -3903,29 +3907,12 @@ export default function Orders() {
           <h1 className="text-base font-bold text-white flex-shrink-0">
             {editingOrderId ? "Edit Order" : "New Order"}
           </h1>
-          {/* Hub selectors */}
+          {/* The POS is configured for one active hub. Keep the internal
+              super/sub-hub IDs for API ownership, but show the hub once. */}
           <div className="flex items-center gap-2 flex-1 min-w-0 ml-2">
-            <Select value={selectedSuperHubId} onValueChange={(v) => { if (!loadingSuperHubs) setSelectedSuperHubId(v); }}>
-              <SelectTrigger className={`h-8 text-xs rounded-full px-3 w-auto max-w-[140px] border-none shadow-none text-white [&>svg]:text-white [&_span]:!text-white transition-colors font-semibold ${selectedSuperHubId ? "bg-[#F05B4E] hover:bg-[#e04a3d]" : "bg-white/20 hover:bg-white/30"}`}>
-                <SelectValue placeholder={loadingSuperHubs ? "Loading..." : "Super Hub"} />
-              </SelectTrigger>
-              <SelectContent>
-                {superHubs.map((h) => (
-                  <SelectItem key={h.id} value={h.id}><span className="text-sm">{h.name}</span></SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <ChevronRight className="w-3.5 h-3.5 text-white flex-shrink-0" />
-            <Select value={selectedSubHubId} onValueChange={(v) => { if (selectedSuperHubId && !loadingSubHubs) setSelectedSubHubId(v); }}>
-              <SelectTrigger className={`h-8 text-xs rounded-full px-3 w-auto max-w-[140px] border-none shadow-none text-white [&>svg]:text-white [&_span]:!text-white transition-colors font-semibold ${selectedSubHubId ? "bg-[#F05B4E] hover:bg-[#e04a3d]" : "bg-white/20 hover:bg-white/30"}`}>
-                <SelectValue placeholder={!selectedSuperHubId ? "Sub Hub" : loadingSubHubs ? "Loading..." : "Sub Hub"} />
-              </SelectTrigger>
-              <SelectContent>
-                {subHubs.map((h) => (
-                  <SelectItem key={h.id} value={h.id}><span className="text-sm">{h.name}</span></SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <span className="inline-flex items-center h-8 rounded-full bg-[#F05B4E] px-3 text-xs font-semibold text-white shadow-sm truncate max-w-[180px]">
+              {posHubName}
+            </span>
           </div>
           {/* Delivery / Takeaway pill toggle */}
           <div className="flex items-center gap-1 flex-shrink-0 bg-white/10 rounded-full p-0.5">
@@ -4142,9 +4129,15 @@ export default function Orders() {
             <div className="w-[250px] flex-shrink-0 border-r border-gray-200 flex flex-col overflow-hidden">
             <div className="flex-1 overflow-y-auto">
 
-              {/* Customer — phone-search UX */}
+              {/* Customer — simple POS entry with optional existing-customer search */}
               <div className="px-4 pt-3 pb-3 border-b border-gray-100">
-                <p className="text-sm font-normal text-gray-900 flex items-center gap-1.5 mb-2"><img src="/icon-customer.png" className="w-4 h-4 object-contain" alt="" />Customer</p>
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <p className="text-sm font-semibold text-[#162B4D] flex items-center gap-1.5">
+                    <img src="/icon-customer.png" className="w-4 h-4 object-contain" alt="" />
+                    Customer
+                  </p>
+                  {!chosenCustomer && <span className="text-[10px] font-semibold text-[#F05B4E] uppercase tracking-wide">Enter details</span>}
+                </div>
 
                 {/* ── State A: customer already selected ── */}
                 {chosenCustomer ? (
@@ -4212,7 +4205,7 @@ export default function Orders() {
                             }
                             setCustomerSearch(val);
                           }}
-                          placeholder="Search by name or phone…"
+                           placeholder="Find existing customer…"
                           className="pl-6 h-8 text-sm border-0 border-b border-gray-300 rounded-none bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
                         />
                         {customerSearch.length > 0 && (

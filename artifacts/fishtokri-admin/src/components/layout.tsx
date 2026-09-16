@@ -72,7 +72,7 @@ function ExpandableNavItem({ href, label, icon: Icon, isActive, childActive, sub
             sidebarOpen ? "gap-3 px-5 py-2.5" : "justify-center px-0 py-3"
           } ${
             isActive || childActive
-              ? "bg-white/10 text-white border-amber-400"
+              ? "bg-white/10 text-white border-[#F05B4E]"
               : "text-white/60 hover:text-white hover:bg-white/5 border-transparent"
           }`}
         >
@@ -273,7 +273,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const sidebarW = expanded ? "220px" : "56px";
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#F4F6FA]" style={{ ["--sidebar-w" as any]: sidebarW }}>
+      <div className="flex h-screen overflow-hidden bg-[#F4F6FA]" style={{ ["--sidebar-w" as any]: sidebarW }}>
       {/* Mobile drawer backdrop */}
       {mobileOpen && (
         <div
@@ -287,7 +287,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {mobileOpen && (
         <button
           onClick={() => setMobileOpen(false)}
-          className="md:hidden fixed z-50 w-10 h-10 rounded-full bg-[#162B4D] border-2 border-white/20 shadow-xl flex items-center justify-center hover:bg-[#1d3a6b] transition-colors active:scale-95"
+          className="md:hidden fixed z-50 w-10 h-10 rounded-full bg-[#364F9F] border-2 border-white/20 shadow-xl flex items-center justify-center hover:bg-[#2C418A] transition-colors active:scale-95"
           style={{ left: "220px", top: "50%", transform: "translateY(-50%)" }}
           aria-label="Close menu"
         >
@@ -297,7 +297,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Sidebar — drawer on mobile, fixed column on md+ */}
       <aside
-        className={`fixed inset-y-0 left-0 bg-[#162B4D] text-white flex flex-col overflow-hidden transition-transform md:transition-all duration-300 ease-in-out z-40 md:z-20 w-[240px] md:w-[var(--sidebar-w)] ${
+        className={`fixed inset-y-0 left-0 bg-[#364F9F] text-white flex flex-col overflow-hidden transition-transform md:transition-all duration-300 ease-in-out z-40 md:z-20 w-[240px] md:w-[var(--sidebar-w)] ${
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         } md:translate-x-0`}
       >
@@ -392,7 +392,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     expanded ? "gap-3 px-5 py-2.5" : "justify-center px-0 py-3"
                   } ${
                     isActive
-                      ? "bg-white/10 text-white border-amber-400"
+                       ? "bg-white/15 text-white border-[#F05B4E]"
                       : "text-white/60 hover:text-white hover:bg-white/5 border-transparent"
                   }`}
                 >
@@ -406,7 +406,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     <>
                       <span className="truncate flex-1">{label}</span>
                       {badgeCount > 0 && (
-                        <span className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 text-[10px] font-bold rounded-full bg-amber-400 text-[#162B4D]">
+                      <span className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 text-[10px] font-bold rounded-full bg-[#F05B4E] text-white">
                           {badgeCount > 99 ? "99+" : badgeCount}
                         </span>
                       )}
@@ -514,11 +514,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {/* Main Content */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden transition-all duration-300 ease-in-out ml-0 md:ml-[var(--sidebar-w)] w-full min-w-0">
         {/* Header */}
-        <header className="bg-white h-14 border-b border-gray-100 flex items-center px-4 md:px-8 z-10 sticky top-0 shadow-sm gap-2">
+        <header className="bg-[#364F9F] h-14 border-b border-[#2C418A] flex items-center px-4 md:px-8 z-10 sticky top-0 shadow-sm gap-2">
           {/* Mobile hamburger */}
           <button
             onClick={() => setMobileOpen(true)}
-            className="md:hidden inline-flex items-center justify-center w-9 h-9 rounded-md text-[#162B4D] hover:bg-gray-100 -ml-1"
+            className="md:hidden inline-flex items-center justify-center w-9 h-9 rounded-md text-white hover:bg-white/10 -ml-1"
             aria-label="Open menu"
             data-testid="button-mobile-menu"
           >
@@ -528,14 +528,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
           {/* Mobile inline brand — hidden for delivery (page injects its own title via slot) */}
           {!isDelivery && (
             <div className="md:hidden flex items-center gap-2 min-w-0">
-              <span className="text-sm font-bold text-[#162B4D] truncate">{roleLabel}</span>
+               <span className="text-sm font-bold text-white truncate">{roleLabel}</span>
             </div>
           )}
 
           <div id="page-header-slot" className="flex items-center gap-3 flex-1 min-w-0" />
         </header>
 
-        <div className={`flex-1 min-w-0 min-h-0 bg-white ${
+        <div className={`flex-1 min-w-0 min-h-0 bg-[#F7F9FC] ${
           location.startsWith("/live-chat")
             ? "overflow-hidden p-0 flex flex-col"
               : `overflow-y-auto overflow-x-hidden ${
