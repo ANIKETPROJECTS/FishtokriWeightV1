@@ -240,11 +240,14 @@ function App() {
             </Route>
 
             {/* Admin Users — Master Admin only */}
-            <Route path="/settings">
+            <Route path="/hub-settings">
               <ProtectedRoute component={SettingsPage} allowedRoles={MASTER_ONLY} />
             </Route>
+            <Route path="/settings">
+              <RedirectTo to="/hub-settings" />
+            </Route>
             <Route path="/admin-users">
-              <RedirectTo to="/settings" />
+              <RedirectTo to="/hub-settings" />
             </Route>
 
             {/* Customers — all admin roles */}

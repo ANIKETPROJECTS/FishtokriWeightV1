@@ -24,9 +24,9 @@ const masterAdminNavItems = [
       { href: "/inventory/wastage", label: "Wastage Report", icon: Trash2 },
     ],
   },
-  { href: "/settings", label: "Settings", icon: Settings },
   { href: "/customers", label: "Customers", icon: ShoppingBasket },
   { href: "/day-end-report", label: "Day End Report", icon: FileSpreadsheet },
+  { href: "/hub-settings", label: "Hub Settings", icon: Settings },
 ];
 
 function getAdminData() {
@@ -343,7 +343,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               );
             }
 
-            const badgeCount = href === "/settings" ? pendingResets : 0;
+            const badgeCount = href === "/hub-settings" ? pendingResets : 0;
 
             // ── Delivery nav item — big, bold, full-width pill ──
             if (isDelivery && isMobile && expanded) {

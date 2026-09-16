@@ -8,6 +8,8 @@ import { HubUser } from "../db/models/hub-user.js";
 import { PasswordResetRequest } from "../db/models/password-reset-request.js";
 import { MasterAdminSettings } from "../db/models/master-admin-settings.js";
 import { MasterAdminPasswordReset } from "../db/models/master-admin-password-reset.js";
+import { SubHub } from "../db/models/sub-hub.js";
+import { SuperHub } from "../db/models/super-hub.js";
 import { requireAuth, requireMasterAdmin, type AuthenticatedRequest } from "../middlewares/auth.js";
 
 const router: IRouter = Router();
@@ -49,6 +51,13 @@ function publicSettings(settings: any) {
     recoveryEmail: settings.recoveryEmail,
     mailConfigured: Boolean(process.env.SMTP_HOST && process.env.SMTP_FROM),
   };
+}
+
+async function getPrimaryHub() {
+  const hub = await SubHub.findOne({ status: "Active" }).sort({ createdAt: 1 });
+  if (!hub) return null;
+  const parent = await SuperHub.findById(hub.superHubId);
+  return { hub, parent };
 }
 
 function hashResetToken(token: string) {
@@ -145,7 +154,21 @@ router.post("/login", async (req, res) => {
 router.get("/master-admin/settings", requireAuth as any, requireMasterAdmin as any, async (_req, res) => {
   try {
     const settings = await getMasterAdminSettings();
-    res.json({ settings: publicSettings(settings) });
+    const primaryHub = await getPrimaryHub();
+    res.json({
+      settings: {
+        ...publicSettings(settings),
+        hub: primaryHub
+          ? {
+              id: String(primaryHub.hub._id),
+              name: primaryHub.hub.name,
+              location: primaryHub.hub.location || "",
+              superHubId: String(primaryHub.hub.superHubId),
+              superHubName: primaryHub.parent?.name || "",
+            }
+          : null,
+      },
+    });
   } catch {
     res.status(500).json({ error: "InternalError", message: "Could not load settings" });
   }
@@ -155,6 +178,7 @@ const settingsSchema = z.object({
   name: z.string().trim().min(1).max(100),
   email: z.string().trim().email().max(200),
   recoveryEmail: z.string().trim().email().max(200),
+  hubName: z.string().trim().min(1).max(100),
   currentPassword: z.string().min(1).max(200),
 });
 
@@ -174,9 +198,33 @@ router.put("/master-admin/settings", requireAuth as any, requireMasterAdmin as a
     settings.email = parsed.data.email.toLowerCase();
     settings.recoveryEmail = parsed.data.recoveryEmail.toLowerCase();
     await settings.save();
+    const primaryHub = await getPrimaryHub();
+    if (primaryHub) {
+      primaryHub.hub.name = parsed.data.hubName;
+      await primaryHub.hub.save();
+      if (primaryHub.parent) {
+        primaryHub.parent.name = parsed.data.hubName;
+        await primaryHub.parent.save();
+      }
+    }
     const admin = { id: "master-admin-1", email: settings.email, name: settings.name, role: "master_admin" };
     const token = jwt.sign({ adminId: admin.id, email: admin.email, role: admin.role }, JWT_SECRET, { expiresIn: "7d" });
-    res.json({ settings: publicSettings(settings), token, admin });
+    res.json({
+      settings: {
+        ...publicSettings(settings),
+        hub: primaryHub
+          ? {
+              id: String(primaryHub.hub._id),
+              name: primaryHub.hub.name,
+              location: primaryHub.hub.location || "",
+              superHubId: String(primaryHub.hub.superHubId),
+              superHubName: primaryHub.parent?.name || "",
+            }
+          : null,
+      },
+      token,
+      admin,
+    });
   } catch {
     res.status(500).json({ error: "InternalError", message: "Could not save settings" });
   }

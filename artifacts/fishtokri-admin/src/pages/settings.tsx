@@ -12,6 +12,7 @@ type Settings = {
   email: string;
   recoveryEmail: string;
   mailConfigured: boolean;
+  hub: { id: string; name: string; location: string; superHubName: string } | null;
 };
 
 function getToken() {
@@ -40,7 +41,7 @@ export default function SettingsPage() {
   const { toast } = useToast();
   const headerSlot = document.getElementById("page-header-slot");
   const [settings, setSettings] = useState<Settings | null>(null);
-  const [form, setForm] = useState({ name: "", email: "", recoveryEmail: "", currentPassword: "" });
+  const [form, setForm] = useState({ hubName: "", name: "", email: "", recoveryEmail: "", currentPassword: "" });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [sendingReset, setSendingReset] = useState(false);
@@ -52,6 +53,7 @@ export default function SettingsPage() {
         setSettings(next);
         setForm((current) => ({
           ...current,
+          hubName: next.hub?.name || "",
           name: next.name || "",
           email: next.email || "",
           recoveryEmail: next.recoveryEmail || "",
@@ -101,15 +103,15 @@ export default function SettingsPage() {
     <div className="max-w-5xl mx-auto space-y-6">
       {headerSlot && createPortal(
         <div className="min-w-0">
-          <h1 className="text-sm font-bold text-white leading-tight">Settings</h1>
-          <p className="text-[11px] text-white/75 leading-tight hidden sm:block">Manage admin access and recovery</p>
+          <h1 className="text-sm font-bold text-white leading-tight">Hub Settings</h1>
+          <p className="text-[11px] text-white/75 leading-tight hidden sm:block">Manage hub identity and access</p>
         </div>,
         headerSlot,
       )}
 
       <div>
-        <h2 className="text-2xl font-bold text-[#162B4D]">Master Admin Settings</h2>
-        <p className="text-gray-500 text-sm mt-1">Update the login identity and the email address that receives password reset instructions.</p>
+        <h2 className="text-2xl font-bold text-[#162B4D]">Hub Settings</h2>
+        <p className="text-gray-500 text-sm mt-1">Rename the operating hub and manage the credentials used to log in.</p>
       </div>
 
       {loading ? (
@@ -122,12 +124,17 @@ export default function SettingsPage() {
                 <ShieldCheck className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="font-semibold text-[#162B4D]">Admin login details</h3>
-                <p className="text-sm text-gray-500">The password is never shown here. Use the reset email section below to change it.</p>
+                <h3 className="font-semibold text-[#162B4D]">Hub identity and login details</h3>
+                <p className="text-sm text-gray-500">The hub name can be changed here. The password is never shown; use the reset email section to change it.</p>
               </div>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label>Hub name</Label>
+                <Input value={form.hubName} onChange={(e) => update("hubName", e.target.value)} disabled={saving} />
+                <p className="text-xs text-gray-400">This updates the active hub label without changing its stored data.</p>
+              </div>
               <div className="space-y-1.5">
                 <Label>Admin name</Label>
                 <Input value={form.name} onChange={(e) => update("name", e.target.value)} disabled={saving} />
