@@ -921,7 +921,7 @@ export default function Orders() {
   type PaymentEntry = { mode: string; amount: string; reference: string };
   const [paymentStatus, setPaymentStatus] = useState<"unpaid" | "partial" | "paid">("unpaid");
   const [paymentEntries, setPaymentEntries] = useState<PaymentEntry[]>([]);
-  const [mainPaymentMode, setMainPaymentMode] = useState<"upi" | "cash">("cash");
+  const [mainPaymentMode, setMainPaymentMode] = useState<"upi" | "cash" | "card">("cash");
   const [useWallet, setUseWallet] = useState(false);
   // Takeaway orders default to "paid at pickup" — this flag lets the cashier mark
   // a takeaway order as unpaid when the customer didn't pay at the counter.
@@ -1621,7 +1621,7 @@ export default function Orders() {
 
     if (walletApplied > 0 && remaining > 0) {
       // Wallet covers part + remaining via main mode.
-      if (mainPaymentMode === "upi") {
+      if (mainPaymentMode === "upi" || mainPaymentMode === "card") {
         // UPI is an immediate payment — wallet + UPI together cover the full total now → "paid".
         setPaymentStatus("paid");
         setPaymentEntries([
@@ -1640,7 +1640,7 @@ export default function Orders() {
       // Wallet covers everything
       setPaymentStatus("paid");
       setPaymentEntries([{ mode: "wallet", amount: String(walletApplied), reference: "" }]);
-    } else if (mainPaymentMode === "upi") {
+    } else if (mainPaymentMode === "upi" || mainPaymentMode === "card") {
       setPaymentStatus("paid");
       setPaymentEntries([{ mode: "upi", amount: String(newOrderTotal || 0), reference: "" }]);
     } else {
@@ -1683,7 +1683,8 @@ export default function Orders() {
     let email = "";
     let customerId: string | undefined;
 
-    if (customerMode === "existing" && !isNewCustomerEntry) {
+    const hasManualCustomer = !chosenCustomer && Boolean(newCustomer.name.trim() && newCustomer.phone.trim());
+    if (customerMode === "existing" && !isNewCustomerEntry && !hasManualCustomer) {
       if (!chosenCustomer) {
         toast({ title: "Select a customer", description: "Pick an existing customer or switch to 'New Customer'.", variant: "destructive" });
         return;
@@ -1889,8 +1890,8 @@ export default function Orders() {
         // On edits, omit status entirely so the backend keeps the existing stage.
         // On new orders, set the initial POS status.
         ...(!editingOrderId && { status: isPreorderSale ? "created" : "takeaway" }),
-        createCustomerIfMissing: customerMode === "new" || isNewCustomerEntry,
-        newCustomerExtras: (customerMode === "new" || isNewCustomerEntry) ? {
+        createCustomerIfMissing: customerMode === "new" || isNewCustomerEntry || hasManualCustomer,
+        newCustomerExtras: (customerMode === "new" || isNewCustomerEntry || hasManualCustomer) ? {
           dateOfBirth: newCustomer.dateOfBirth.trim(),
         } : undefined,
         // Pricing breakdown
@@ -2759,7 +2760,7 @@ export default function Orders() {
     const hadWallet = !!walletEntry;
     if (hadWallet) {
       const nonWalletMode = nonWalletEntry ? String(nonWalletEntry.mode || "").toLowerCase() : "cash";
-      setMainPaymentMode((nonWalletMode === "upi" ? "upi" : "cash") as "upi" | "cash");
+      setMainPaymentMode((nonWalletMode === "upi" || nonWalletMode === "card" ? nonWalletMode : "cash") as "upi" | "cash" | "card");
     }
     // Remember the wallet amount from the original order. The customer's balance
     // is already deducted, so we add this back when computing the effective
@@ -3967,19 +3968,19 @@ export default function Orders() {
         <div className="flex flex-1 min-h-0 overflow-hidden">
 
           {/* ── LEFT: CATEGORIES ── */}
-          <div className="w-44 flex-shrink-0 bg-[#364F9F] flex flex-col overflow-hidden">
-            <div className="px-4 pt-4 pb-2 flex-shrink-0">
-              <p className="text-[11px] font-bold text-white/50 uppercase tracking-widest">Categories</p>
+          <div className="w-16 flex-shrink-0 bg-[#364F9F] flex flex-col overflow-hidden">
+            <div className="px-1 pt-4 pb-2 flex-shrink-0 text-center">
+              <p className="text-[9px] font-bold text-white/50 uppercase tracking-widest">Cat.</p>
             </div>
             <div className="flex-1 overflow-y-auto pb-4">
               <button
                 onClick={() => setPickerCategory(null)}
+                title="All Items"
                 className={`w-full flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-all text-left ${
                   !pickerCategory ? "bg-[#F05B4E] text-white" : "text-white hover:bg-white/10"
                 }`}
               >
-                <span className="truncate flex-1">All Items</span>
-                <span className={`text-[11px] font-bold min-w-[20px] h-5 px-1.5 rounded-full flex-shrink-0 flex items-center justify-center ${!pickerCategory ? "bg-[#162B4D] text-white" : "bg-[#F05B4E] text-white"}`}>{productsForMode.length}</span>
+                <span className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center text-[10px] font-bold flex-shrink-0">ALL</span>
               </button>
               {loadingProducts ? (
                 <div className="px-4 py-6 text-xs text-white/40 text-center">Loading...</div>
@@ -3987,12 +3988,14 @@ export default function Orders() {
                 <button
                   key={cat.name}
                   onClick={() => setPickerCategory(cat.name)}
+                  title={cat.name}
                   className={`w-full flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-all text-left ${
                     pickerCategory === cat.name ? "bg-[#F05B4E] text-white" : "text-white hover:bg-white/10"
                   }`}
                 >
-                  <span className="truncate flex-1 capitalize">{cat.name}</span>
-                  <span className={`text-[11px] font-bold min-w-[20px] h-5 px-1.5 rounded-full flex-shrink-0 flex items-center justify-center ${pickerCategory === cat.name ? "bg-[#162B4D] text-white" : "bg-[#F05B4E] text-white"}`}>{cat.count}</span>
+                  <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${pickerCategory === cat.name ? "bg-[#162B4D] text-white" : "bg-white/10 text-white"}`}>
+                    {cat.name.slice(0, 3).toUpperCase()}
+                  </span>
                 </button>
               ))}
               {!loadingProducts && productCategories.length === 0 && selectedSubHubId && (
@@ -4133,10 +4136,10 @@ export default function Orders() {
           </div>
 
           {/* ── RIGHT: ORDER PANEL — split: customer/schedule | cart ── */}
-          <div className="w-[600px] flex-shrink-0 border-l border-gray-200 bg-white flex flex-row overflow-hidden">
+          <div className="w-[560px] flex-shrink-0 border-l border-gray-200 bg-white flex flex-row overflow-hidden">
 
             {/* ── Left half: Customer + Address + Schedule ── */}
-            <div className="w-[320px] flex-shrink-0 border-r border-gray-200 flex flex-col overflow-hidden">
+            <div className="w-[250px] flex-shrink-0 border-r border-gray-200 flex flex-col overflow-hidden">
             <div className="flex-1 overflow-y-auto">
 
               {/* Customer — phone-search UX */}
@@ -4236,15 +4239,33 @@ export default function Orders() {
                         </div>
                       )}
 
-                      {/* New customer form — appears automatically when 10 digits entered and no match */}
-                      {noMatch && (
-                        <div className="mt-2 space-y-1.5">
-                          <p className="text-xs font-semibold text-[#1A56DB] flex items-center gap-1.5"><UserPlus className="w-3.5 h-3.5" />New customer — fill in details</p>
-                          <Input value={newCustomer.name} onChange={(e) => { setNewCustomer((n) => ({ ...n, name: e.target.value })); setNewAddress((a) => ({ ...a, name: e.target.value })); }} placeholder="Full name *" className="h-8 text-sm border-0 border-b border-gray-300 rounded-none bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 px-0" />
-                          <Input value={newCustomer.email} onChange={(e) => setNewCustomer((n) => ({ ...n, email: e.target.value }))} placeholder="Email (optional)" className="h-8 text-sm border-0 border-b border-gray-300 rounded-none bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 px-0" type="email" />
-                          <Input value={newCustomer.dateOfBirth} onChange={(e) => setNewCustomer((n) => ({ ...n, dateOfBirth: e.target.value }))} placeholder="Date of birth (optional)" className="h-8 text-sm border-0 border-b border-gray-300 rounded-none bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 px-0" type="date" />
-                        </div>
-                      )}
+                      {/* Quick customer capture — the same simple name + phone flow
+                          used by the former POS screen. Existing matches can still
+                          be selected from the search results above. */}
+                      <div className="mt-2 space-y-1.5">
+                        <Input
+                          value={newCustomer.name}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setNewCustomer((n) => ({ ...n, name: value }));
+                            setNewAddress((a) => ({ ...a, name: value }));
+                          }}
+                          placeholder="Customer name *"
+                          className="h-9 text-sm border-gray-200 rounded-lg bg-white shadow-none focus-visible:ring-1 focus-visible:ring-[#1A56DB]"
+                        />
+                        <Input
+                          value={newCustomer.phone}
+                          onChange={(e) => {
+                            const value = e.target.value.replace(/\D/g, "").slice(0, 10);
+                            setNewCustomer((n) => ({ ...n, phone: value }));
+                            setNewAddress((a) => ({ ...a, phone: value }));
+                          }}
+                          placeholder="Phone number *"
+                          inputMode="numeric"
+                          className="h-9 text-sm border-gray-200 rounded-lg bg-white shadow-none focus-visible:ring-1 focus-visible:ring-[#1A56DB]"
+                        />
+                        {noMatch && <p className="text-[11px] text-[#1A56DB]">New customer will be created from these details.</p>}
+                      </div>
                     </>
                   );
                 })()}
@@ -4430,8 +4451,8 @@ export default function Orders() {
                 </div>
               )}
 
-              {/* Optional address for takeaway */}
-              {orderDeliveryType === "takeaway" && (chosenCustomer || customerMode === "new" || isNewCustomerEntry) && (
+              {/* POS takeaway orders do not collect delivery addresses. */}
+              {orderDeliveryType === "delivery" && (chosenCustomer || customerMode === "new" || isNewCustomerEntry) && (
                 <div className="px-4 pt-3 pb-3 border-b border-gray-100">
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-sm font-normal text-gray-900 flex items-center gap-1.5">
@@ -4780,7 +4801,7 @@ export default function Orders() {
               {/* ── Payment ── */}
               <div className="flex-shrink-0 border-t border-gray-100 px-3 py-2">
                 <p className="text-sm font-normal text-gray-900 flex items-center gap-1.5 mb-2"><img src="/icon-payment.png" className="w-4 h-4 object-contain" alt="" />Payment</p>
-                {/* Main mode: UPI or Cash (+ Unpaid for takeaway) */}
+                {/* Main mode: Cash, UPI, or Card (+ Unpaid for takeaway) */}
                 <div className="flex items-center gap-2 mb-2">
                   <button type="button"
                     onClick={() => { setMainPaymentMode("upi"); setTakeawayUnpaid(false); }}
@@ -4795,6 +4816,13 @@ export default function Orders() {
                   >
                     <Banknote className="w-4 h-4" />
                     Cash
+                  </button>
+                  <button type="button"
+                    onClick={() => { setMainPaymentMode("card"); setTakeawayUnpaid(false); }}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border-2 text-sm font-semibold transition-all ${mainPaymentMode === "card" && !takeawayUnpaid ? "border-[#364F9F] bg-[#364F9F] text-white shadow-sm" : "border-gray-200 text-gray-500 hover:bg-blue-50 hover:border-blue-300"}`}
+                  >
+                    <CreditCard className="w-4 h-4" />
+                    Card
                   </button>
                   {orderDeliveryType === "takeaway" && (() => {
                     const sameCustomer = editingOrderId && editingOrderCustomerId && String(chosenCustomer?.id) === editingOrderCustomerId;
@@ -4860,7 +4888,7 @@ export default function Orders() {
                               ? `₹${walletApplied.toLocaleString("en-IN")} from wallet · Order fully covered`
                               : isTakeawayUnpaid
                                 ? `₹${walletApplied.toLocaleString("en-IN")} from wallet · ₹${remaining.toLocaleString("en-IN")} due at pickup`
-                                : `₹${walletApplied.toLocaleString("en-IN")} from wallet · ₹${remaining.toLocaleString("en-IN")} via ${mainPaymentMode === "upi" ? "UPI" : "Cash"}`}
+                                 : `₹${walletApplied.toLocaleString("en-IN")} from wallet · ₹${remaining.toLocaleString("en-IN")} via ${mainPaymentMode === "upi" ? "UPI" : mainPaymentMode === "card" ? "Card" : "Cash"}`}
                           </p>
                         )}
                       </div>
@@ -5017,7 +5045,7 @@ export default function Orders() {
                     if (paymentStatus === "partial") {
                       return <><ShoppingBag className="w-4 h-4" />Place Order · ₹{nonWalletAmt.toLocaleString("en-IN")} due</>;
                     }
-                    return <><ShoppingBag className="w-4 h-4" />Place Order (Cash)</>;
+                    return <><ShoppingBag className="w-4 h-4" />Place Order ({mainPaymentMode === "upi" ? "UPI" : mainPaymentMode === "card" ? "Card" : "Cash"})</>;
                   })()}
                 </Button>
               </div>
