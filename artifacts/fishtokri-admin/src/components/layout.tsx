@@ -166,7 +166,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
   }, []);
   // On mobile the drawer should always render in "expanded" mode (with labels)
   const isPos = location === "/pos" || location === "/orders/new";
-  const expanded = isMobile ? true : (isPos ? false : sidebarOpen);
+  const isOrderEdit = location.startsWith("/orders/edit/");
+  const expanded = isMobile ? true : (isPos ? false : (isOrderEdit ? true : sidebarOpen));
   // Close drawer on route change
   useEffect(() => {
     setMobileOpen(false);
@@ -503,7 +504,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* Desktop-only collapse/expand toggle at the bottom */}
-        {!isPos && (
+        {!isPos && !isOrderEdit && (
           <button
             onClick={() => setSidebarOpen((o) => !o)}
             className="hidden md:flex items-center justify-center py-3 border-t border-white/10 hover:bg-white/10 transition-colors text-white/50 hover:text-white w-full"
