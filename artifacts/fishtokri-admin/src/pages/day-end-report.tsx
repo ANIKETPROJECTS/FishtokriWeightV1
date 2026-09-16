@@ -1214,18 +1214,18 @@ export default function DayEndReportPage() {
   const headerContent = (
     <div style={{ display: "flex", alignItems: "center", gap: 14, width: "100%", fontFamily: "Poppins, sans-serif" }}>
       {/* Title */}
-      <h1 style={{ fontSize: 15, fontWeight: 700, color: "#000", margin: 0, whiteSpace: "nowrap", flexShrink: 0 }}>
+      <h1 style={{ fontSize: 15, fontWeight: 700, color: "#fff", margin: 0, whiteSpace: "nowrap", flexShrink: 0 }}>
         Day End Report
       </h1>
 
       {/* Divider */}
-      <div style={{ width: 1, height: 20, background: "#e5e7eb", flexShrink: 0 }} />
+      <div style={{ width: 1, height: 20, background: "rgba(255,255,255,0.35)", flexShrink: 0 }} />
 
       {/* Date range */}
       <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-        <label style={{ fontSize: 11, fontWeight: 500, color: "#888", whiteSpace: "nowrap" }}>From</label>
+        <label style={{ fontSize: 11, fontWeight: 500, color: "rgba(255,255,255,0.8)", whiteSpace: "nowrap" }}>From</label>
         <input type="date" value={from} onChange={e => setFrom(e.target.value)} style={dateInputStyle} />
-        <label style={{ fontSize: 11, fontWeight: 500, color: "#888", whiteSpace: "nowrap" }}>To</label>
+        <label style={{ fontSize: 11, fontWeight: 500, color: "rgba(255,255,255,0.8)", whiteSpace: "nowrap" }}>To</label>
         <input type="date" value={to} onChange={e => setTo(e.target.value)} style={dateInputStyle} />
       </div>
 

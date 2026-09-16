@@ -3000,10 +3000,11 @@ export default function Orders() {
       {/* Full-width content area (no card wrapper) */}
       <div className="bg-white">
 
-        {/* Status pills + New Order button — same row */}
-        <div className="flex items-center justify-between gap-2 py-2">
+        {/* Status pills */}
+        <div className="flex flex-col gap-2 py-2">
+          <div className="flex flex-wrap items-center gap-1.5">
           {activeTab !== "invoices" ? (
-            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none flex-1">
+            <>
               <button
                 onClick={() => setStatusFilter("")}
                 className="flex-shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-sm font-semibold transition-all bg-[#162B4D] text-white shadow-sm"
@@ -3037,13 +3038,14 @@ export default function Orders() {
               >
                 Paid
               </button>
-            </div>
+            </>
           ) : (
-            <div className="flex-1" />
+            <div className="w-full" />
           )}
+          </div>
           <button
             onClick={() => { resetCreateForm(); setLocation("/orders/new"); }}
-            className="flex-shrink-0 flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-semibold bg-[#1A56DB] hover:bg-[#1447B4] text-white shadow-sm transition-colors"
+            className="self-end flex-shrink-0 flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-semibold bg-[#1A56DB] hover:bg-[#1447B4] text-white shadow-sm transition-colors"
           >
             <Plus className="w-3.5 h-3.5" /> New Order
           </button>

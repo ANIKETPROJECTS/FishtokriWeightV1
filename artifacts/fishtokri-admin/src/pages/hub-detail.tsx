@@ -144,14 +144,14 @@ export default function HubDetail() {
       {headerSlot && createPortal(
         <div className="flex items-center justify-between w-full min-w-0">
           <div className="min-w-0">
-            <h1 className="text-sm font-bold text-[#162B4D] leading-tight">
+            <h1 className="text-sm font-bold text-white leading-tight">
               {superHub ? `${superHub.name} — Sub Hubs` : "Sub Hubs"}
             </h1>
-            <p className="text-xs text-gray-500 leading-tight hidden sm:block">
+            <p className="text-xs text-white/75 leading-tight hidden sm:block">
               {superHub?.location || "Manage sub hubs for this super hub"}
             </p>
           </div>
-          <span className="text-3xl font-bold text-[#162B4D] flex-shrink-0 ml-4">{stats.total}</span>
+          <span className="text-3xl font-bold text-white flex-shrink-0 ml-4">{stats.total}</span>
         </div>,
         headerSlot,
       )}

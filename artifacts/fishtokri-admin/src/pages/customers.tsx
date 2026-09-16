@@ -425,12 +425,12 @@ export default function Customers() {
       {headerSlot && createPortal(
         <div className="flex items-center justify-between w-full min-w-0">
           <div className="min-w-0">
-            <h1 className="text-sm font-bold text-[#162B4D] leading-tight">Customers</h1>
-            <p className="text-xs text-gray-500 leading-tight hidden sm:block">
+            <h1 className="text-sm font-bold text-white leading-tight">Customers</h1>
+            <p className="text-xs text-white/75 leading-tight hidden sm:block">
               Manage all registered customers with saved addresses, current orders and order history.
             </p>
           </div>
-          <span className="text-3xl font-bold text-[#162B4D] flex-shrink-0 ml-4">{total}</span>
+          <span className="text-3xl font-bold text-white flex-shrink-0 ml-4">{total}</span>
         </div>,
         headerSlot,
       )}
