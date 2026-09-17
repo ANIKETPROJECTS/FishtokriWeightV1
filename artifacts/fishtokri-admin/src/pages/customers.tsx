@@ -620,7 +620,6 @@ export default function Customers() {
                       <td className="px-3 py-4">
                         <p className="text-sm font-medium text-black">{c.phone || "N.A"}</p>
                         <p className="text-xs text-black mt-0.5">{c.email || "N.A"}</p>
-                        <p className="text-xs text-black mt-0.5">{c.dateOfBirth || "N.A"}</p>
                       </td>
                       <td className="px-3 py-4 text-right">
                         <span className="text-sm font-medium text-black">{formatRupees(totalSpend)}</span>
@@ -724,7 +723,7 @@ function EmptyState({ search }: { search: string }) {
 }
 
 function CustomerCard({ customer: c, onView, onEdit, onDelete }: { customer: Customer; onView: () => void; onEdit: () => void; onDelete: () => void }) {
-  const { current, history } = splitOrders(c);
+  const { history } = splitOrders(c);
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex flex-col gap-3 hover:shadow-md transition-shadow">
       <div>
@@ -734,11 +733,8 @@ function CustomerCard({ customer: c, onView, onEdit, onDelete }: { customer: Cus
       <div className="space-y-1">
         <div className="text-sm font-medium text-black">{c.phone || "N.A"}</div>
         <div className="text-xs text-black">{c.email || "N.A"}</div>
-        <div className="text-xs text-black">{c.dateOfBirth || "N.A"}</div>
       </div>
-      <div className="grid grid-cols-3 gap-2">
-        <MiniStat label="Addrs" value={c.addresses?.length ?? 0} />
-        <MiniStat label="Active" value={current.length} />
+      <div className="grid grid-cols-1 gap-2">
         <MiniStat label="History" value={history.length} />
       </div>
       <div className="pt-2 border-t border-gray-100 flex items-center justify-end gap-1">
@@ -944,8 +940,8 @@ function CustomerDetailPage({
   });
 
   const fullCustomer = data ?? null;
-  const { current, history, all } = useMemo(
-    () => (fullCustomer ? splitOrders(fullCustomer) : { current: [], history: [], all: [] }),
+  const { history, all } = useMemo(
+    () => (fullCustomer ? splitOrders(fullCustomer) : { history: [], all: [] }),
     [fullCustomer]
   );
   const totalSpend = all.reduce((sum: number, order: any) => sum + getOrderTotal(order), 0);
@@ -1036,17 +1032,12 @@ function CustomerDetailPage({
                 <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1.5 text-sm text-gray-600">
                   <span className="inline-flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-[#F05B4E]" />{fullCustomer.phone || "N.A"}</span>
                   <span className="inline-flex items-center gap-1.5"><Mail className="w-3.5 h-3.5 text-gray-400" />{fullCustomer.email || "N.A"}</span>
-                  {fullCustomer.dateOfBirth && (
-                    <span className="inline-flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5 text-gray-400" />DOB: {fullCustomer.dateOfBirth}</span>
-                  )}
                 </div>
                 <p className="mt-1 text-xs text-gray-400">Customer since {formatDate(fullCustomer.createdAt)}</p>
               </div>
             </div>
             {/* Stats strip — no card backgrounds, just dividers */}
-            <div className="border-t border-gray-100 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 divide-x divide-gray-100">
-              <SummaryCard label="Addresses" value={fullCustomer.addresses?.length ?? 0} icon={Home} color="text-[#364F9F]" />
-              <SummaryCard label="Active Orders" value={current.length} icon={Clock} color="text-indigo-500" />
+            <div className="border-t border-gray-100 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 divide-x divide-gray-100">
               <SummaryCard label="Order History" value={history.length} icon={CheckCircle2} color="text-emerald-500" />
               <SummaryCard label="All Orders" value={all.length} icon={ClipboardList} color="text-amber-500" />
               <SummaryCard label="Total Spend" value={formatRupees(totalSpend)} icon={CreditCard} color="text-[#F05B4E]" />
@@ -1061,43 +1052,14 @@ function CustomerDetailPage({
               <InfoRow label="Name" value={fullCustomer.name} />
               <InfoRow label="Phone" value={fullCustomer.phone} />
               <InfoRow label="Email" value={fullCustomer.email} />
-              <InfoRow label="Date of Birth" value={fullCustomer.dateOfBirth} />
               <InfoRow label="Created" value={formatDateTime(fullCustomer.createdAt)} />
               <InfoRow label="Updated" value={formatDateTime(fullCustomer.updatedAt)} />
             </div>
           </DetailSection>
 
-          {/* Addresses */}
-          <DetailSection title={`Saved Addresses (${fullCustomer.addresses?.length ?? 0})`} icon={MapPin}>
-            {fullCustomer.addresses?.length ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {fullCustomer.addresses.map((address: any, index: number) => (
-                  <AddressCard key={index} address={address} index={index} />
-                ))}
-              </div>
-            ) : <EmptyPanel text="No saved addresses found for this customer." />}
-          </DetailSection>
-
-          {/* Active Orders */}
-          <CollapsibleDetailSection title={`Active Orders (${current.length})`} icon={Clock} defaultOpen={current.length > 0 && current.length <= 5}>
-            <OrderList orders={current} empty="No active orders found for this customer." />
-          </CollapsibleDetailSection>
-
           {/* Order History */}
           <CollapsibleDetailSection title={`Order History (${history.length})`} icon={ShoppingBag} defaultOpen={history.length > 0 && history.length <= 5}>
             <OrderList orders={history} empty="No completed or past orders found for this customer." />
-          </CollapsibleDetailSection>
-
-          {/* Wallet Tracker */}
-          <CollapsibleDetailSection
-            title={`Customer Wallet Tracker (${(fullCustomer.walletTransactions ?? []).length})`}
-            icon={History}
-            defaultOpen={(fullCustomer.walletTransactions ?? []).length > 0 && (fullCustomer.walletTransactions ?? []).length <= 10}
-          >
-            <WalletTrackerSection
-              transactions={fullCustomer.walletTransactions ?? []}
-              currentBalance={Number(fullCustomer.walletBalance) || 0}
-            />
           </CollapsibleDetailSection>
 
           {/* Active Coupons — locked in pending/in-progress orders */}
@@ -1820,33 +1782,6 @@ function OrderCard({ order, index }: { order: any; index: number }) {
   );
 }
 
-type AddressDraft = {
-  label: string; type: string; name: string; phone: string;
-  building: string; street: string; area: string;
-  pincode: string; instructions: string; isDefault: boolean;
-};
-
-function emptyAddress(): AddressDraft {
-  return { label: "Home", type: "house", name: "", phone: "", building: "", street: "", area: "", pincode: "", instructions: "", isDefault: false };
-}
-
-function addressFromExisting(a: any): AddressDraft {
-  const existingHouse = a?.houseNo ?? a?.flatNo ?? a?.house ?? a?.apartment ?? "";
-  const existingBuilding = a?.building ?? a?.buildingName ?? a?.society ?? "";
-  return {
-    label: a?.label ?? a?.type ?? "Home",
-    type: a?.type ?? "house",
-    name: a?.name ?? a?.contactName ?? "",
-    phone: a?.phone ?? a?.contactPhone ?? a?.mobile ?? "",
-    building: [existingHouse, existingBuilding].filter(Boolean).join(", "),
-    street: a?.street ?? a?.streetName ?? a?.road ?? a?.addressLine1 ?? "",
-    area: a?.area ?? a?.locality ?? a?.neighbourhood ?? "",
-    pincode: a?.pincode ?? a?.zipCode ?? a?.zip ?? "",
-    instructions: a?.instructions ?? a?.deliveryInstructions ?? "",
-    isDefault: !!a?.isDefault,
-  };
-}
-
 function CustomerModal({ isOpen, onClose, customer, onSuccess }: {
   isOpen: boolean; onClose: () => void; customer: Customer | null; onSuccess: () => void;
 }) {
@@ -1855,16 +1790,13 @@ function CustomerModal({ isOpen, onClose, customer, onSuccess }: {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [dob, setDob] = useState("");
   const [walletBalance, setWalletBalance] = useState("");
-  const [addresses, setAddresses] = useState<AddressDraft[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const reset = useCallback(() => {
     setName(customer?.name ?? ""); setEmail(customer?.email ?? "");
-    setPhone(customer?.phone ?? ""); setDob(customer?.dateOfBirth ?? "");
+    setPhone(customer?.phone ?? "");
     setWalletBalance(String(Number(customer?.walletBalance) || 0));
-    setAddresses(Array.isArray(customer?.addresses) && customer!.addresses.length ? customer!.addresses.map(addressFromExisting) : []);
     setErrors({});
   }, [customer]);
 
@@ -1882,29 +1814,12 @@ function CustomerModal({ isOpen, onClose, customer, onSuccess }: {
     onError: (err: any) => { toast({ title: "Error", description: err.message, variant: "destructive" }); },
   });
 
-  const updateAddress = (idx: number, patch: Partial<AddressDraft>) => {
-    setAddresses((prev) => prev.map((a, i) => (i === idx ? { ...a, ...patch } : a)));
-  };
-
   const validate = () => {
     const e: Record<string, string> = {};
     if (!name.trim()) e.name = "Name is required";
     if (!phone.trim()) e.phone = "Phone is required";
     else if (!/^\d{10}$/.test(phone.trim())) e.phone = "Phone must be exactly 10 digits";
     if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) e.email = "Invalid email format";
-    if (dob.trim() && !/^\d{4}-\d{2}-\d{2}$/.test(dob.trim())) e.dob = "Use YYYY-MM-DD format";
-    addresses.forEach((a, i) => {
-      const hasAny = a.name || a.phone || a.building || a.street || a.area || a.pincode;
-      if (hasAny) {
-        if (!a.name.trim()) e[`addr_${i}_name`] = "Full name is required";
-        if (!a.phone.trim()) e[`addr_${i}_phone`] = "Phone is required";
-        else if (!/^\d{10}$/.test(a.phone.trim())) e[`addr_${i}_phone`] = "Phone must be 10 digits";
-        if (!a.building.trim()) e[`addr_${i}_building`] = "Building / Flat No is required";
-        if (!a.area.trim()) e[`addr_${i}_area`] = "Area / Suburb is required";
-        if (!a.pincode.trim()) e[`addr_${i}_pincode`] = "Pincode required";
-        else if (!/^\d{6}$/.test(a.pincode.trim())) e[`addr_${i}_pincode`] = "Pincode must be 6 digits";
-      }
-    });
     return e;
   };
 
@@ -1912,24 +1827,7 @@ function CustomerModal({ isOpen, onClose, customer, onSuccess }: {
     const e = validate();
     setErrors(e);
     if (Object.keys(e).length > 0) { toast({ title: "Please fix the highlighted errors", variant: "destructive" }); return; }
-    const cleanAddresses = addresses
-      .map((a) => {
-        const out: Record<string, any> = {};
-        (Object.keys(a) as (keyof AddressDraft)[]).forEach((k) => {
-          const v = a[k];
-          if (typeof v === "string") { if (v.trim()) out[k] = v.trim(); } else if (v) out[k] = v;
-        });
-        return out;
-      })
-      .filter((a) => Object.keys(a).filter((k) => k !== "label" && k !== "type").length > 0);
-    const labelCounts: Record<string, number> = {};
-    const numberedAddresses = cleanAddresses.map((a) => {
-      const base = (a.label || "Home").replace(/\s+\d+$/, "").trim();
-      const key = base.toLowerCase();
-      labelCounts[key] = (labelCounts[key] ?? 0) + 1;
-      return { ...a, label: labelCounts[key] === 1 ? base : `${base} ${labelCounts[key]}` };
-    });
-    const payload: any = { name: name.trim(), email: email.trim(), phone: phone.trim(), dateOfBirth: dob.trim(), addresses: numberedAddresses };
+    const payload: any = { name: name.trim(), email: email.trim(), phone: phone.trim() };
     if (isEditing) {
       payload.walletBalance = Math.max(0, Number(walletBalance) || 0);
       updateMutation.mutate(payload);
@@ -1946,7 +1844,7 @@ function CustomerModal({ isOpen, onClose, customer, onSuccess }: {
         <DialogHeader>
           <DialogTitle className="text-black">{isEditing ? "Edit Customer" : "Add Customer"}</DialogTitle>
           <DialogDescription>
-            {isEditing ? "Update the customer's profile, contact info and saved addresses." : "Capture the customer's full profile, contact info and one or more delivery addresses."}
+            {isEditing ? "Update the customer's profile and contact info." : "Capture the customer's profile and contact info."}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-5 py-2">
@@ -1963,9 +1861,6 @@ function CustomerModal({ isOpen, onClose, customer, onSuccess }: {
               </Field>
               <Field label="Email" error={errors.email}>
                 <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@example.com" className={errors.email ? "border-red-400" : ""} />
-              </Field>
-              <Field label="Date of birth" error={errors.dob}>
-                <Input type="date" value={dob} onChange={(e) => setDob(e.target.value)} className={errors.dob ? "border-red-400" : ""} />
               </Field>
               {isEditing && (
                 <Field label="Wallet Balance (₹)">
@@ -1985,78 +1880,6 @@ function CustomerModal({ isOpen, onClose, customer, onSuccess }: {
                 </Field>
               )}
             </div>
-          </section>
-
-          <section className="rounded-xl border border-gray-100 bg-gray-50/40 p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h4 className="text-sm font-bold text-black flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-[#1A56DB]" />Addresses ({addresses.length})
-              </h4>
-              <Button type="button" size="sm" variant="outline" onClick={() => setAddresses((prev) => [...prev, emptyAddress()])} className="h-8 gap-1.5 text-xs">
-                <Plus className="w-3.5 h-3.5" />Add address
-              </Button>
-            </div>
-            {addresses.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-gray-200 bg-white py-6 text-center text-xs text-black">
-                No addresses yet. Click "Add address" to add one or more delivery locations.
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {addresses.map((a, i) => (
-                  <div key={i} className="rounded-lg border border-gray-200 bg-white p-3">
-                    <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs font-bold uppercase tracking-wide text-black">Address {i + 1}</span>
-                        {a.isDefault && <span className="text-[10px] font-bold uppercase tracking-wide bg-blue-50 text-blue-700 border border-blue-100 px-2 py-0.5 rounded-full">Default</span>}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {!a.isDefault && <button type="button" onClick={() => setAddresses((prev) => prev.map((x, j) => ({ ...x, isDefault: j === i })))} className="text-[11px] text-[#1A56DB] hover:underline font-medium">Make default</button>}
-                        <button type="button" onClick={() => setAddresses((prev) => prev.filter((_, j) => j !== i))} className="w-7 h-7 flex items-center justify-center rounded border border-gray-200 text-black hover:text-red-500 hover:border-red-200 hover:bg-red-50 transition-colors" title="Remove address">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <Field label="Full Name" required={!!(a.name || a.phone || a.building || a.street || a.area || a.pincode)} error={errors[`addr_${i}_name`]}>
-                        <Input value={a.name} onChange={(e) => updateAddress(i, { name: e.target.value })} placeholder="Recipient name" className={errors[`addr_${i}_name`] ? "border-red-400" : ""} />
-                      </Field>
-                      <Field label="Phone" required={!!(a.name || a.phone || a.building || a.street || a.area || a.pincode)} error={errors[`addr_${i}_phone`]}>
-                        <Input value={a.phone} onChange={(e) => updateAddress(i, { phone: e.target.value.replace(/\D/g, "").slice(0, 10) })} placeholder="10-digit mobile" className={errors[`addr_${i}_phone`] ? "border-red-400" : ""} />
-                      </Field>
-                      <Field label="Building / Flat No" required={!!(a.name || a.phone || a.building || a.street || a.area || a.pincode)} error={errors[`addr_${i}_building`]}>
-                        <Input value={a.building} onChange={(e) => updateAddress(i, { building: e.target.value })} placeholder="Wing A, Flat 302, Building Name" className={errors[`addr_${i}_building`] ? "border-red-400" : ""} />
-                      </Field>
-                      <Field label="Street / Locality">
-                        <Input value={a.street} onChange={(e) => updateAddress(i, { street: e.target.value })} placeholder="Street name or society" />
-                      </Field>
-                      <Field label="Area / Suburb" required={!!(a.name || a.phone || a.building || a.street || a.area || a.pincode)} error={errors[`addr_${i}_area`]}>
-                        <Input value={a.area} onChange={(e) => updateAddress(i, { area: e.target.value })} placeholder="e.g. Thane West" className={errors[`addr_${i}_area`] ? "border-red-400" : ""} />
-                      </Field>
-                      <Field label="Pincode" required={!!(a.name || a.phone || a.building || a.street || a.area || a.pincode)} error={errors[`addr_${i}_pincode`]}>
-                        <Input value={a.pincode} onChange={(e) => updateAddress(i, { pincode: e.target.value.replace(/\D/g, "").slice(0, 6) })} placeholder="6-digit pincode" className={errors[`addr_${i}_pincode`] ? "border-red-400" : ""} />
-                      </Field>
-                      <div className="md:col-span-2">
-                        <Field label="Address Type">
-                          <Select value={a.label || "Home"} onValueChange={(v) => updateAddress(i, { label: v, type: v.toLowerCase() })}>
-                            <SelectTrigger><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="Home">Home</SelectItem>
-                              <SelectItem value="Work">Work</SelectItem>
-                              <SelectItem value="Other">Other</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </Field>
-                      </div>
-                      <div className="md:col-span-2">
-                        <Field label="Delivery Instructions">
-                          <Input value={a.instructions} onChange={(e) => updateAddress(i, { instructions: e.target.value })} placeholder="Leave at door, ring bell twice, etc." />
-                        </Field>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
           </section>
         </div>
         <DialogFooter>
