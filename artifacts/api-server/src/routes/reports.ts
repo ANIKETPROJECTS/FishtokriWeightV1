@@ -56,11 +56,11 @@ router.get("/day-end/orders", async (req: ScopedRequest, res) => {
 
     const filter: any = { ...scopeClause, isDeleted: { $ne: true } };
     if (channel === "pos") {
-      // The FishTokri Admin day-end report is for counter sales only.
-      // POS/admin invoices use the FTS order prefix; storefront orders use FTW/FTN.
-      filter.orderId = { $regex: /^#?FTS/i };
-      // A future preorder is not a completed counter sale yet. Include it only
-      // after it reaches a handover-complete status.
+      // The admin Orders Report includes every order visible to the current
+      // admin scope. A previous FTS-only prefix filter hid valid orders whose
+      // IDs were created by another order channel.
+      // Future preorders are not completed sales yet; include them only after
+      // they reach a handover-complete status.
       filter.$and = [
         ...(filter.$and ?? []),
         { $or: [{ orderType: { $ne: "preorder" } }, { orderType: "preorder", status: { $in: ["takeaway", "handed_over", "delivered"] } }] },
@@ -72,17 +72,16 @@ router.get("/day-end/orders", async (req: ScopedRequest, res) => {
       if (from) dateClause.$gte = from;
       if (to) dateClause.$lte = to;
 
-      // The POS day-end report is a sales report: include orders placed during
-      // the selected India-time calendar days. Using deliveryDate here made
-      // orders placed in the range disappear when they were scheduled for a
-      // different delivery date.
+      // Include orders placed during the selected India-time calendar days or
+      // scheduled for a selected delivery date. This keeps the report aligned
+      // with the Orders page, which exposes both dates to admins.
       const createdAtClause: any = {};
       if (from) createdAtClause.$gte = istDayStart(from);
       if (to) createdAtClause.$lt = istNextDayStart(to);
       filter.$and = [
         ...(filter.$and ?? []),
         channel === "pos"
-          ? { createdAt: createdAtClause }
+          ? { $or: [{ createdAt: createdAtClause }, { deliveryDate: dateClause }] }
           : { deliveryDate: dateClause },
       ];
     }

@@ -458,7 +458,7 @@ function OrdersReport({ from, to, onDownload, downloadRef }: { from: string; to:
     }
     rows.push([]);
     rows.push(["SUMMARY", "", "", "", "", "", "", "", "", "", "", "", "", ""]);
-    rows.push(["Showing POS orders (filtered)", filteredOrders.length, "of", orders.length, "POS orders"]);
+    rows.push(["Showing orders (filtered)", filteredOrders.length, "of", orders.length, "orders"]);
     rows.push(["Cash Revenue", stats.cash]);
     rows.push(["UPI Revenue", stats.upi]);
     rows.push(["Card Revenue", stats.card]);
@@ -492,7 +492,7 @@ function OrdersReport({ from, to, onDownload, downloadRef }: { from: string; to:
 
         const cards: StatCard[] = [
           {
-            label: "POS Orders",
+             label: "Orders",
             value: String(filteredOrders.length),
             color: "#000",
             sub: [
