@@ -1790,13 +1790,11 @@ function CustomerModal({ isOpen, onClose, customer, onSuccess }: {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [walletBalance, setWalletBalance] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const reset = useCallback(() => {
     setName(customer?.name ?? ""); setEmail(customer?.email ?? "");
     setPhone(customer?.phone ?? "");
-    setWalletBalance(String(Number(customer?.walletBalance) || 0));
     setErrors({});
   }, [customer]);
 
@@ -1829,7 +1827,6 @@ function CustomerModal({ isOpen, onClose, customer, onSuccess }: {
     if (Object.keys(e).length > 0) { toast({ title: "Please fix the highlighted errors", variant: "destructive" }); return; }
     const payload: any = { name: name.trim(), email: email.trim(), phone: phone.trim() };
     if (isEditing) {
-      payload.walletBalance = Math.max(0, Number(walletBalance) || 0);
       updateMutation.mutate(payload);
     } else {
       createMutation.mutate(payload);
@@ -1862,23 +1859,6 @@ function CustomerModal({ isOpen, onClose, customer, onSuccess }: {
               <Field label="Email" error={errors.email}>
                 <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@example.com" className={errors.email ? "border-red-400" : ""} />
               </Field>
-              {isEditing && (
-                <Field label="Wallet Balance (₹)">
-                  <div className="relative">
-                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">₹</span>
-                    <Input
-                      type="number"
-                      inputMode="decimal"
-                      min={0}
-                      step="0.01"
-                      value={walletBalance}
-                      onChange={(e) => setWalletBalance(e.target.value)}
-                      placeholder="0"
-                      className="pl-6"
-                    />
-                  </div>
-                </Field>
-              )}
             </div>
           </section>
         </div>

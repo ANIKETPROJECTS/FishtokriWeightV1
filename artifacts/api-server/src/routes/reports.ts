@@ -26,6 +26,16 @@ function scopeOrderFilter(req: ScopedRequest): Record<string, any> | null {
   return { subHubId: { $in: scope.subHubIds } };
 }
 
+function istDayStart(date: string): Date {
+  return new Date(`${date}T00:00:00+05:30`);
+}
+
+function istNextDayStart(date: string): Date {
+  const next = istDayStart(date);
+  next.setUTCDate(next.getUTCDate() + 1);
+  return next;
+}
+
 // ─── ORDERS DAY-END REPORT ──────────────────────────────────────────────────
 // GET /api/reports/day-end/orders?from=YYYY-MM-DD&to=YYYY-MM-DD&subHubId=xxx
 router.get("/day-end/orders", async (req: ScopedRequest, res) => {
@@ -62,18 +72,18 @@ router.get("/day-end/orders", async (req: ScopedRequest, res) => {
       if (from) dateClause.$gte = from;
       if (to) dateClause.$lte = to;
 
-      // Delivery orders are grouped by their scheduled delivery date. Takeaway
-      // POS sales do not have a delivery date, so group them by creation date
-      // or they disappear from the day-end report.
+      // The POS day-end report is a sales report: include orders placed during
+      // the selected India-time calendar days. Using deliveryDate here made
+      // orders placed in the range disappear when they were scheduled for a
+      // different delivery date.
       const createdAtClause: any = {};
-      if (from) createdAtClause.$gte = new Date(`${from}T00:00:00.000Z`);
-      if (to) createdAtClause.$lte = new Date(`${to}T23:59:59.999Z`);
+      if (from) createdAtClause.$gte = istDayStart(from);
+      if (to) createdAtClause.$lt = istNextDayStart(to);
       filter.$and = [
         ...(filter.$and ?? []),
-        { $or: [
-          { deliveryDate: dateClause },
-          { deliveryType: "takeaway", createdAt: createdAtClause },
-        ] },
+        channel === "pos"
+          ? { createdAt: createdAtClause }
+          : { deliveryDate: dateClause },
       ];
     }
 
