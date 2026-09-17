@@ -13,3 +13,4 @@
 - [Quiet runtime logging](quiet-runtime-logging.md) — production defaults to error-only output; request logs are disabled and PM2 stdout is discarded.
 - [Filtered pnpm startup installs](filtered-pnpm-startup-installs.md) — install each runtime’s dependency closure separately; broad or concurrent workspace installs fail on Replit.
 - [POS takeaway reporting](pos-takeaway-reporting.md) — takeaway sales have no delivery date; create their customer and include them by creation date in day-end reports.
+- [Day-end preorder inclusion](day-end-report-preorders.md) — paid confirmed preorders count as sales before handover and must not be status-filtered out of the report.

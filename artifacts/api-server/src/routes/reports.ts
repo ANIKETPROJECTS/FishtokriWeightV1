@@ -56,15 +56,12 @@ router.get("/day-end/orders", async (req: ScopedRequest, res) => {
 
     const filter: any = { ...scopeClause, isDeleted: { $ne: true } };
     if (channel === "pos") {
-      // The admin Orders Report includes every order visible to the current
-      // admin scope. A previous FTS-only prefix filter hid valid orders whose
-      // IDs were created by another order channel.
-      // Future preorders are not completed sales yet; include them only after
-      // they reach a handover-complete status.
-      filter.$and = [
-        ...(filter.$and ?? []),
-        { $or: [{ orderType: { $ne: "preorder" } }, { orderType: "preorder", status: { $in: ["takeaway", "handed_over", "delivered"] } }] },
-      ];
+      // The Day End Orders Report includes every non-deleted order visible to
+      // the current admin scope, including paid confirmed preorders. A
+      // preorder can be a completed sale before its scheduled handover date,
+      // so status-based exclusion here made paid orders disappear from reports.
+      // Keep this branch intentionally free of an orderId prefix or status
+      // filter; the date range below is the report's inclusion rule.
     }
 
     if (from || to) {
