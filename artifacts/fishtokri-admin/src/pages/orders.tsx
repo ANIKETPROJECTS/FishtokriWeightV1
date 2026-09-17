@@ -4133,7 +4133,8 @@ export default function Orders() {
                     const pid = String(p._id);
                     const cartItem = selectedProducts.find((sp) => sp.productId === pid);
                     const stock = Number(p.quantity) || 0;
-                     const stockUnit = String(p.unit || "kg").trim() || "kg";
+                     const rawUnit = String(p.unit || "kg").trim() || "kg";
+                     const stockUnit = /kg/i.test(rawUnit) ? "kg" : rawUnit;
                     const outOfStock = stock <= 0;
                     const lowStock = stock > 0 && stock <= 5;
                     const atMax = cartItem ? cartItem.quantity >= stock : false;
@@ -4172,7 +4173,7 @@ export default function Orders() {
                           <p className="text-xs text-gray-400 uppercase tracking-wide truncate h-4">{p.category || "\u00A0"}</p>
                           <div className="flex items-center justify-between mt-auto pt-1.5 gap-1">
                             <div className="min-w-0 flex-1">
-                              <p className="text-sm font-semibold text-[#1A56DB]">₹{Number(p.price).toLocaleString("en-IN")}</p>
+                               <p className="text-sm font-semibold text-[#1A56DB]">₹{Number(p.price).toLocaleString("en-IN")}/{stockUnit}</p>
                                {!outOfStock && (
                                  <p className={`text-[10px] font-medium leading-none ${lowStock ? "text-amber-600" : "text-[#364F9F]"}`}>
                                    {stock.toLocaleString("en-IN", { maximumFractionDigits: 2 })} {stockUnit} left
