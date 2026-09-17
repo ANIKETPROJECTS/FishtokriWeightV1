@@ -3381,14 +3381,22 @@ export default function Orders() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+             <table className="w-full table-fixed text-sm">
+               <colgroup>
+                 <col className="w-[26%]" />
+                 <col className="w-[25%]" />
+                 <col className="w-[12%]" />
+                 <col className="w-[16%]" />
+                 <col className="w-[12%]" />
+                 <col className="w-[9%]" />
+               </colgroup>
               <thead>
                 <tr className="bg-white border-b border-gray-200 text-xs font-semibold text-black uppercase tracking-wide">
-                  <th className="px-3 py-4 text-center">Customer</th>
-                  <th className="px-3 py-4 text-center">Items</th>
-                  <th className="px-3 py-4 text-center">Total</th>
-                  <th className="px-3 py-4 text-center">Payment</th>
-                  <th className="px-3 py-4 text-center">Status</th>
+                   <th className="px-3 py-4 text-left">Customer</th>
+                   <th className="px-3 py-4 text-left">Items</th>
+                   <th className="px-3 py-4 text-left">Total</th>
+                   <th className="px-3 py-4 text-left">Payment</th>
+                   <th className="px-3 py-4 text-left">Status</th>
                   <th className="px-3 py-4 text-center">Actions</th>
                 </tr>
               </thead>
@@ -3398,7 +3406,7 @@ export default function Orders() {
                   const items: any[] = Array.isArray(o.items) ? o.items : [];
                   return (
                     <tr key={String(o._id)} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-3 py-4">
+                       <td className="px-3 py-4 align-top">
                         <p className="font-semibold text-black text-sm">{o.customerName}</p>
                         <p className="text-xs text-black">{o.phone}</p>
                         <p className="text-xs text-black mt-1 whitespace-nowrap">Placed: {formatDate(o.createdAt)}</p>
@@ -3409,7 +3417,7 @@ export default function Orders() {
                           <p className="text-[10px] font-mono font-bold text-[#364F9F] mt-0.5">{displayOrderId(o.orderId, o, dailySeqMap.get(String(o._id)))}</p>
                         )}
                       </td>
-                      <td className="px-3 py-4">
+                       <td className="px-3 py-4 align-top">
                         {items.length === 0 ? (
                           <span className="text-sm text-black">—</span>
                         ) : (
@@ -3423,7 +3431,7 @@ export default function Orders() {
                           </div>
                         )}
                       </td>
-                      <td className="px-3 py-4">
+                       <td className="px-3 py-4 align-top">
                         <span className="font-bold text-black text-sm">{formatRupees(total)}</span>
                         {(Number(o.slotCharge) > 0) && <p className="text-xs text-orange-600">+{formatRupees(Number(o.slotCharge))} delivery</p>}
                         {(Number(o.deliveryCharge) > 0) && <p className="text-xs text-orange-600">+{formatRupees(Number(o.deliveryCharge))} {o.isExpress ? "porter" : "delivery"}</p>}
@@ -3435,7 +3443,7 @@ export default function Orders() {
                           return walletAmt > 0 ? <p className="text-xs text-[#364F9F] font-medium">−{formatRupees(walletAmt)} wallet</p> : null;
                         })()}
                       </td>
-                      <td className="px-3 py-4">
+                       <td className="px-3 py-4 align-top">
                         {/* Payment mode change dropdown */}
                         <select
                           value={orderPaymentModeKey(o)}
@@ -3465,8 +3473,8 @@ export default function Orders() {
                           </div>
                         )}
                       </td>
-                      <td className="px-4 py-4"><SolidStatusBadge status={o.status} deliveryType={o.deliveryType} orderType={o.orderType} /></td>
-                      <td className="px-4 py-4 text-center">
+                       <td className="px-3 py-4 align-top"><SolidStatusBadge status={o.status} deliveryType={o.deliveryType} orderType={o.orderType} /></td>
+                       <td className="px-3 py-4 align-top text-center">
                         <div className="inline-flex items-center gap-1.5">
                           <button
                             title="View"
