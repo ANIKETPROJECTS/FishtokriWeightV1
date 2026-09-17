@@ -15,9 +15,32 @@ export function formatRupees(n: number) {
   return `₹${Number(n || 0).toLocaleString("en-IN")}`;
 }
 
+function getWeightPricing(unit?: string) {
+  const normalized = String(unit || "").trim().toLowerCase();
+  if (normalized.includes("kg")) return { isWeightBased: true, basisGrams: 1000 };
+  const gramMatch = normalized.match(/(\d+(?:\.\d+)?)\s*g/);
+  if (gramMatch) return { isWeightBased: true, basisGrams: Number(gramMatch[1]) };
+  return { isWeightBased: false, basisGrams: 1 };
+}
+
+function formatOrderWeight(weightInKg: number) {
+  const grams = Math.round((Number(weightInKg) || 0) * 1000);
+  if (grams < 1000) return `${grams} g`;
+  return `${Number(weightInKg || 0).toLocaleString("en-IN", { maximumFractionDigits: 3 })} kg`;
+}
+
+function invoiceLineAmount(item: any) {
+  const basis = getWeightPricing(item?.unit);
+  const price = Number(item?.price) || 0;
+  const quantity = Number(item?.quantity) || 0;
+  return basis.isWeightBased
+    ? price * quantity * (1000 / basis.basisGrams)
+    : price * (quantity || 1);
+}
+
 function orderItemsTotal(items: any[]) {
   return (items ?? []).reduce(
-    (s: number, i: any) => s + (Number(i.price) || 0) * (Number(i.quantity) || 1),
+    (s: number, item: any) => s + invoiceLineAmount(item),
     0,
   );
 }
@@ -105,7 +128,11 @@ export function InvoiceModal({ order, onClose }: { order: any; onClose: () => vo
       .map((it: any) => {
         const qty = Number(it.quantity) || 1;
         const rate = Number(it.price) || 0;
-        return `<tr><td style="padding:5px 4px;border:2px solid #444;font-weight:700;font-size:14px;word-break:break-word;">${it.name}</td><td style="padding:5px 4px;border:2px solid #444;text-align:right;font-size:14px;">${qty}</td><td style="padding:5px 4px;border:2px solid #444;text-align:right;font-size:14px;">${rate.toFixed(2)}</td><td style="padding:5px 4px;border:2px solid #444;text-align:right;font-size:14px;">${(qty * rate).toFixed(2)}</td></tr>`;
+        const basis = getWeightPricing(it.unit);
+        const displayRate = basis.isWeightBased ? rate * (1000 / basis.basisGrams) : rate;
+        const quantityLabel = basis.isWeightBased ? formatOrderWeight(qty) : String(qty);
+        const rateLabel = basis.isWeightBased ? `${formatRupees(displayRate)}/kg` : rate.toFixed(2);
+        return `<tr><td style="padding:5px 4px;border:2px solid #444;font-weight:700;font-size:14px;word-break:break-word;">${it.name}</td><td style="padding:5px 4px;border:2px solid #444;text-align:right;font-size:14px;">${quantityLabel}</td><td style="padding:5px 4px;border:2px solid #444;text-align:right;font-size:14px;">${rateLabel}</td><td style="padding:5px 4px;border:2px solid #444;text-align:right;font-size:14px;">${invoiceLineAmount(it).toFixed(2)}</td></tr>`;
       })
       .join("");
     const discountRows = [
@@ -160,7 +187,7 @@ export function InvoiceModal({ order, onClose }: { order: any; onClose: () => vo
       commonInfoHtml +
       `<div style="margin:4px 0;font-size:17px;"><b>Payment :</b> ${payMode} <span style="margin-left:5px;font-size:14px;font-weight:700;text-transform:uppercase;padding:1px 6px;border-radius:20px;border:1px solid ${payStatusColor};color:${payStatusColor};background:${payStatusBg};">${payLabel}</span></div>` +
       `<div style="border-top:2px solid #444;margin:8px 0;"></div>` +
-      `<table style="width:100%;border-collapse:collapse;font-size:14px;margin:4px 0;"><thead><tr><th style="padding:5px 4px;border:2px solid #444;text-align:left;font-weight:700;background:#f5f5f5;">Item</th><th style="padding:5px 4px;border:2px solid #444;text-align:right;font-weight:700;background:#f5f5f5;white-space:nowrap;">Qty</th><th style="padding:5px 4px;border:2px solid #444;text-align:right;font-weight:700;background:#f5f5f5;white-space:nowrap;">Rate</th><th style="padding:5px 4px;border:2px solid #444;text-align:right;font-weight:700;background:#f5f5f5;white-space:nowrap;">Amount</th></tr></thead><tbody>` +
+       `<table style="width:100%;border-collapse:collapse;font-size:14px;margin:4px 0;"><thead><tr><th style="padding:5px 4px;border:2px solid #444;text-align:left;font-weight:700;background:#f5f5f5;">Item</th><th style="padding:5px 4px;border:2px solid #444;text-align:right;font-weight:700;background:#f5f5f5;white-space:nowrap;">Qty / Weight</th><th style="padding:5px 4px;border:2px solid #444;text-align:right;font-weight:700;background:#f5f5f5;white-space:nowrap;">Rate</th><th style="padding:5px 4px;border:2px solid #444;text-align:right;font-weight:700;background:#f5f5f5;white-space:nowrap;">Amount</th></tr></thead><tbody>` +
       itemRows +
       `<tr><td style="padding:5px 4px;border:2px solid #444;font-weight:700;">Total Items: ${items.length}</td><td style="padding:5px 4px;border:2px solid #444;text-align:right;font-weight:700;">${totalQty}</td><td style="padding:5px 4px;border:2px solid #444;"></td><td style="padding:5px 4px;border:2px solid #444;text-align:right;font-weight:700;">${subtotal.toFixed(2)}</td></tr>` +
       discountRows + slotRow + deliveryRow +
@@ -238,7 +265,7 @@ export function InvoiceModal({ order, onClose }: { order: any; onClose: () => vo
                 <thead>
                   <tr>
                     <th style={{ padding: "5px 4px", border: "1px solid #bbb", textAlign: "left", fontWeight: 700, background: "#f5f5f5" }}>Item</th>
-                    <th style={{ padding: "5px 4px", border: "1px solid #bbb", textAlign: "right", fontWeight: 700, background: "#f5f5f5", whiteSpace: "nowrap" }}>Qty</th>
+                    <th style={{ padding: "5px 4px", border: "1px solid #bbb", textAlign: "right", fontWeight: 700, background: "#f5f5f5", whiteSpace: "nowrap" }}>Qty / Weight</th>
                     <th style={{ padding: "5px 4px", border: "1px solid #bbb", textAlign: "right", fontWeight: 700, background: "#f5f5f5", whiteSpace: "nowrap" }}>Rate</th>
                     <th style={{ padding: "5px 4px", border: "1px solid #bbb", textAlign: "right", fontWeight: 700, background: "#f5f5f5", whiteSpace: "nowrap" }}>Amount</th>
                   </tr>
@@ -247,12 +274,14 @@ export function InvoiceModal({ order, onClose }: { order: any; onClose: () => vo
                   {items.map((it: any, i: number) => {
                     const qty = Number(it.quantity) || 1;
                     const rate = Number(it.price) || 0;
+                    const basis = getWeightPricing(it.unit);
+                    const displayRate = basis.isWeightBased ? rate * (1000 / basis.basisGrams) : rate;
                     return (
                       <tr key={i}>
                         <td style={{ padding: "5px 4px", border: "1px solid #bbb", fontWeight: 600, wordBreak: "break-word", maxWidth: 150 }}>{it.name}</td>
-                        <td style={{ padding: "5px 4px", border: "1px solid #bbb", textAlign: "right" }}>{qty}</td>
-                        <td style={{ padding: "5px 4px", border: "1px solid #bbb", textAlign: "right" }}>{rate.toFixed(2)}</td>
-                        <td style={{ padding: "5px 4px", border: "1px solid #bbb", textAlign: "right" }}>{(qty * rate).toFixed(2)}</td>
+                        <td style={{ padding: "5px 4px", border: "1px solid #bbb", textAlign: "right" }}>{basis.isWeightBased ? formatOrderWeight(qty) : qty}</td>
+                        <td style={{ padding: "5px 4px", border: "1px solid #bbb", textAlign: "right" }}>{basis.isWeightBased ? `${formatRupees(displayRate)}/kg` : rate.toFixed(2)}</td>
+                        <td style={{ padding: "5px 4px", border: "1px solid #bbb", textAlign: "right" }}>{invoiceLineAmount(it).toFixed(2)}</td>
                       </tr>
                     );
                   })}

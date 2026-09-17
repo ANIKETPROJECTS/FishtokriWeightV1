@@ -59,8 +59,40 @@ function formatTimeSlot(o: any): string | null {
   if (o?.timeslotLabel) { const m = String(o.timeslotLabel).match(/\(([^)]+)\)/); return m ? m[1] : o.timeslotLabel; }
   return null;
 }
+
+function getWeightPricing(unit?: string) {
+  const normalized = String(unit || "").trim().toLowerCase();
+  if (normalized.includes("kg")) return { isWeightBased: true, basisGrams: 1000 };
+  const gramMatch = normalized.match(/(\d+(?:\.\d+)?)\s*g/);
+  if (gramMatch) return { isWeightBased: true, basisGrams: Number(gramMatch[1]) };
+  return { isWeightBased: false, basisGrams: 1 };
+}
+
+function formatOrderWeight(weightInKg: number) {
+  const grams = Math.round((Number(weightInKg) || 0) * 1000);
+  if (grams < 1000) return `${grams} g`;
+  return `${Number(weightInKg || 0).toLocaleString("en-IN", { maximumFractionDigits: 3 })} kg`;
+}
+
+function orderLineAmount(item: any) {
+  const basis = getWeightPricing(item?.unit);
+  const price = Number(item?.price) || 0;
+  const quantity = Number(item?.quantity) || 0;
+  return basis.isWeightBased ? price * quantity * (1000 / basis.basisGrams) : price * (quantity || 1);
+}
+
+function orderLineSummary(item: any) {
+  const basis = getWeightPricing(item?.unit);
+  const price = Number(item?.price) || 0;
+  const quantity = Number(item?.quantity) || 0;
+  if (basis.isWeightBased) {
+    return `${formatOrderWeight(quantity)} @ ${formatRupees(price * (1000 / basis.basisGrams))}/kg`;
+  }
+  return `${quantity || 1} × ${formatRupees(price)}`;
+}
+
 function orderItemsTotal(items: any[]) {
-  return (items ?? []).reduce((s: number, i: any) => s + (Number(i.price) || 0) * (Number(i.quantity) || 1), 0);
+  return (items ?? []).reduce((s: number, item: any) => s + orderLineAmount(item), 0);
 }
 function effectiveTotal(o: any): number {
   const saved = Number(o?.total); if (saved > 0) return saved;
@@ -448,7 +480,7 @@ function OrdersReport({ from, to, onDownload, downloadRef }: { from: string; to:
     if (!filteredOrders.length) return;
     const rows: any[] = [["Invoice No","Order Placed","Delivery Date","Customer","Phone","Items & Qty","Total (₹)","Wallet Used (₹)","Bal. Due Cash/UPI (₹)","Due Amount (₹)","Delivery Partner","Payment Mode","Payment Status","Order Status"]];
     for (const o of filteredOrders) {
-      const itemsQty = (o.items || []).map((it: any) => `${it.name} × ${it.quantity}`).join(", ");
+      const itemsQty = (o.items || []).map((it: any) => `${it.name} · ${orderLineSummary(it)}`).join(", ");
       const placedDate = o.createdAt ? new Date(o.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
       const delivDate = o.deliveryDate ? formatDate(o.deliveryDate) : "—";
       const due = orderDueAmount(o);
@@ -812,7 +844,7 @@ function OrdersReport({ from, to, onDownload, downloadRef }: { from: string; to:
                     {(o.items || []).map((it: any, j: number) => (
                       <div key={j} style={{ fontSize: 12, color: "#222" }}>
                         <span style={{ fontWeight: 600 }}>{it.name}</span>
-                        <span style={{ color: "#888" }}> × {it.quantity}</span>
+                        <span style={{ color: "#888" }}> · {orderLineSummary(it)}</span>
                       </div>
                     ))}
                   </td>

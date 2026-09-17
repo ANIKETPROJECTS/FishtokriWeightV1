@@ -473,8 +473,28 @@ function orderProductPriceForApi(product: { price: number; unit?: string }) {
     : Number(product.price) || 0;
 }
 
+function orderLineAmount(item: any) {
+  const basis = getWeightPricing(item?.unit);
+  const price = Number(item?.price) || 0;
+  const quantity = Number(item?.quantity) || 0;
+  return basis.isWeightBased
+    ? price * quantity * (1000 / basis.basisGrams)
+    : price * (quantity || 1);
+}
+
+function orderLineSummary(item: any) {
+  const basis = getWeightPricing(item?.unit);
+  const price = Number(item?.price) || 0;
+  const quantity = Number(item?.quantity) || 0;
+  if (basis.isWeightBased) {
+    const ratePerKg = price * (1000 / basis.basisGrams);
+    return `${formatOrderWeight(quantity)} @ ${formatRupees(ratePerKg)}/kg`;
+  }
+  return `${quantity || 1} × ${formatRupees(price)}`;
+}
+
 function orderTotal(items: any[]) {
-  return (items ?? []).reduce((s: number, i: any) => s + (Number(i.price) || 0) * (Number(i.quantity) || 1), 0);
+  return (items ?? []).reduce((s: number, item: any) => s + orderLineAmount(item), 0);
 }
 
 // Returns the final amount payable for an order, honouring any saved
@@ -3337,7 +3357,7 @@ export default function Orders() {
                         </td>
                         <td className="px-4 py-3">
                           <p className="text-[#162B4D] font-medium text-sm">{(o.items ?? []).length} item{(o.items ?? []).length !== 1 ? "s" : ""}</p>
-                          <p className="text-xs text-gray-400 truncate max-w-[130px]">{(o.items ?? []).map((i: any) => i.name).join(", ")}</p>
+                           <p className="text-xs text-gray-400 truncate max-w-[180px]">{(o.items ?? []).map((i: any) => `${i.name} · ${orderLineSummary(i)}`).join(", ")}</p>
                         </td>
                         <td className="px-4 py-3">
                           <span className="font-bold text-[#162B4D]">{formatRupees(tot)}</span>
@@ -3423,9 +3443,9 @@ export default function Orders() {
                         ) : (
                           <div className="space-y-0.5 max-w-[220px]">
                             {items.map((it: any, i: number) => (
-                              <p key={i} className="text-sm text-black truncate">
-                                <span className="font-medium">{it.name}</span>
-                                <span> × {Number(it.quantity) || 1}</span>
+                               <p key={i} className="text-sm text-black truncate">
+                                 <span className="font-medium">{it.name}</span>
+                                 <span> · {orderLineSummary(it)}</span>
                               </p>
                             ))}
                           </div>
@@ -4120,11 +4140,11 @@ export default function Orders() {
                     return (
                       <div
                         key={pid}
-                        className={`rounded-xl border-2 transition-all select-none flex flex-col ${
+                        className={`relative rounded-xl border-2 transition-all select-none flex flex-col ${
                           outOfStock
                             ? "border-gray-100 bg-gray-50 opacity-40 cursor-not-allowed"
                             : cartItem
-                              ? "border-[#1A56DB] bg-blue-50/60 shadow-md shadow-blue-100"
+                              ? "border-[#1A56DB] bg-blue-50/60 shadow-md shadow-blue-100 cursor-pointer"
                               : "border-gray-200 bg-white hover:border-[#1A56DB]/60 hover:shadow-md cursor-pointer"
                         }`}
                         onClick={() => {
@@ -4158,6 +4178,25 @@ export default function Orders() {
                           });
                         }}
                       >
+                        {cartItem && (
+                          <button
+                            type="button"
+                            aria-label={`Remove ${p.name} from order`}
+                            title="Remove from order"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setSelectedProducts((prev) => prev.filter((sp) => sp.productId !== pid));
+                              if (scaleProductId === pid) {
+                                setScaleProductId("");
+                                setScaleKg("");
+                                setScaleGrams("");
+                              }
+                            }}
+                            className="absolute left-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-white/95 text-gray-500 shadow-sm ring-1 ring-gray-200 transition-colors hover:bg-red-50 hover:text-red-600"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        )}
                         {p.imageUrl && (
                           <img src={p.imageUrl} alt="" className="w-full h-20 object-cover rounded-t-[10px]" />
                         )}
@@ -5255,13 +5294,12 @@ export default function Orders() {
                   </div>
                   <ul className="space-y-4">
                     {(selectedOrder.items ?? []).map((item: any, i: number) => {
-                      const qty = Number(item.quantity || 1);
-                      const lineTotal = Number(item.price) * qty;
+                      const lineTotal = orderLineAmount(item);
                       return (
                         <li key={i} className="flex items-center justify-between gap-3">
                           <div className="min-w-0 flex-1">
                             <p className="font-bold text-black text-base">{item.name}</p>
-                            <p className="text-sm font-medium text-black mt-0.5">{qty} × {formatRupees(Number(item.price))}</p>
+                            <p className="text-sm font-medium text-black mt-0.5">{orderLineSummary(item)}</p>
                           </div>
                           <span className="font-extrabold text-black text-base whitespace-nowrap">{formatRupees(lineTotal)}</span>
                         </li>
