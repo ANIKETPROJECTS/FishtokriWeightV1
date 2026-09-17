@@ -6,7 +6,7 @@ import {
   Phone, User, UserPlus, SlidersHorizontal, ArrowUpDown, UserCheck,
   ShoppingBag, Building2, AlertCircle, ChevronDown, Check,
   Pencil, Trash2, Plus, Store, Home, Trash, Mail, Calendar, Tag, Ticket, Zap, RotateCcw,
-  Wallet, CreditCard, Banknote, Smartphone, Landmark, FileText, Printer, MoreVertical,
+  Wallet, CreditCard, Banknote, Smartphone, Landmark, FileText, Printer, MoreVertical, Scale,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { InvoiceModal } from "@/components/InvoiceModal";
@@ -439,6 +439,38 @@ function formatDeliveryDate(d: any) {
 
 function formatRupees(n: number) {
   return `₹${Number(n || 0).toLocaleString("en-IN")}`;
+}
+
+function getWeightPricing(unit?: string) {
+  const normalized = String(unit || "").trim().toLowerCase();
+  if (normalized.includes("kg")) return { isWeightBased: true, basisGrams: 1000 };
+  const gramMatch = normalized.match(/(\d+(?:\.\d+)?)\s*g/);
+  if (gramMatch) return { isWeightBased: true, basisGrams: Number(gramMatch[1]) };
+  return { isWeightBased: false, basisGrams: 1 };
+}
+
+function isWeightBasedProduct(product: any) {
+  return !product?.isCombo && getWeightPricing(product?.unit).isWeightBased;
+}
+
+function formatOrderWeight(weightInKg: number) {
+  const grams = Math.round((Number(weightInKg) || 0) * 1000);
+  if (grams < 1000) return `${grams} g`;
+  return `${Number(weightInKg || 0).toLocaleString("en-IN", { maximumFractionDigits: 3 })} kg`;
+}
+
+function orderProductAmount(product: { price: number; unit?: string }, quantity: number) {
+  const basis = getWeightPricing(product.unit);
+  return basis.isWeightBased
+    ? (Number(product.price) || 0) * (Number(quantity) || 0) * (1000 / basis.basisGrams)
+    : (Number(product.price) || 0) * (Number(quantity) || 0);
+}
+
+function orderProductPriceForApi(product: { price: number; unit?: string }) {
+  const basis = getWeightPricing(product.unit);
+  return basis.isWeightBased
+    ? (Number(product.price) || 0) * (1000 / basis.basisGrams)
+    : Number(product.price) || 0;
 }
 
 function orderTotal(items: any[]) {
@@ -910,6 +942,9 @@ export default function Orders() {
   const [pickerCategory, setPickerCategory] = useState<string | null>(null);
   const [posProductMode, setPosProductMode] = useState<"normal" | "preorder">("normal");
   const [selectedProducts, setSelectedProducts] = useState<{ productId: string; name: string; price: number; unit: string; quantity: number; isCombo?: boolean }[]>([]);
+  const [scaleProductId, setScaleProductId] = useState("");
+  const [scaleKg, setScaleKg] = useState("");
+  const [scaleGrams, setScaleGrams] = useState("");
 
   // Coupons / timeslots / scheduling
   const [coupons, setCoupons] = useState<any[]>([]);
@@ -978,6 +1013,9 @@ export default function Orders() {
     // Keep hub selection (super + sub) so the user doesn't have to re-pick every time.
     // Clear only the cart and per-order state.
     setSelectedProducts([]);
+    setScaleProductId("");
+    setScaleKg("");
+    setScaleGrams("");
     setProductSearch(""); setProductPickerOpen(false);
     setPosProductMode("normal");
     setAppliedCouponIds([]); setCouponCode(""); setCouponError("");
@@ -1283,7 +1321,7 @@ export default function Orders() {
 
   const itemsSubtotal = useMemo(() => {
     const customSum = orderItems.reduce((s, it) => s + (Number(it.price) || 0) * (Number(it.quantity) || 0), 0);
-    const productSum = selectedProducts.reduce((s, p) => s + (Number(p.price) || 0) * (Number(p.quantity) || 0), 0);
+    const productSum = selectedProducts.reduce((s, p) => s + orderProductAmount(p, p.quantity), 0);
     return customSum + productSum;
   }, [orderItems, selectedProducts]);
 
@@ -1350,7 +1388,7 @@ export default function Orders() {
         Boolean(categoryDoc) ||
         (sp.isCombo && apCats.includes("combos"));
       return matchesProduct || matchesCategory
-        ? sum + (Number(sp.price) || 0) * (Number(sp.quantity) || 0)
+        ? sum + orderProductAmount(sp, sp.quantity)
         : sum;
     }, 0);
 
@@ -1532,6 +1570,48 @@ export default function Orders() {
       return 0;
     });
   }, [productsForMode, productSearch, pickerCategory]);
+
+  const selectedScaleProduct = productsForMode.find((product) => String(product._id) === scaleProductId) || null;
+  const scaleWeightKg = Math.round((
+    Math.max(0, Number(scaleKg) || 0) +
+    Math.max(0, Number(scaleGrams) || 0) / 1000
+  ) * 1000) / 1000;
+  const scalePreviewAmount = selectedScaleProduct
+    ? orderProductAmount(selectedScaleProduct, scaleWeightKg)
+    : 0;
+
+  const applyScaleWeight = () => {
+    if (!selectedScaleProduct) {
+      toast({ title: "Select a product", description: "Choose a weight-based product for the test scale.", variant: "destructive" });
+      return;
+    }
+    if (scaleWeightKg <= 0) {
+      toast({ title: "Enter a weight", description: "Enter a weight greater than 0.", variant: "destructive" });
+      return;
+    }
+    const available = Number(selectedScaleProduct.quantity) || 0;
+    if (scaleWeightKg > available) {
+      toast({ title: "Weight exceeds stock", description: `Only ${formatOrderWeight(available)} is available.`, variant: "destructive" });
+      return;
+    }
+    setSelectedProducts((current) => {
+      const existing = current.some((item) => item.productId === String(selectedScaleProduct._id));
+      if (existing) {
+        return current.map((item) => item.productId === String(selectedScaleProduct._id)
+          ? { ...item, quantity: scaleWeightKg }
+          : item);
+      }
+      return [...current, {
+        productId: String(selectedScaleProduct._id),
+        name: selectedScaleProduct.name,
+        price: Number(selectedScaleProduct.price) || 0,
+        unit: selectedScaleProduct.unit ?? "",
+        quantity: scaleWeightKg,
+        isCombo: false,
+      }];
+    });
+    toast({ title: "Weight added", description: `${selectedScaleProduct.name} · ${formatOrderWeight(scaleWeightKg)}` });
+  };
 
   const filteredCategories = useMemo(() => {
     const q = productSearch.trim().toLowerCase();
@@ -1807,7 +1887,13 @@ export default function Orders() {
     // Validate items (products + custom)
     const productItems = selectedProducts
       .filter((p) => p.quantity > 0)
-      .map((p) => ({ productId: p.productId, name: p.name, price: p.price, quantity: p.quantity, unit: p.unit }));
+      .map((p) => ({
+        productId: p.productId,
+        name: p.name,
+        price: orderProductPriceForApi(p),
+        quantity: p.quantity,
+        unit: isWeightBasedProduct(p) ? "per kg" : p.unit,
+      }));
     const customItems = orderItems
       .map((it) => ({
         name: it.name.trim(),
@@ -3877,6 +3963,9 @@ export default function Orders() {
               onClick={() => {
                 setPosProductMode("normal");
                 setSelectedProducts([]);
+                setScaleProductId("");
+                setScaleKg("");
+                setScaleGrams("");
                 setPickerCategory(null);
                 setProductSearch("");
                 setSelectedTimeslotId("");
@@ -3892,6 +3981,9 @@ export default function Orders() {
                 setOrderDeliveryType("takeaway");
                 setOrderDate(getTomorrowIST());
                 setSelectedProducts([]);
+                setScaleProductId("");
+                setScaleKg("");
+                setScaleGrams("");
                 setPickerCategory(null);
                 setProductSearch("");
                 setSelectedTimeslotId("");
@@ -3975,6 +4067,64 @@ export default function Orders() {
                    <span className="px-2 text-xs font-medium text-[#64748B]">No categories available</span>
                  )}
                </div>
+             <section className="mx-4 mb-4 rounded-xl border border-dashed border-[#F1A59D] bg-[#FFF8F6] p-3" data-testid="section-test-weighing-scale">
+               <div className="flex items-start gap-2">
+                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#FDE5E1] text-[#D94A3D]">
+                   <Scale className="h-4 w-4" />
+                 </div>
+                 <div>
+                   <h3 className="text-sm font-bold text-[#162B4D]">Test weighing scale</h3>
+                   <p className="text-[11px] text-[#8D3D36]">Temporary test control — select a fish, enter kg and grams, then add the weight to this order.</p>
+                 </div>
+               </div>
+               <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_82px_82px_auto] sm:items-end">
+                 <label className="block">
+                   <span className="mb-1 block text-[11px] font-semibold text-[#51617A]">Weight-based product</span>
+                   <select
+                     value={scaleProductId}
+                     onChange={(event) => {
+                       const nextId = event.target.value;
+                       setScaleProductId(nextId);
+                       const nextProduct = productsForMode.find((product) => String(product._id) === nextId);
+                       if (nextProduct && !selectedProducts.some((item) => item.productId === nextId)) {
+                         setSelectedProducts((current) => [...current, {
+                           productId: nextId,
+                           name: nextProduct.name,
+                           price: Number(nextProduct.price) || 0,
+                           unit: nextProduct.unit ?? "",
+                           quantity: 0,
+                           isCombo: false,
+                         }]);
+                       }
+                     }}
+                     className="h-9 w-full rounded-lg border border-[#E9B8B1] bg-white px-2.5 text-xs font-semibold text-[#162B4D] outline-none focus:border-[#F05B4E]"
+                     data-testid="select-test-scale-product"
+                   >
+                     <option value="">Select product</option>
+                     {productsForMode.filter(isWeightBasedProduct).map((product) => (
+                       <option key={String(product._id)} value={String(product._id)}>
+                         {product.name} · {formatRupees(Number(product.price) || 0)}/kg
+                       </option>
+                     ))}
+                   </select>
+                 </label>
+                 <label className="block">
+                   <span className="mb-1 block text-[11px] font-semibold text-[#51617A]">Kilograms</span>
+                   <input type="number" min="0" step="1" value={scaleKg} onChange={(event) => setScaleKg(event.target.value)} placeholder="0" className="h-9 w-full rounded-lg border border-[#E9B8B1] bg-white px-2.5 text-sm font-bold text-[#162B4D] outline-none focus:border-[#F05B4E]" data-testid="input-test-scale-kg" />
+                 </label>
+                 <label className="block">
+                   <span className="mb-1 block text-[11px] font-semibold text-[#51617A]">Grams</span>
+                   <input type="number" min="0" max="999" step="1" value={scaleGrams} onChange={(event) => setScaleGrams(event.target.value)} placeholder="0" className="h-9 w-full rounded-lg border border-[#E9B8B1] bg-white px-2.5 text-sm font-bold text-[#162B4D] outline-none focus:border-[#F05B4E]" data-testid="input-test-scale-grams" />
+                 </label>
+                 <button type="button" onClick={applyScaleWeight} className="h-9 rounded-lg bg-[#F05B4E] px-3 text-xs font-bold text-white hover:bg-[#D94A3D]" data-testid="button-apply-test-scale">
+                   Add weight
+                 </button>
+               </div>
+               <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-[#7E8998]">
+                 <span>Scale reading: <strong className="text-[#162B4D]">{formatOrderWeight(scaleWeightKg)}</strong></span>
+                 <span>Calculated price: <strong className="text-[#162B4D]">{formatRupees(scalePreviewAmount)}</strong></span>
+               </div>
+             </section>
              </div>
 
             {/* Product grid */}
@@ -4010,6 +4160,7 @@ export default function Orders() {
                   {filteredProducts.map((p) => {
                     const pid = String(p._id);
                     const cartItem = selectedProducts.find((sp) => sp.productId === pid);
+                    const weightBased = isWeightBasedProduct(p);
                     const stock = Number(p.quantity) || 0;
                      const rawUnit = String(p.unit || "kg").trim() || "kg";
                      const stockUnit = /kg/i.test(rawUnit) ? "kg" : rawUnit;
@@ -4028,6 +4179,20 @@ export default function Orders() {
                         }`}
                         onClick={() => {
                           if (outOfStock) { toast({ title: "Out of stock", description: `${p.name} is unavailable.`, variant: "destructive" }); return; }
+                          if (weightBased) {
+                            setScaleProductId(pid);
+                            if (!cartItem) {
+                              setSelectedProducts((prev) => [...prev, {
+                                productId: pid,
+                                name: p.name,
+                                price: Number(p.price) || 0,
+                                unit: p.unit ?? "",
+                                quantity: 0,
+                                isCombo: false,
+                              }]);
+                            }
+                            return;
+                          }
                           if (atMax) { toast({ title: "Stock limit reached", description: `Only ${stock} available.`, variant: "destructive" }); return; }
                           setSelectedProducts((prev) => {
                             const exists = prev.find((sp) => sp.productId === pid);
@@ -4059,7 +4224,11 @@ export default function Orders() {
                                )}
                               {outOfStock && <p className="text-[10px] font-bold text-red-500 leading-none">Out of stock</p>}
                             </div>
-                            {cartItem ? (
+                             {cartItem && weightBased ? (
+                               <span className="rounded-lg bg-[#1A56DB] px-2 py-1 text-[10px] font-bold text-white">
+                                 {cartItem.quantity > 0 ? formatOrderWeight(cartItem.quantity) : "Scale"}
+                               </span>
+                             ) : cartItem ? (
                               <div className="flex items-center bg-[#1A56DB] rounded-lg overflow-hidden shadow-sm flex-shrink-0" onClick={(e) => e.stopPropagation()}>
                                 <button
                                   className="w-6 h-6 flex items-center justify-center text-white hover:bg-[#1447B4] font-bold text-sm"
@@ -4675,19 +4844,27 @@ export default function Orders() {
                   <div className="px-3 py-2 space-y-0">
                     {selectedProducts.map((p) => {
                       const stock = stockOf(p.productId);
+                      const weightBased = isWeightBasedProduct(p);
                       const atMax = p.quantity >= stock;
                       return (
                         <div key={p.productId} className="flex items-center gap-2 py-2 border-b border-gray-100 last:border-0">
                           <div className="flex-1 min-w-0">
                             <p className="text-xs font-semibold text-[#162B4D] leading-tight truncate">{p.name}</p>
-                            <p className="text-[11px] text-gray-400">₹{Number(p.price).toLocaleString("en-IN")}{p.unit ? ` / ${p.unit}` : ""}</p>
+                            <p className="text-[11px] text-gray-400">{formatRupees(Number(p.price))}{p.unit ? ` / ${p.unit}` : ""}</p>
                           </div>
-                          <div className="flex items-center bg-white rounded-md border border-gray-200 overflow-hidden flex-shrink-0">
-                            <button onClick={() => setSelectedProducts((arr) => p.quantity <= 1 ? arr.filter((x) => x.productId !== p.productId) : arr.map((x) => x.productId === p.productId ? { ...x, quantity: x.quantity - 1 } : x))} className="w-6 h-6 flex items-center justify-center text-gray-500 hover:bg-gray-100 font-bold">−</button>
-                            <span className="text-xs font-bold text-gray-700 min-w-[18px] text-center">{p.quantity}</span>
-                            <button disabled={atMax} onClick={() => { if (!atMax) setSelectedProducts((arr) => arr.map((x) => x.productId === p.productId ? { ...x, quantity: x.quantity + 1 } : x)); }} className="w-6 h-6 flex items-center justify-center text-gray-500 hover:bg-gray-100 font-bold disabled:opacity-30">+</button>
-                          </div>
-                          <span className="text-xs font-bold text-[#162B4D] w-12 text-right flex-shrink-0">₹{(p.price * p.quantity).toLocaleString("en-IN")}</span>
+                          {weightBased ? (
+                            <div className="rounded-md bg-[#F8FAFD] px-2 py-1 text-right flex-shrink-0">
+                              <p className="text-[10px] font-semibold uppercase tracking-wide text-[#9A8F84]">Weight from scale</p>
+                              <p className="text-xs font-bold text-[#162B4D]">{formatOrderWeight(p.quantity)}</p>
+                            </div>
+                          ) : (
+                            <div className="flex items-center bg-white rounded-md border border-gray-200 overflow-hidden flex-shrink-0">
+                              <button onClick={() => setSelectedProducts((arr) => p.quantity <= 1 ? arr.filter((x) => x.productId !== p.productId) : arr.map((x) => x.productId === p.productId ? { ...x, quantity: x.quantity - 1 } : x))} className="w-6 h-6 flex items-center justify-center text-gray-500 hover:bg-gray-100 font-bold">−</button>
+                              <span className="text-xs font-bold text-gray-700 min-w-[18px] text-center">{p.quantity}</span>
+                              <button disabled={atMax} onClick={() => { if (!atMax) setSelectedProducts((arr) => arr.map((x) => x.productId === p.productId ? { ...x, quantity: x.quantity + 1 } : x)); }} className="w-6 h-6 flex items-center justify-center text-gray-500 hover:bg-gray-100 font-bold disabled:opacity-30">+</button>
+                            </div>
+                          )}
+                          <span className="text-xs font-bold text-[#162B4D] w-16 text-right flex-shrink-0">{formatRupees(orderProductAmount(p, p.quantity))}</span>
                         </div>
                       );
                     })}
