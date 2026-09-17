@@ -773,7 +773,7 @@ export default function Orders() {
   const editIdFromUrl = isEditPage ? location.replace("/orders/edit/", "") : "";
   const isCreatePage = location === "/orders/new" || location.endsWith("/orders/new") || isEditPage;
 
-  const [activeTab, setActiveTab] = useState<"current" | "otherday" | "history" | "all" | "invoices" | "preorder" | "deleted">("current");
+  const [activeTab, setActiveTab] = useState<"current" | "history" | "all" | "invoices" | "preorder" | "deleted">("current");
   const [invoiceOrder, setInvoiceOrder] = useState<any | null>(null);
 
   // Filters
@@ -823,7 +823,7 @@ export default function Orders() {
   const [pages, setPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [statsData, setStatsData] = useState<Record<string, number>>({});
-  const [statsTotals, setStatsTotals] = useState<{ total?: number; currentTotal?: number; historyTotal?: number; todayTotal?: number; otherDayTotal?: number; preorderTotal?: number; deletedTotal?: number }>({});
+  const [statsTotals, setStatsTotals] = useState<{ total?: number; currentTotal?: number; historyTotal?: number; todayTotal?: number; preorderTotal?: number; deletedTotal?: number }>({});
 
   // Order alert is now handled globally in Layout (useGlobalOrderAlert)
 
@@ -2299,7 +2299,7 @@ export default function Orders() {
   const effectiveStatus = useMemo(() => {
     if (activeTab === "deleted") return "";
     if (statusFilter) return statusFilter;
-    if (activeTab === "current" || activeTab === "otherday") return ACTIVE_STATUSES.join(",");
+    if (activeTab === "current") return ACTIVE_STATUSES.join(",");
     if (activeTab === "history") return HISTORY_STATUSES.join(",");
     if (activeTab === "invoices") return HISTORY_STATUSES.join(",");
     return "";
@@ -2319,15 +2319,13 @@ export default function Orders() {
         params.set("tab", "deleted");
       } else if (activeTab === "preorder") {
         params.set("orderType", "preorder");
-      } else if (activeTab === "current" || activeTab === "otherday" || activeTab === "history" || activeTab === "invoices") {
+      } else if (activeTab === "current" || activeTab === "history" || activeTab === "invoices") {
         params.set("tab",
           activeTab === "invoices" ? "history" :
-          activeTab === "otherday" ? "current" :
           activeTab
         );
       }
       if (activeTab === "current") params.set("deliveryDateFilter", "today");
-      else if (activeTab === "otherday") params.set("deliveryDateFilter", "tomorrow");
       if (statusFilter && activeTab !== "deleted") {
         params.set("status", statusFilter);
       }
@@ -2431,7 +2429,6 @@ export default function Orders() {
         currentTotal: data.currentTotal,
         historyTotal: data.historyTotal,
         todayTotal: data.todayTotal,
-        otherDayTotal: data.otherDayTotal,
         preorderTotal: data.preorderTotal ?? 0,
         deletedTotal: data.deletedTotal ?? 0,
       });
@@ -2455,23 +2452,6 @@ export default function Orders() {
     const id = setInterval(() => { load(true); loadStats(); }, 5000);
     return () => clearInterval(id);
   }, [load, loadStats]);
-
-  // ── Auto-promote "other day" orders when the date rolls over ─────────────
-  // Every 30 s, check if the IST calendar date has changed since the last
-  // check. When it does, refresh stats and switch from "otherday" → "current"
-  // so that orders scheduled for the new "today" appear immediately.
-  useEffect(() => {
-    let lastDate = getTodayIST();
-    const id = setInterval(() => {
-      const today = getTodayIST();
-      if (today !== lastDate) {
-        lastDate = today;
-        loadStats();
-        setActiveTab((tab) => (tab === "otherday" ? "current" : tab));
-      }
-    }, 30_000);
-    return () => clearInterval(id);
-  }, [loadStats]);
 
   const handleStatusUpdate = async () => {
     if (!selectedOrder || !editStatus) return;
@@ -2992,7 +2972,6 @@ export default function Orders() {
 
   const invoiceCount = (statsData["delivered"] ?? 0) + (statsData["takeaway"] ?? 0);
   const totalToday = statsTotals.todayTotal ?? totalActive;
-  const totalOtherDay = statsTotals.otherDayTotal ?? 0;
   const totalPreorder = statsTotals.preorderTotal ?? 0;
   const totalDeleted = statsTotals.deletedTotal ?? 0;
   const posHubName =
@@ -3001,7 +2980,6 @@ export default function Orders() {
     "Thane Hub";
   const TABS = [
     { key: "current" as const, label: "Current Orders", count: totalToday, icon: Clock, color: "text-blue-600" },
-    { key: "otherday" as const, label: "Next Day Orders", count: totalOtherDay, icon: Calendar, color: "text-orange-600" },
     { key: "history" as const, label: "History", count: totalHistory, icon: CheckCircle2, color: "text-green-600" },
     { key: "all" as const, label: "All Orders", count: totalAll, icon: ClipboardList, color: "text-gray-600" },
     { key: "invoices" as const, label: "Order Invoices", count: invoiceCount, icon: FileText, color: "text-violet-600" },
@@ -3071,15 +3049,6 @@ export default function Orders() {
           <div className="flex flex-wrap items-center gap-1.5">
           {activeTab !== "invoices" ? (
             <>
-              <button
-                onClick={() => setStatusFilter("")}
-                className="flex-shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-sm font-semibold transition-all bg-[#162B4D] text-white shadow-sm"
-              >
-                All
-                <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-white/20 text-white">
-                  {totalAll}
-                </span>
-              </button>
               {VISIBLE_STATUS_FILTERS.map((s) => {
                 const cfg = STATUS_CONFIG[s];
                 const count = statsData[s] ?? 0;
@@ -3097,13 +3066,6 @@ export default function Orders() {
                   </button>
                 );
               })}
-              {/* Paid filter pill */}
-              <button
-                onClick={() => { setPayFilter((f) => !f); setPayModeFilter(""); setActiveTab("all"); setStatusFilter(""); }}
-                className={`flex-shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-sm font-semibold transition-all bg-green-600 text-white shadow-sm ${payFilter ? "ring-2 ring-white ring-offset-1 ring-offset-green-700" : "opacity-80 hover:opacity-100"}`}
-              >
-                Paid
-              </button>
             </>
           ) : (
             <div className="w-full" />
@@ -3340,6 +3302,7 @@ export default function Orders() {
                   <th className="px-3 py-4 text-center">Items</th>
                   <th className="px-3 py-4 text-center">Total</th>
                   <th className="px-3 py-4 text-center">Payment</th>
+                  <th className="px-3 py-4 text-center">Status</th>
                   <th className="px-3 py-4 text-center">Actions</th>
                 </tr>
               </thead>
@@ -3416,6 +3379,7 @@ export default function Orders() {
                           </div>
                         )}
                       </td>
+                      <td className="px-4 py-4"><SolidStatusBadge status={o.status} deliveryType={o.deliveryType} orderType={o.orderType} /></td>
                       <td className="px-4 py-4 text-center">
                         <div className="inline-flex items-center gap-1.5">
                           <button
