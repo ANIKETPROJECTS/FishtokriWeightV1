@@ -126,7 +126,8 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; 
 const ACTIVE_STATUSES = ["created", "pending", "confirmed", "out_for_delivery"];
 const HISTORY_STATUSES = ["delivered", "cancelled"];
 const ALL_STATUSES = Object.keys(STATUS_CONFIG);
-const VISIBLE_STATUS_FILTERS = ["created", "pending", "confirmed", "takeaway", "handed_over", "cancelled"];
+const VISIBLE_STATUS_FILTERS = ["takeaway", "cancelled"];
+const ORDER_STATUS_FILTERS = ["takeaway", "cancelled"];
 
 // Takeaway orders are treated as completed and shown in History.
 function isHistoryOrder(o: any) {
@@ -3185,7 +3186,7 @@ export default function Orders() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="_all">All Statuses</SelectItem>
-              {ALL_STATUSES.map((s) => (
+              {ORDER_STATUS_FILTERS.map((s) => (
                 <SelectItem key={s} value={s}>{STATUS_CONFIG[s].label}</SelectItem>
               ))}
             </SelectContent>
@@ -3339,11 +3340,6 @@ export default function Orders() {
                   <th className="px-3 py-4 text-center">Items</th>
                   <th className="px-3 py-4 text-center">Total</th>
                   <th className="px-3 py-4 text-center">Payment</th>
-                  <th className="px-3 py-4 text-center">Sub Hub</th>
-                  <th className="px-3 py-4 text-center">Time Slot</th>
-                  <th className="px-3 py-4 text-center">Location</th>
-                  <th className="px-3 py-4 text-center">Status</th>
-                  <th className="px-3 py-4 text-center">Operations</th>
                   <th className="px-3 py-4 text-center">Actions</th>
                 </tr>
               </thead>
@@ -3351,7 +3347,6 @@ export default function Orders() {
                 {displayedOrders.map((o) => {
                   const total = effectiveOrderTotal(o);
                   const items: any[] = Array.isArray(o.items) ? o.items : [];
-                  const slot = formatTimeSlot(o);
                   return (
                     <tr key={String(o._id)} className="hover:bg-gray-50 transition-colors">
                       <td className="px-3 py-4">
@@ -3419,87 +3414,6 @@ export default function Orders() {
                               {upiVariants.map((v) => <option key={v} value={v}>{v}</option>)}
                             </select>
                           </div>
-                        )}
-                      </td>
-                      <td className="px-3 py-4">
-                        {o.subHubName
-                          ? <span className="text-sm font-medium text-black">{o.subHubName}</span>
-                          : <span className="text-sm text-black">—</span>}
-                      </td>
-                       <td className="px-3 py-4">
-                         {String(o.orderType ?? "").toLowerCase() === "preorder" ? (
-                           slot ? (
-                             <div className="whitespace-nowrap">
-                               <p className="text-sm font-medium text-black">{slot}</p>
-                               {o.deliveryDate && <p className="text-[11px] font-semibold text-[#364F9F]">{formatDeliveryDate(o.deliveryDate)}</p>}
-                             </div>
-                           ) : <span className="text-sm text-black">—</span>
-                         ) : o.deliveryType === "takeaway" ? (
-                           <span className="text-sm text-black italic">Takeaway</span>
-                         ) : slot ? (
-                           <span className="text-sm font-medium text-black whitespace-nowrap">{slot}</span>
-                         ) : (
-                           <span className="text-sm text-black">—</span>
-                         )}
-                       </td>
-                      <td className="px-3 py-4">
-                        {o.deliveryArea
-                          ? <span className="text-sm text-black">{o.deliveryArea}</span>
-                          : <span className="text-sm text-black">—</span>}
-                      </td>
-                      <td className="px-4 py-4"><SolidStatusBadge status={o.status} deliveryType={o.deliveryType} orderType={o.orderType} /></td>
-                      <td className="px-4 py-4">
-                        {activeTab === "deleted" ? (
-                          <span className="text-sm text-gray-400 italic">Deleted</span>
-                        ) : String(o.orderType ?? "").toLowerCase() === "preorder" ? (
-                          <span className="text-sm text-emerald-700 font-semibold italic">
-                            {["takeaway", "handed_over"].includes(String(o.status)) ? "Handed over" : "POS order created"}
-                          </span>
-                        ) : o.status === "pending" ? (
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              type="button"
-                              disabled={acceptingId === String(o._id)}
-                              onClick={() => acceptOrder(o)}
-                              className="inline-flex items-center justify-center h-7 px-3 rounded-full text-xs font-semibold bg-green-600 hover:bg-green-700 text-white disabled:opacity-60"
-                            >
-                              Accept
-                            </button>
-                            <button
-                              type="button"
-                              disabled={acceptingId === String(o._id)}
-                              onClick={() => { setRejectingOrder(o); setRejectReason(""); }}
-                              className="inline-flex items-center justify-center h-7 px-3 rounded-full text-xs font-semibold bg-red-600 hover:bg-red-700 text-white disabled:opacity-60"
-                            >
-                              Reject
-                            </button>
-                          </div>
-                        ) : o.status === "cancelled" ? (
-                          <div className="flex flex-col">
-                            <span className="text-sm font-semibold text-red-600">Rejected</span>
-                            {o.cancellationReason && (
-                              <span className="text-xs text-black truncate max-w-[180px]" title={o.cancellationReason}>
-                                {o.cancellationReason}
-                              </span>
-                            )}
-                          </div>
-                        ) : String(o.orderType ?? "").toLowerCase() === "preorder" ? (
-                          <span className="text-sm text-emerald-700 font-semibold italic">
-                            {o.status === "confirmed" ? "Scheduled for handover" : "Handover at slot"}
-                          </span>
-                        ) : o.deliveryType === "takeaway" ? (
-                          <span className="text-sm text-gray-400 italic">Not required</span>
-                        ) : deliveryPersons.length > 0 ? (
-                          <InlineDeliverySelect
-                            order={o}
-                            persons={deliveryPersons}
-                            saving={inlineAssigningId === String(o._id)}
-                            onAssign={inlineAssign}
-                          />
-                        ) : (
-                          o.assignedDeliveryPersonName
-                            ? <span className="text-sm font-medium text-orange-700">{o.assignedDeliveryPersonName}</span>
-                            : <span className="text-sm text-gray-300 italic">Unassigned</span>
                         )}
                       </td>
                       <td className="px-4 py-4 text-center">

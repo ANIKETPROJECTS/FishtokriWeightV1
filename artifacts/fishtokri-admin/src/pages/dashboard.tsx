@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
+import { useLocation } from "wouter";
 import {
   useGetStatsSummary,
   getGetStatsSummaryQueryKey,
@@ -7,7 +8,7 @@ import {
   getGetSuperHubsQueryKey,
 } from "@workspace/api-client-react";
 import {
-  Building2, MapPin, Users,
+  Building2, MapPin, Users, Warehouse, Package, Settings2,
   CheckCircle2, ShoppingBag, Clock,
   XCircle, RefreshCw, Phone, User,
   ArrowRight,
@@ -119,6 +120,7 @@ function SectionHeader({ icon: Icon, iconColor, title, action, onAction }: any) 
 
 // ─── MAIN ─────────────────────────────────────────────────────────────────────
 export default function Dashboard() {
+  const [, navigate] = useLocation();
   const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useGetStatsSummary(undefined, {
     query: { queryKey: getGetStatsSummaryQueryKey() },
   });
@@ -130,15 +132,17 @@ export default function Dashboard() {
   const [orderSummary, setOrderSummary]       = useState({ todayPosSales: 0, activePreorderSales: 0 });
   const [recentOrders, setRecentOrders]       = useState<any[]>([]);
   const [customers, setCustomers]             = useState<{ total: number }>({ total: 0 });
+  const [operatingHub, setOperatingHub]       = useState<any | null>(null);
   const [extraLoading, setExtraLoading]       = useState(true);
 
   const loadExtra = useCallback(async (silent = false) => {
     if (!silent) setExtraLoading(true);
     try {
-      const [oStats, oRecent, cust, vend, dp] = await Promise.allSettled([
+      const [oStats, oRecent, cust, hubData] = await Promise.allSettled([
         apiFetch("/api/orders/stats"),
         apiFetch("/api/orders?limit=6&sort=createdAt&order=desc"),
         apiFetch("/api/customers?limit=1"),
+        apiFetch("/api/sub-hubs"),
       ]);
       if (oStats.status === "fulfilled") {
         setOrderStats(oStats.value.stats ?? {});
@@ -149,6 +153,14 @@ export default function Dashboard() {
       }
       if (oRecent.status === "fulfilled")  setRecentOrders(oRecent.value.orders ?? []);
       if (cust.status === "fulfilled")     setCustomers({ total: cust.value.total ?? 0 });
+      if (hubData.status === "fulfilled") {
+        const subHubs = hubData.value.subHubs ?? [];
+        setOperatingHub(
+          subHubs.find((hub: any) => String(hub.name ?? "").toLowerCase().includes("thane")) ??
+          subHubs[0] ??
+          null,
+        );
+      }
     } finally { setExtraLoading(false); }
   }, []);
 
@@ -219,6 +231,69 @@ export default function Dashboard() {
           <StatCard loading={isLoading} title="Total Hubs" value={stats?.totalSubHubs ?? 0} sub={`${stats?.activeSubHubs ?? 0} active`} icon={Building2} iconColor="text-[#1A56DB]" iconBg="bg-blue-50" border="border-blue-100" badge={`${stats?.totalSubHubs ? Math.round((stats.activeSubHubs / stats.totalSubHubs) * 100) : 0}% active`} badgeColor="bg-blue-50 text-blue-600" />
           <StatCard loading={isLoading} title="Master Admin" value={1} sub="active system account" icon={Users} iconColor="text-amber-600" iconBg="bg-amber-50" border="border-amber-100" badge="100% active" badgeColor="bg-amber-50 text-amber-600" />
         </div>
+      </div>
+
+      {/* ── Operating hub shortcuts ─────────────────────────────────────────── */}
+      <div>
+        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+          <Warehouse className="w-3 h-3" /> Hub operations
+        </p>
+        {extraLoading && !operatingHub ? (
+          <Skeleton className="h-[190px] rounded-2xl" />
+        ) : operatingHub ? (
+          <div className="space-y-4">
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center">
+                    <Warehouse className="w-6 h-6 text-[#1A56DB]" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-bold text-[#162B4D]">{operatingHub.name}</h2>
+                    <p className="text-sm text-gray-500">{operatingHub.location || "Thane"} · Single operating hub</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-gray-500">
+                  <Building2 className="w-4 h-4 text-[#1A56DB]" />
+                  Hub operations
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <button
+                onClick={() => navigate(`/sub-hub-menu/${operatingHub.id}`)}
+                className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 text-left hover:border-[#1A56DB]/40 transition-colors"
+              >
+                <Package className="w-6 h-6 text-[#1A56DB] mb-3" />
+                <p className="font-bold text-[#162B4D]">Manage Products</p>
+                <p className="text-sm text-gray-500 mt-1">Add and edit the products sold by {operatingHub.name}.</p>
+              </button>
+              <button
+                onClick={() => navigate("/inventory/products")}
+                className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 text-left hover:border-[#1A56DB]/40 transition-colors"
+              >
+                <Warehouse className="w-6 h-6 text-[#1A56DB] mb-3" />
+                <p className="font-bold text-[#162B4D]">View Inventory</p>
+                <p className="text-sm text-gray-500 mt-1">See current products, stock, batches, and expiry.</p>
+              </button>
+              <button
+                onClick={() => navigate("/inventory/adjustment")}
+                className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 text-left hover:border-[#1A56DB]/40 transition-colors"
+              >
+                <Settings2 className="w-6 h-6 text-emerald-600 mb-3" />
+                <p className="font-bold text-[#162B4D]">Stock Adjustments</p>
+                <p className="text-sm text-gray-500 mt-1">Record cleaned weight and update usable stock.</p>
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-8 text-center">
+            <Warehouse className="w-9 h-9 text-gray-300 mx-auto mb-2" />
+            <p className="text-sm font-semibold text-[#162B4D]">No operating hub configured</p>
+            <p className="text-xs text-gray-500 mt-1">Hub shortcuts will appear here once an operating hub is available.</p>
+          </div>
+        )}
       </div>
 
       {/* ── Row 2: Order + people stats ──────────────────────────────────────── */}

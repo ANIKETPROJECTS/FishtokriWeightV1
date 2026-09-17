@@ -10,7 +10,6 @@ import Dashboard from "@/pages/dashboard";
 import DeliveryDashboard from "@/pages/delivery-dashboard";
 import MyDeliveries from "@/pages/my-deliveries";
 import DeliveryHubs from "@/pages/delivery-hubs";
-import SingleHub from "@/pages/single-hub";
 import HubDetail from "@/pages/hub-detail";
 import SettingsPage from "@/pages/settings";
 import ResetAdminPassword from "@/pages/reset-admin-password";
@@ -160,9 +159,10 @@ function App() {
               <ProtectedRoute component={Dashboard} allowedRoles={ALL_ADMIN_ROLES} />
             </Route>
 
-            {/* Hubs — Master Admin & Super Hub */}
+            {/* The old Hubs module now lives on the dashboard. Keep this route as
+                a compatibility redirect for saved bookmarks and legacy links. */}
             <Route path="/hubs">
-              <ProtectedRoute component={SingleHub} allowedRoles={HUB_OWNERS} />
+              <RedirectTo to="/dashboard" />
             </Route>
             <Route path="/hubs/:id">
               <ProtectedRoute component={HubDetail} allowedRoles={HUB_OWNERS} />

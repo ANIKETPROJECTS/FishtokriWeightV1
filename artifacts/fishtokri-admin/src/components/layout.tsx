@@ -10,7 +10,6 @@ import { createPortal } from "react-dom";
 
 const masterAdminNavItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/hubs", label: "Hubs", icon: Warehouse },
   { href: "/orders", label: "Orders", icon: ClipboardList },
   { href: "/orders/new", label: "POS", icon: Receipt },
   {
@@ -223,11 +222,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
   // Super Hub & Sub Hub now share the same Master Admin sidebar UI,
   // filtered to the sections allotted to that role.
   // Allotted sections per role (matches App.tsx route permissions):
-  //   Super Hub: Dashboard, Hubs, Orders, Vendor Management, Inventory Management, Banking, Customers
+  //   Super Hub: Dashboard, Orders, Vendor Management, Inventory Management, Banking, Customers
   //   Sub Hub:   Dashboard, Orders, Inventory Management, Customers (+ Menu shortcut)
   const superHubAllowedHrefs = new Set([
     "/dashboard",
-    "/hubs",
     "/orders",
     "/orders/new",
     "/fish-calculator",
