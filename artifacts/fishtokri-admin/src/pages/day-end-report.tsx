@@ -37,9 +37,6 @@ function formatDate(iso: string | null) {
 function formatRupees(n: number) {
   return `₹${(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 }
-function isOrderFromChannel(order: any, channel: "FTW" | "FTS"): boolean {
-  return new RegExp(`^#?${channel}`, "i").test(String(order?.orderId ?? order?.invoiceNo ?? "").trim());
-}
 function formatTime12(t: string): string {
   const str = String(t).trim();
   // If the string already has an AM/PM suffix (12-hour format), parse and re-format it.
@@ -462,12 +459,10 @@ function OrdersReport({ from, to, onDownload, downloadRef }: { from: string; to:
     rows.push([]);
     rows.push(["SUMMARY", "", "", "", "", "", "", "", "", "", "", "", "", ""]);
     rows.push(["Showing POS orders (filtered)", filteredOrders.length, "of", orders.length, "POS orders"]);
-    rows.push(["POS Orders (FTS)", filteredOrders.filter(o => isOrderFromChannel(o, "FTS")).length]);
     rows.push(["Cash Revenue", stats.cash]);
     rows.push(["UPI Revenue", stats.upi]);
     rows.push(["Card Revenue", stats.card]);
     rows.push(["Grand Total (Cash+UPI+Card)", stats.totalRev]);
-    rows.push(["Wallet Collected (Extra)", stats.wallet]);
     rows.push(["Unpaid Dues", stats.unpaid]);
     rows.push(["Today's Sales (Cash+UPI+Card+Wallet Used+Unpaid)", stats.todaySales]);
     const ws = XLSX.utils.aoa_to_sheet(rows);
@@ -485,7 +480,6 @@ function OrdersReport({ from, to, onDownload, downloadRef }: { from: string; to:
       {(() => {
         const cancelledCount = filteredOrders.filter(o => String(o.orderStatus || o.status || "").toLowerCase() === "cancelled").length;
         const regularCount   = filteredOrders.length - cancelledCount;
-        const posOrderCount  = filteredOrders.filter(o => isOrderFromChannel(o, "FTS")).length;
 
         type InfoLine = { label: string; color: string; value?: string };
         type StatCard = {
@@ -504,7 +498,6 @@ function OrdersReport({ from, to, onDownload, downloadRef }: { from: string; to:
             sub: [
               { text: `${regularCount} regular`, color: "#16a34a" },
               { text: `${cancelledCount} cancelled`, color: "#dc2626" },
-              { text: `${posOrderCount} POS (FTS)`, color: "#ea580c" },
             ],
           },
           { label: "Cash Payment",     value: formatRupees(stats.cash),       color: "#16a34a" },
@@ -519,12 +512,10 @@ function OrdersReport({ from, to, onDownload, downloadRef }: { from: string; to:
                 { label: "Cash Payment",     color: "#16a34a", value: formatRupees(stats.cash) },
                 { label: "UPI Payment",      color: "#7c3aed", value: formatRupees(stats.upi) },
                 { label: "Card Payment",     color: "#ea580c", value: formatRupees(stats.card) },
-                { label: "Wallet Bonuses",   color: "#2563eb", value: formatRupees(stats.wallet) },
               ],
-              note: "Net collected per order (order total minus any wallet portion used), plus excess wallet bonuses received.",
+              note: "Collected totals from Cash, UPI, and Card payments.",
             },
           },
-          { label: "Wallet Collected", value: formatRupees(stats.wallet),     color: "#2563eb" },
           { label: "Unpaid Dues",      value: formatRupees(stats.unpaid),     color: "#dc2626" },
           {
             label: "Today's Sales",
@@ -536,7 +527,7 @@ function OrdersReport({ from, to, onDownload, downloadRef }: { from: string; to:
                 { label: "Wallet Used",                       color: "#7c3aed", value: formatRupees(stats.walletUsedTotal) },
                 { label: "Unpaid Dues",                       color: "#dc2626", value: formatRupees(stats.unpaid) },
               ],
-              note: "Wallet Collected (excess bonuses credited back to customer wallets) is excluded — only wallet amounts used to pay for orders are included.",
+              note: "Today's Sales includes collected payments, wallet-used amounts, and unpaid dues.",
             },
           },
         ];
