@@ -4067,64 +4067,6 @@ export default function Orders() {
                    <span className="px-2 text-xs font-medium text-[#64748B]">No categories available</span>
                  )}
                </div>
-             <section className="mx-4 mb-4 rounded-xl border border-dashed border-[#F1A59D] bg-[#FFF8F6] p-3" data-testid="section-test-weighing-scale">
-               <div className="flex items-start gap-2">
-                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#FDE5E1] text-[#D94A3D]">
-                   <Scale className="h-4 w-4" />
-                 </div>
-                 <div>
-                   <h3 className="text-sm font-bold text-[#162B4D]">Test weighing scale</h3>
-                   <p className="text-[11px] text-[#8D3D36]">Temporary test control — select a fish, enter kg and grams, then add the weight to this order.</p>
-                 </div>
-               </div>
-               <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_82px_82px_auto] sm:items-end">
-                 <label className="block">
-                   <span className="mb-1 block text-[11px] font-semibold text-[#51617A]">Weight-based product</span>
-                   <select
-                     value={scaleProductId}
-                     onChange={(event) => {
-                       const nextId = event.target.value;
-                       setScaleProductId(nextId);
-                       const nextProduct = productsForMode.find((product) => String(product._id) === nextId);
-                       if (nextProduct && !selectedProducts.some((item) => item.productId === nextId)) {
-                         setSelectedProducts((current) => [...current, {
-                           productId: nextId,
-                           name: nextProduct.name,
-                           price: Number(nextProduct.price) || 0,
-                           unit: nextProduct.unit ?? "",
-                           quantity: 0,
-                           isCombo: false,
-                         }]);
-                       }
-                     }}
-                     className="h-9 w-full rounded-lg border border-[#E9B8B1] bg-white px-2.5 text-xs font-semibold text-[#162B4D] outline-none focus:border-[#F05B4E]"
-                     data-testid="select-test-scale-product"
-                   >
-                     <option value="">Select product</option>
-                     {productsForMode.filter(isWeightBasedProduct).map((product) => (
-                       <option key={String(product._id)} value={String(product._id)}>
-                         {product.name} · {formatRupees(Number(product.price) || 0)}/kg
-                       </option>
-                     ))}
-                   </select>
-                 </label>
-                 <label className="block">
-                   <span className="mb-1 block text-[11px] font-semibold text-[#51617A]">Kilograms</span>
-                   <input type="number" min="0" step="1" value={scaleKg} onChange={(event) => setScaleKg(event.target.value)} placeholder="0" className="h-9 w-full rounded-lg border border-[#E9B8B1] bg-white px-2.5 text-sm font-bold text-[#162B4D] outline-none focus:border-[#F05B4E]" data-testid="input-test-scale-kg" />
-                 </label>
-                 <label className="block">
-                   <span className="mb-1 block text-[11px] font-semibold text-[#51617A]">Grams</span>
-                   <input type="number" min="0" max="999" step="1" value={scaleGrams} onChange={(event) => setScaleGrams(event.target.value)} placeholder="0" className="h-9 w-full rounded-lg border border-[#E9B8B1] bg-white px-2.5 text-sm font-bold text-[#162B4D] outline-none focus:border-[#F05B4E]" data-testid="input-test-scale-grams" />
-                 </label>
-                 <button type="button" onClick={applyScaleWeight} className="h-9 rounded-lg bg-[#F05B4E] px-3 text-xs font-bold text-white hover:bg-[#D94A3D]" data-testid="button-apply-test-scale">
-                   Add weight
-                 </button>
-               </div>
-               <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-[#7E8998]">
-                 <span>Scale reading: <strong className="text-[#162B4D]">{formatOrderWeight(scaleWeightKg)}</strong></span>
-                 <span>Calculated price: <strong className="text-[#162B4D]">{formatRupees(scalePreviewAmount)}</strong></span>
-               </div>
-             </section>
              </div>
 
             {/* Product grid */}
@@ -4254,6 +4196,42 @@ export default function Orders() {
                 </div>
               )}
             </div>
+            {selectedSubHubId && (
+              <section className="mx-4 mb-4 shrink-0 rounded-xl border border-dashed border-[#F1A59D] bg-[#FFF8F6] p-3" data-testid="section-test-weighing-scale">
+                <div className="flex items-start gap-2">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#FDE5E1] text-[#D94A3D]">
+                    <Scale className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-bold text-[#162B4D]">Test weighing scale</h3>
+                    <p className="text-[11px] text-[#8D3D36]">Click a weight-based product above, then enter kg and grams to add it to the order.</p>
+                  </div>
+                </div>
+                <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_82px_82px_auto] sm:items-end">
+                  <div className="min-w-0">
+                    <span className="mb-1 block text-[11px] font-semibold text-[#51617A]">Selected product</span>
+                    <div className="flex h-9 items-center truncate rounded-lg border border-[#E9B8B1] bg-white px-2.5 text-xs font-semibold text-[#162B4D]" data-testid="text-test-scale-product">
+                      {selectedScaleProduct ? `${selectedScaleProduct.name} · ${formatRupees(Number(selectedScaleProduct.price) || 0)}/kg` : "Click a weight-based product above"}
+                    </div>
+                  </div>
+                  <label className="block">
+                    <span className="mb-1 block text-[11px] font-semibold text-[#51617A]">Kilograms</span>
+                    <input type="number" min="0" step="1" value={scaleKg} onChange={(event) => setScaleKg(event.target.value)} placeholder="0" disabled={!selectedScaleProduct} className="h-9 w-full rounded-lg border border-[#E9B8B1] bg-white px-2.5 text-sm font-bold text-[#162B4D] outline-none focus:border-[#F05B4E] disabled:cursor-not-allowed disabled:bg-[#F5F6F8]" data-testid="input-test-scale-kg" />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1 block text-[11px] font-semibold text-[#51617A]">Grams</span>
+                    <input type="number" min="0" max="999" step="1" value={scaleGrams} onChange={(event) => setScaleGrams(event.target.value)} placeholder="0" disabled={!selectedScaleProduct} className="h-9 w-full rounded-lg border border-[#E9B8B1] bg-white px-2.5 text-sm font-bold text-[#162B4D] outline-none focus:border-[#F05B4E] disabled:cursor-not-allowed disabled:bg-[#F5F6F8]" data-testid="input-test-scale-grams" />
+                  </label>
+                  <button type="button" onClick={applyScaleWeight} disabled={!selectedScaleProduct} className="h-9 rounded-lg bg-[#F05B4E] px-3 text-xs font-bold text-white hover:bg-[#D94A3D] disabled:cursor-not-allowed disabled:bg-[#D7DDE5]" data-testid="button-apply-test-scale">
+                    Add weight
+                  </button>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-[#7E8998]">
+                  <span>Scale reading: <strong className="text-[#162B4D]">{formatOrderWeight(scaleWeightKg)}</strong></span>
+                  <span>Calculated price: <strong className="text-[#162B4D]">{formatRupees(scalePreviewAmount)}</strong></span>
+                </div>
+              </section>
+            )}
           </div>
 
           {/* ── RIGHT: ORDER PANEL — split: customer/schedule | cart ── */}

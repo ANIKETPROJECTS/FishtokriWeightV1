@@ -222,18 +222,7 @@ export default function Dashboard() {
         headerSlot,
       )}
 
-      {/* ── Row 1: Network stats ─────────────────────────────────────────────── */}
-      <div>
-        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
-          <Building2 className="w-3 h-3" /> Network
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl">
-          <StatCard loading={isLoading} title="Total Hubs" value={stats?.totalSubHubs ?? 0} sub={`${stats?.activeSubHubs ?? 0} active`} icon={Building2} iconColor="text-[#1A56DB]" iconBg="bg-blue-50" border="border-blue-100" badge={`${stats?.totalSubHubs ? Math.round((stats.activeSubHubs / stats.totalSubHubs) * 100) : 0}% active`} badgeColor="bg-blue-50 text-blue-600" />
-          <StatCard loading={isLoading} title="Master Admin" value={1} sub="active system account" icon={Users} iconColor="text-amber-600" iconBg="bg-amber-50" border="border-amber-100" badge="100% active" badgeColor="bg-amber-50 text-amber-600" />
-        </div>
-      </div>
-
-      {/* ── Operating hub shortcuts ─────────────────────────────────────────── */}
+      {/* ── Top: Hub operations shortcuts ────────────────────────────────────── */}
       <div>
         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
           <Warehouse className="w-3 h-3" /> Hub operations
@@ -294,6 +283,17 @@ export default function Dashboard() {
             <p className="text-xs text-gray-500 mt-1">Hub shortcuts will appear here once an operating hub is available.</p>
           </div>
         )}
+      </div>
+
+      {/* ── Row 1: Network stats ─────────────────────────────────────────────── */}
+      <div>
+        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+          <Building2 className="w-3 h-3" /> Network
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl">
+          <StatCard loading={isLoading} title="Total Hubs" value={stats?.totalSubHubs ?? 0} sub={`${stats?.activeSubHubs ?? 0} active`} icon={Building2} iconColor="text-[#1A56DB]" iconBg="bg-blue-50" border="border-blue-100" badge={`${stats?.totalSubHubs ? Math.round((stats.activeSubHubs / stats.totalSubHubs) * 100) : 0}% active`} badgeColor="bg-blue-50 text-blue-600" />
+          <StatCard loading={isLoading} title="Master Admin" value={1} sub="active system account" icon={Users} iconColor="text-amber-600" iconBg="bg-amber-50" border="border-amber-100" badge="100% active" badgeColor="bg-amber-50 text-amber-600" />
+        </div>
       </div>
 
       {/* ── Row 2: Order + people stats ──────────────────────────────────────── */}
