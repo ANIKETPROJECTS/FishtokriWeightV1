@@ -126,6 +126,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; 
 const ACTIVE_STATUSES = ["created", "pending", "confirmed", "out_for_delivery"];
 const HISTORY_STATUSES = ["delivered", "cancelled"];
 const ALL_STATUSES = Object.keys(STATUS_CONFIG);
+const VISIBLE_STATUS_FILTERS = ["created", "pending", "confirmed", "takeaway", "handed_over", "cancelled"];
 
 // Takeaway orders are treated as completed and shown in History.
 function isHistoryOrder(o: any) {
@@ -3078,7 +3079,7 @@ export default function Orders() {
                   {totalAll}
                 </span>
               </button>
-              {ALL_STATUSES.map((s) => {
+              {VISIBLE_STATUS_FILTERS.map((s) => {
                 const cfg = STATUS_CONFIG[s];
                 const count = statsData[s] ?? 0;
                 const solidBg = SOLID_STATUS_BG[s] ?? "bg-gray-500";
