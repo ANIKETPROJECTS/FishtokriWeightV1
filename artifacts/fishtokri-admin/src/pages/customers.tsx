@@ -600,17 +600,14 @@ export default function Customers() {
                 <tr className="border-b border-gray-200 text-xs font-semibold text-black uppercase tracking-wide">
                   <th className="px-3 py-4 text-left">Customer</th>
                   <th className="px-3 py-4 text-left">Contact</th>
-                  <th className="px-3 py-4 text-left">Location</th>
                   <th className="px-3 py-4 text-right">Total Spend</th>
                   <th className="px-3 py-4 text-right">Due Amount</th>
                   <th className="px-3 py-4 text-center">Total Orders</th>
-                  <th className="px-3 py-4 text-right">Wallet</th>
                   <th className="px-3 py-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 bg-white">
                 {filteredCustomers.map((c) => {
-                  const loc = getCustomerLocation(c);
                   const totalSpend = getCustomerTotalSpend(c);
                   const dueAmount = getCustomerDueAmount(c);
                   const totalOrders = getCustomerTotalOrders(c);
@@ -625,17 +622,6 @@ export default function Customers() {
                         <p className="text-xs text-black mt-0.5">{c.email || "N.A"}</p>
                         <p className="text-xs text-black mt-0.5">{c.dateOfBirth || "N.A"}</p>
                       </td>
-                      <td className="px-3 py-4">
-                        {loc ? (
-                          <div>
-                            {loc.map((line: string, i: number) => (
-                              <p key={i} className={i === 0 ? "text-sm font-medium text-black" : "text-xs text-black mt-0.5"}>{line}</p>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="text-sm text-black">—</span>
-                        )}
-                      </td>
                       <td className="px-3 py-4 text-right">
                         <span className="text-sm font-medium text-black">{formatRupees(totalSpend)}</span>
                       </td>
@@ -646,14 +632,6 @@ export default function Customers() {
                       </td>
                       <td className="px-3 py-4 text-center">
                         <span className="text-sm text-black">{totalOrders}</span>
-                      </td>
-                      <td className="px-3 py-4 text-right">
-                        {(() => {
-                          const wb = Number(c.walletBalance) || 0;
-                          if (wb > 0) return <span className="text-sm font-semibold text-[#1A56DB]">{formatRupees(wb)}</span>;
-                          if (wb < 0) return <span className="text-sm font-semibold text-red-600">{formatRupees(wb)}</span>;
-                          return <span className="text-sm text-black">₹0</span>;
-                        })()}
                       </td>
                       <td className="px-3 py-4 text-right">
                         <div className="flex items-center justify-end gap-1">
