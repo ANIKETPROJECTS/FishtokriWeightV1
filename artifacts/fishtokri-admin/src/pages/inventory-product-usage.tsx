@@ -191,12 +191,12 @@ export default function InventoryProductUsage() {
             });
             navigate(`/inventory/products/${productId}?${backParams.toString()}`);
           }}
-          className="flex items-center gap-1 text-xs text-gray-500 hover:text-[#1A56DB] transition-colors flex-shrink-0"
+           className="flex items-center gap-1 text-xs text-white/80 hover:text-white transition-colors flex-shrink-0"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">Back</span>
         </button>
-        <ChevronRight className="w-3 h-3 text-gray-300 flex-shrink-0" />
+         <ChevronRight className="w-3 h-3 text-white/50 flex-shrink-0" />
         <button
           onClick={() => {
             const backParams = new URLSearchParams({
@@ -208,14 +208,14 @@ export default function InventoryProductUsage() {
             });
             navigate(`/inventory/products/${productId}?${backParams.toString()}`);
           }}
-          className="text-xs text-gray-500 hover:text-[#1A56DB] transition-colors flex-shrink-0 truncate max-w-[120px]"
+           className="text-xs text-white/80 hover:text-white transition-colors flex-shrink-0 truncate max-w-[120px]"
         >
           {productName}
         </button>
-        <ChevronRight className="w-3 h-3 text-gray-300 flex-shrink-0" />
+         <ChevronRight className="w-3 h-3 text-white/50 flex-shrink-0" />
         <div className="flex items-center gap-1.5">
           <Activity className="w-3.5 h-3.5 text-[#F05B4E]" />
-          <p className="text-sm font-bold text-[#162B4D]">
+           <p className="text-sm font-bold text-white">
             Usage History{batchNumber ? ` — ${batchNumber}` : ""}
           </p>
         </div>

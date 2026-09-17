@@ -24,6 +24,7 @@ type Batch = {
   id: string;
   batchNumber: string;
   quantity: number;
+  price?: number | null;
   shelfLifeDays: number | null;
   receivedDate: string | null;
   expiryDate: string | null;
@@ -172,13 +173,13 @@ export default function InventoryProductDetail() {
       <div className="flex items-center gap-2 min-w-0">
         <button
           onClick={() => navigate("/inventory/products")}
-          className="flex items-center gap-1 text-xs text-gray-500 hover:text-[#1A56DB] transition-colors flex-shrink-0"
+          className="flex items-center gap-1 text-xs text-white/80 hover:text-white transition-colors flex-shrink-0"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">Inventory</span>
         </button>
-        <ChevronRight className="w-3 h-3 text-gray-300 flex-shrink-0" />
-        <p className="text-sm font-bold text-[#162B4D] truncate">
+        <ChevronRight className="w-3 h-3 text-white/50 flex-shrink-0" />
+        <p className="text-sm font-bold text-white truncate">
           {product?.name ?? productName ?? "Product Detail"}
         </p>
       </div>
@@ -255,7 +256,7 @@ export default function InventoryProductDetail() {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4">
                 <div className="bg-gray-50 rounded-xl p-3">
                   <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Price</p>
-                  <p className="text-lg font-bold text-[#162B4D] mt-0.5">₹{product.price}</p>
+                   <p className="text-lg font-bold text-[#162B4D] mt-0.5">₹{product.price.toLocaleString("en-IN")} / {product.unit || "unit"}</p>
                 </div>
                 <div className="rounded-xl p-3 border"
                   style={{
@@ -264,7 +265,7 @@ export default function InventoryProductDetail() {
                   }}>
                   <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Live Stock</p>
                   <p className="text-lg font-bold text-[#162B4D] mt-0.5">
-                    {totalLiveQty} <span className="text-xs font-normal text-gray-400">{product.unit}</span>
+                     {totalLiveQty.toLocaleString("en-IN", { maximumFractionDigits: 2 })} <span className="text-xs font-normal text-gray-400">{product.unit || "unit"} left</span>
                   </p>
                 </div>
                 <div className="bg-gray-50 rounded-xl p-3">
@@ -371,6 +372,7 @@ export default function InventoryProductDetail() {
                 <tr className="bg-gray-50 border-b border-gray-100">
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Batch #</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Quantity</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Price / {product.unit || "unit"}</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Received</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Expiry Date</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Shelf Life</th>
@@ -382,7 +384,7 @@ export default function InventoryProductDetail() {
               <tbody className="divide-y divide-gray-100">
                 {tabBatches.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-12 text-center text-sm text-gray-400">
+                    <td colSpan={9} className="px-4 py-12 text-center text-sm text-gray-400">
                       No {activeTab} batches found
                     </td>
                   </tr>
@@ -424,11 +426,14 @@ export default function InventoryProductDetail() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-right">
+                     <td className="px-4 py-3 text-right">
                         <span className={`font-bold text-sm ${b.quantity > 0 ? "text-[#162B4D]" : "text-gray-400"}`}>
                           {b.quantity}
                         </span>
                         <span className="text-xs text-gray-400 ml-1">{product.unit}</span>
+                      </td>
+                      <td className="px-4 py-3 text-right text-sm font-semibold text-[#162B4D]">
+                        ₹{Number(b.price ?? product.price).toLocaleString("en-IN")}
                       </td>
                       <td className="px-4 py-3 text-gray-600 text-xs">
                         <div className="flex items-center gap-1">

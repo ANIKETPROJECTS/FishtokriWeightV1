@@ -34,6 +34,7 @@ type Batch = {
   id: string;
   batchNumber: string;
   quantity: number;
+  price?: number | null;
   shelfLifeDays: number | null;
   receivedDate: string | null;
   expiryDate: string | null;
@@ -186,8 +187,8 @@ export default function InventoryPage() {
   const headerContent = (
     <div className="flex items-center justify-between w-full gap-4 min-w-0">
       <div className="min-w-0 flex-shrink-0">
-        <p className="text-sm font-bold text-[#162B4D] leading-tight">Inventory</p>
-        <p className="text-[11px] text-gray-400 leading-tight hidden sm:block">Live stock levels for products in a sub-hub.</p>
+        <p className="text-sm font-bold text-white leading-tight">Inventory</p>
+        <p className="text-[11px] text-white/75 leading-tight hidden sm:block">Live stock levels for products in a sub-hub.</p>
       </div>
       <div className="flex items-center gap-2 flex-shrink-0">
         {selectedSubHub ? (
@@ -320,10 +321,12 @@ export default function InventoryPage() {
                               {p.category || <span className="text-gray-300">—</span>}
                               {p.subCategory && <span className="text-gray-400"> / {p.subCategory}</span>}
                             </td>
-                            <td className="px-4 py-4 text-right text-sm font-medium text-gray-700">₹{p.price}</td>
+                            <td className="px-4 py-4 text-right text-sm font-medium text-gray-700">
+                              ₹{p.price.toLocaleString("en-IN")} / {p.unit || "unit"}
+                            </td>
                             <td className="px-4 py-4 text-right">
                               <span className={`inline-flex items-center justify-end px-2.5 py-1 rounded-md font-bold text-sm ${stockTone}`}>
-                                {p.quantity}
+                                {p.quantity.toLocaleString("en-IN", { maximumFractionDigits: 2 })} {p.unit || "unit"} left
                               </span>
                             </td>
                             <td className="px-4 py-4 text-center text-sm text-gray-500">

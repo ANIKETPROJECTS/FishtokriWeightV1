@@ -42,6 +42,7 @@ type Batch = {
   id: string;
   batchNumber: string;
   quantity: number;
+  price?: number | null;
   rawWeight?: number | null;
   cleanedWeight?: number | null;
   yieldPercentage?: number | null;
@@ -62,6 +63,7 @@ type FormRow = {
   quantityBefore: number;
   mode: FormMode;
   addQuantity: string;
+  batchPrice: string;
   rawWeight: string;
   cleanedWeight: string;
   shelfLifeDays: string;
@@ -153,7 +155,7 @@ function generateNextBatchNumber(productName: string, productBatches: Batch[], s
 function emptyRow(): FormRow {
   return {
     productId: "", productName: "", category: "", unit: "", quantityBefore: 0,
-    mode: "add", addQuantity: "", rawWeight: "", cleanedWeight: "", shelfLifeDays: "", expiryDate: "", expiryTime: getCurrentTime12h(), batchNumber: "",
+    mode: "add", addQuantity: "", batchPrice: "", rawWeight: "", cleanedWeight: "", shelfLifeDays: "", expiryDate: "", expiryTime: getCurrentTime12h(), batchNumber: "",
     batchNotes: "",
     removeQuantity: "", selectedBatchId: "", search: "",
   };
@@ -584,12 +586,14 @@ function ProductSelector({
 function BatchSelector({
   batches,
   unit,
+  defaultPrice,
   selectedBatchId,
   onSelect,
   mode = "remove",
 }: {
   batches: Batch[];
   unit: string;
+  defaultPrice: number;
   selectedBatchId: string;
   onSelect: (batchId: string) => void;
   mode?: "remove" | "add_existing";
@@ -688,9 +692,9 @@ function BatchSelector({
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-bold text-[#162B4D]">{b.batchNumber || "Unnamed Batch"}</p>
-                  <p className="text-[11px] text-gray-400 mt-0.5">
-                    Added {formatDate(b.receivedDate)} · Exp <span className={`font-semibold ${tone}`}>{formatExpiry(b.expiryDate)}</span>
-                  </p>
+                    <p className="text-[11px] text-gray-400 mt-0.5">
+                     Added {formatDate(b.receivedDate)} · Price ₹{Number(b.price ?? defaultPrice).toLocaleString("en-IN")} / {unit} · Exp <span className={`font-semibold ${tone}`}>{formatExpiry(b.expiryDate)}</span>
+                   </p>
                 </div>
                 <div className="text-right flex-shrink-0">
                   <p className="text-sm font-bold text-[#162B4D]">{b.quantity}</p>
@@ -728,10 +732,11 @@ function BatchSelector({
 
 // ─── EXISTING BATCHES CARD (editable) ────────────────────────────────────────
 function ExistingBatchesCard({
-  batches, unit, productId, subHubId, onReload,
+  batches, unit, defaultPrice, productId, subHubId, onReload,
 }: {
   batches: Batch[];
   unit: string;
+  defaultPrice: number;
   productId: string;
   subHubId: string;
   onReload: () => void;
@@ -754,7 +759,7 @@ function ExistingBatchesCard({
 
   // Sync local edit state when batches prop changes or panel opens
   useEffect(() => {
-    setEdited(visibleBatches.map((b) => ({ ...b, expiryTime: extractTime12hFromISO(b.expiryDate) })));
+    setEdited(visibleBatches.map((b) => ({ ...b, price: b.price ?? defaultPrice, expiryTime: extractTime12hFromISO(b.expiryDate) })));
     setDirty(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [batches, open, showAllBatches]);
@@ -791,7 +796,7 @@ function ExistingBatchesCard({
   }
 
   function handleCancel() {
-    setEdited(batches.map((b) => ({ ...b, expiryTime: extractTime12hFromISO(b.expiryDate) })));
+    setEdited(visibleBatches.map((b) => ({ ...b, price: b.price ?? defaultPrice, expiryTime: extractTime12hFromISO(b.expiryDate) })));
     setDirty(false);
   }
 
@@ -824,9 +829,10 @@ function ExistingBatchesCard({
         <>
           {/* Column headers */}
           <div className="px-3 py-1.5 bg-[#364F9F]/5 border-y border-[#364F9F]/10">
-            <div className="grid grid-cols-6 gap-2">
+            <div className="grid grid-cols-7 gap-2">
               <span className="text-[10px] font-bold text-[#364F9F] uppercase tracking-wider">Batch ID</span>
               <span className="text-[10px] font-bold text-[#364F9F] uppercase tracking-wider">Qty ({unit})</span>
+              <span className="text-[10px] font-bold text-[#364F9F] uppercase tracking-wider">Price / {unit}</span>
               <span className="text-[10px] font-bold text-[#364F9F] uppercase tracking-wider">Shelf Life (d)</span>
               <span className="text-[10px] font-bold text-[#364F9F] uppercase tracking-wider">Received</span>
               <span className="text-[10px] font-bold text-[#364F9F] uppercase tracking-wider">Expiry Date &amp; Time</span>
@@ -843,7 +849,7 @@ function ExistingBatchesCard({
                 : dl <= 7 ? "border-amber-300 bg-amber-50"
                 : "border-emerald-200 bg-emerald-50";
               return (
-                <div key={b.id} className="px-3 py-2 grid grid-cols-6 gap-2 items-start bg-white/50 hover:bg-white/80 transition-colors">
+                <div key={b.id} className="px-3 py-2 grid grid-cols-7 gap-2 items-start bg-white/50 hover:bg-white/80 transition-colors">
                   <input
                     type="text"
                     value={b.batchNumber}
@@ -855,6 +861,15 @@ function ExistingBatchesCard({
                     min="0"
                     value={b.quantity}
                     onChange={(e) => patchBatch(i, { quantity: Number(e.target.value) })}
+                    className="h-7 px-2 text-[11px] font-bold text-[#162B4D] border border-gray-200 rounded bg-white focus:outline-none focus:ring-1 focus:ring-[#364F9F]/30 mt-0.5"
+                  />
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={b.price ?? ""}
+                    onChange={(e) => patchBatch(i, { price: e.target.value === "" ? null : Number(e.target.value) })}
+                    placeholder={String(defaultPrice)}
                     className="h-7 px-2 text-[11px] font-bold text-[#162B4D] border border-gray-200 rounded bg-white focus:outline-none focus:ring-1 focus:ring-[#364F9F]/30 mt-0.5"
                   />
                   <input
@@ -1018,7 +1033,7 @@ export default function InventoryStockAdjustment() {
       ...r,
       productId: p.id, productName: p.name, category: p.category || "",
       unit: p.unit, quantityBefore: p.quantity, search: p.name,
-      addQuantity: "", rawWeight: "", cleanedWeight: "", removeQuantity: "",
+      addQuantity: "", batchPrice: String(p.price ?? ""), rawWeight: "", cleanedWeight: "", removeQuantity: "",
       batchNumber: r.mode === "add" ? autoNum : "",
       batchNotes: "",
       selectedBatchId: "",
@@ -1028,7 +1043,7 @@ export default function InventoryStockAdjustment() {
   function clearProduct(i: number) {
     updateRow(i, {
       productId: "", productName: "", category: "", unit: "", quantityBefore: 0, search: "",
-      addQuantity: "", rawWeight: "", cleanedWeight: "", removeQuantity: "",
+      addQuantity: "", batchPrice: "", rawWeight: "", cleanedWeight: "", removeQuantity: "",
       batchNumber: "", selectedBatchId: "",
     });
   }
@@ -1036,7 +1051,7 @@ export default function InventoryStockAdjustment() {
   function onSearchChange(i: number, val: string) {
     updateRow(i, {
       search: val, productId: "", productName: "", category: "", unit: "", quantityBefore: 0,
-      addQuantity: "", rawWeight: "", cleanedWeight: "", removeQuantity: "",
+      addQuantity: "", batchPrice: "", rawWeight: "", cleanedWeight: "", removeQuantity: "",
       batchNumber: "", selectedBatchId: "",
     });
   }
@@ -1141,6 +1156,7 @@ export default function InventoryStockAdjustment() {
             if (r.mode === "add") return {
               productId: r.productId, mode: "add",
               addQuantity: Number(r.addQuantity),
+              price: r.batchPrice !== "" ? Number(r.batchPrice) : undefined,
                rawWeight: Number(r.rawWeight),
                cleanedWeight: Number(r.cleanedWeight),
                yieldPercentage: Number(r.cleanedWeight) / Number(r.rawWeight) * 100,
@@ -1180,8 +1196,8 @@ export default function InventoryStockAdjustment() {
   const headerContent = (
     <div className="flex items-center justify-between w-full gap-4 min-w-0">
       <div className="min-w-0 flex-shrink-0">
-        <p className="text-sm font-bold text-[#162B4D] leading-tight">Inventory Stock Management</p>
-        <p className="text-[11px] text-gray-400 leading-tight hidden sm:block">Adjust quantities for multiple products at once.</p>
+        <p className="text-sm font-bold text-white leading-tight">Inventory Stock Management</p>
+        <p className="text-[11px] text-white/75 leading-tight hidden sm:block">Adjust quantities for multiple products at once.</p>
       </div>
       <div className="flex items-center gap-2 flex-shrink-0">
         {selectedSubHub && <LockedHubBadge label="Hub" name={selectedSubHub.name} location={selectedSubHub.location} />}
@@ -1292,7 +1308,7 @@ export default function InventoryStockAdjustment() {
                     <div className="px-4 py-3">
                       <div className="grid grid-cols-12 gap-3 items-start">
                         {/* Product selector */}
-                        <div className="col-span-12 md:col-span-4 space-y-1">
+                        <div className="col-span-12 md:col-span-3 space-y-1">
                           <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Product *</label>
                           <ProductSelector
                             row={row} idx={idx} allProducts={products} usedIds={usedIds}
@@ -1341,7 +1357,23 @@ export default function InventoryStockAdjustment() {
                           />
                         </div>
 
-                        {/* Conditional fields */}
+                         {/* Batch price for a new batch */}
+                         {isAdd && (
+                           <div className="col-span-6 md:col-span-2 space-y-1">
+                             <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Batch Price / {row.unit || "unit"}</label>
+                             <input
+                               type="number"
+                               min="0"
+                               step="0.01"
+                               value={row.batchPrice}
+                               onChange={(e) => updateRow(idx, { batchPrice: e.target.value })}
+                               placeholder="Product price"
+                               className="w-full h-9 px-3 text-sm font-semibold text-[#162B4D] border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-[#364F9F]/20 focus:border-[#364F9F]"
+                             />
+                           </div>
+                         )}
+
+                         {/* Conditional fields */}
                         {isAdd ? (
                           <>
                             {/* Shelf Life */}
@@ -1381,13 +1413,21 @@ export default function InventoryStockAdjustment() {
                               {isAddExisting ? "Select Batch to Add Into" : "Select Batch"}
                             </label>
                             {activeBatches.length > 0 ? (
-                              <BatchSelector
-                                batches={prodBatches}
-                                unit={row.unit}
-                                selectedBatchId={row.selectedBatchId}
-                                onSelect={(batchId) => updateRow(idx, { selectedBatchId: batchId })}
-                                mode={isAddExisting ? "add_existing" : "remove"}
-                              />
+                              <>
+                                <BatchSelector
+                                  batches={prodBatches}
+                                  unit={row.unit}
+                                  defaultPrice={prod?.price ?? 0}
+                                  selectedBatchId={row.selectedBatchId}
+                                  onSelect={(batchId) => updateRow(idx, { selectedBatchId: batchId })}
+                                  mode={isAddExisting ? "add_existing" : "remove"}
+                                />
+                                {row.selectedBatchId && (
+                                  <p className="text-[10px] text-gray-400">
+                                    Batch price: <span className="font-bold text-[#162B4D]">₹{Number(prodBatches.find((b) => b.id === row.selectedBatchId)?.price ?? prod?.price ?? 0).toLocaleString("en-IN")} / {row.unit}</span>
+                                  </p>
+                                )}
+                              </>
                             ) : (
                               <div className="h-9 px-3 flex items-center text-xs text-gray-400 border border-dashed border-gray-200 rounded-lg">
                                 {row.productId ? "No active batches" : "Select product first"}
@@ -1478,6 +1518,7 @@ export default function InventoryStockAdjustment() {
                         <ExistingBatchesCard
                           batches={prodBatches}
                           unit={row.unit}
+                          defaultPrice={prod?.price ?? 0}
                           productId={row.productId}
                           subHubId={selectedSubHubId}
                           onReload={reload}

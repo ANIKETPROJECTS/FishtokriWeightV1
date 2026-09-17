@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "wouter";
 import {
   ArrowRight, Boxes, Building2, History, Package, RefreshCw, SlidersHorizontal,
@@ -127,9 +128,18 @@ export default function InventoryOverview() {
     () => Math.max(1, ...((data?.subHubBreakdown ?? []).map((s) => s.stockValue))),
     [data?.subHubBreakdown]
   );
+  const headerSlot = document.getElementById("page-header-slot");
 
   return (
-    <div className="space-y-5">
+    <>
+      {headerSlot && createPortal(
+        <div className="min-w-0">
+          <p className="text-sm font-bold text-white leading-tight">Inventory Management</p>
+          <p className="text-[11px] text-white/75 leading-tight hidden sm:block">Overview of stock levels, movements, and adjustments.</p>
+        </div>,
+        headerSlot,
+      )}
+      <div className="space-y-5">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-[#162B4D]">Inventory Management</h1>
@@ -294,6 +304,7 @@ export default function InventoryOverview() {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }

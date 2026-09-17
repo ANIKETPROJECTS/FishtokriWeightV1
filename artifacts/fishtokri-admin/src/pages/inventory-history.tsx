@@ -150,8 +150,8 @@ export default function InventoryHistory() {
   const headerContent = (
     <div className="flex items-center justify-between w-full gap-4 min-w-0">
       <div className="min-w-0 flex-shrink-0">
-        <p className="text-sm font-bold text-[#162B4D] leading-tight">Inventory History</p>
-        <p className="text-[11px] text-gray-400 leading-tight hidden sm:block">Stock movement log — order deductions, cancellations, and adjustments.</p>
+        <p className="text-sm font-bold text-white leading-tight">Inventory History</p>
+        <p className="text-[11px] text-white/75 leading-tight hidden sm:block">Stock movement log — order deductions, cancellations, and adjustments.</p>
       </div>
       <div className="flex items-center gap-2 flex-shrink-0">
         {selectedSubHub && (

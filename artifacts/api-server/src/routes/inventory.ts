@@ -77,6 +77,7 @@ type Batch = {
   _id?: any;
   batchNumber?: string;
   quantity: number;
+  price?: number | null;
   rawWeight?: number | null;
   cleanedWeight?: number | null;
   yieldPercentage?: number | null;
@@ -104,6 +105,7 @@ function normalizeBatch(b: any): Batch {
     _id: b?._id ?? new mongoose.Types.ObjectId(),
     batchNumber: b?.batchNumber ? String(b.batchNumber).trim() : "",
     quantity: Math.max(0, Number(b?.quantity) || 0),
+    price: b?.price != null && Number.isFinite(Number(b.price)) ? Number(b.price) : null,
     rawWeight: b?.rawWeight != null && Number.isFinite(Number(b.rawWeight)) ? Number(b.rawWeight) : null,
     cleanedWeight: b?.cleanedWeight != null && Number.isFinite(Number(b.cleanedWeight)) ? Number(b.cleanedWeight) : null,
     yieldPercentage: b?.yieldPercentage != null && Number.isFinite(Number(b.yieldPercentage)) ? Number(b.yieldPercentage) : null,
@@ -437,6 +439,7 @@ router.get("/products", async (req, res) => {
             id: String(b._id ?? ""),
             batchNumber: b.batchNumber ?? "",
             quantity: Number(b.quantity) || 0,
+            price: b.price ?? null,
             rawWeight: b.rawWeight ?? null,
             cleanedWeight: b.cleanedWeight ?? null,
             yieldPercentage: b.yieldPercentage ?? null,
@@ -585,6 +588,7 @@ router.post("/adjustments", async (req, res) => {
         const batch = normalizeBatch({
           batchNumber: it.batchNumber,
           quantity: addQty,
+          price: it.price,
           rawWeight: it.rawWeight,
           cleanedWeight: it.cleanedWeight,
           yieldPercentage: it.yieldPercentage,
