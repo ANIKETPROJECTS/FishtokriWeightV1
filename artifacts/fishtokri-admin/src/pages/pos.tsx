@@ -501,8 +501,25 @@ export default function POS() {
                       data-testid={`card-product-${product._id}`}
                     >
                       <div className="relative p-3">
-                        {inCart && <span className="absolute right-3 top-3 flex h-6 min-w-6 items-center justify-center rounded-full bg-[#F05B4E] px-1.5 text-[11px] font-bold text-white" data-testid={`badge-cart-product-${product._id}`}>{getPricingBasis(product.unit).isWeightBased ? formatWeight(inCart.cartQuantity) : formatQty(inCart.cartQuantity)}</span>}
-                        <p className={`truncate text-sm font-semibold text-[#162B4D] ${inCart ? "pr-8" : ""}`}>{product.name}</p>
+                         {inCart && (
+                           <>
+                             <button
+                               type="button"
+                               onClick={(event) => {
+                                 event.stopPropagation();
+                                 setCart((current) => current.filter((line) => line._id !== product._id));
+                               }}
+                               className="absolute left-3 top-3 flex h-6 w-6 items-center justify-center rounded-full border border-[#F3C7C1] bg-white text-[#D94A3D] shadow-sm hover:bg-[#FFF0ED]"
+                               aria-label={`Unselect ${product.name}`}
+                               title={`Unselect ${product.name}`}
+                               data-testid={`button-unselect-product-${product._id}`}
+                             >
+                               <X className="h-3.5 w-3.5" />
+                             </button>
+                             <span className="absolute right-3 top-3 flex h-6 min-w-6 items-center justify-center rounded-full bg-[#F05B4E] px-1.5 text-[11px] font-bold text-white" data-testid={`badge-cart-product-${product._id}`}>{getPricingBasis(product.unit).isWeightBased ? formatWeight(inCart.cartQuantity) : formatQty(inCart.cartQuantity)}</span>
+                           </>
+                         )}
+                         <p className={`truncate text-sm font-semibold text-[#162B4D] ${inCart ? "pl-8 pr-8" : ""}`}>{product.name}</p>
                         <p className="mt-1 truncate text-[10px] font-medium uppercase tracking-wide text-[#9A8F84]">{getCategoryName(product, categories)}</p>
                          <div className="mt-3 flex items-end justify-between gap-2">
                            <div>

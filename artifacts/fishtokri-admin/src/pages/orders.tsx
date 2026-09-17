@@ -3480,7 +3480,7 @@ export default function Orders() {
                             title="View"
                             onClick={() => {
                               setSelectedOrder(o);
-                              setEditStatus(displayStatus(o.status, o.deliveryType, o.orderType));
+                              setEditStatus(o.status === "cancelled" ? "cancelled" : "takeaway");
                               setSelectedDeliveryPersonId(o.assignedDeliveryPersonId ?? "");
                               setShowAllPersons(false);
                               setShowPorterFallback(false);
@@ -5181,7 +5181,7 @@ export default function Orders() {
                     <p className="text-sm font-medium text-black mt-2">Placed: {formatDate(selectedOrder.createdAt)}</p>
                   </div>
                   <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                    <SolidStatusBadge status={selectedOrder.status} deliveryType={selectedOrder.deliveryType} orderType={selectedOrder.orderType} />
+                    <SolidStatusBadge status={selectedOrder.status === "cancelled" ? "cancelled" : "takeaway"} />
                     <span className="text-xl font-extrabold text-[#F05B4E]">
                       {formatRupees((() => {
                         const _s = Number(selectedOrder.subtotal) > 0 ? Number(selectedOrder.subtotal) : orderTotal(selectedOrder.items);
@@ -5441,12 +5441,6 @@ export default function Orders() {
                        </p>
                       <p className="font-bold text-black">{formatDeliveryDate(selectedOrder.deliveryDate) || formatDate(selectedOrder.createdAt)}</p>
                     </div>
-                    {selectedOrder.timeslotLabel && (
-                      <div className="col-span-2">
-                        <p className="text-xs font-bold tracking-wider text-black mb-1">TIME SLOT</p>
-                        <p className="font-bold text-black">{selectedOrder.timeslotLabel}</p>
-                      </div>
-                    )}
                     {selectedOrder.superHubName && (
                       <div>
                         <p className="text-xs font-bold tracking-wider text-black mb-1">SUPER HUB</p>
@@ -5780,33 +5774,12 @@ export default function Orders() {
                       <MaskIcon src={iconClipboardCheck} color="#364F9F" className="w-[20px] h-[20px]" />
                       <span className="text-xs font-bold text-[#364F9F] uppercase tracking-widest">Update Status</span>
                     </div>
-                    <SolidStatusBadge status={selectedOrder.status} deliveryType={selectedOrder.deliveryType} orderType={selectedOrder.orderType} />
+                     <SolidStatusBadge status={selectedOrder.status === "cancelled" ? "cancelled" : "takeaway"} />
                   </div>
                   <div className="space-y-3">
                     {(() => {
-                      const isTakeaway = selectedOrder.deliveryType === "takeaway";
-                      const isPreorder = String(selectedOrder.orderType ?? "").toLowerCase() === "preorder";
-                      const hasAssignee = !!selectedOrder.assignedDeliveryPersonId || !!selectedOrder.isExpress;
-                      const requiresAssignee = (s: string) => !isTakeaway && !hasAssignee && (s === "out_for_delivery" || s === "delivered");
-                      // Normal next-day orders cannot be dispatched or marked delivered
-                      // until the delivery day arrives. Preorders are intentionally
-                      // exempt because they may be fulfilled on any actual date.
-                      const isOtherDay = !!(
-                        !isPreorder &&
-                        selectedOrder.deliveryDate &&
-                        selectedOrder.deliveryDate !== "" &&
-                        selectedOrder.deliveryDate === getTomorrowIST()
-                      );
-                      const otherDayBlocked = new Set(["out_for_delivery", "delivered"]);
-                       const statusOptions = isPreorder
-                         ? ["created", "handed_over", "cancelled"]
-                         : isTakeaway
-                         ? ["takeaway", "cancelled"]
-                        : ALL_STATUSES.filter((s) => s !== "takeaway" && !(isOtherDay && otherDayBlocked.has(s)));
-                       const handoverOpen = !isPreorder || preorderHandoverOpen(selectedOrder);
-                       const blocked = requiresAssignee(editStatus) ||
-                         (isOtherDay && otherDayBlocked.has(editStatus)) ||
-                         (isPreorder && editStatus === "handed_over" && !handoverOpen);
+                       const statusOptions = ["takeaway", "cancelled"];
+                       const currentViewStatus = selectedOrder.status === "cancelled" ? "cancelled" : "takeaway";
                       return (
                         <>
                           <div className="flex gap-2">
@@ -5814,13 +5787,10 @@ export default function Orders() {
                               <SelectTrigger className="h-11 flex-1 text-sm rounded-xl font-semibold"><SelectValue /></SelectTrigger>
                               <SelectContent>
                                 {statusOptions.map((s) => {
-                                   const disabled = requiresAssignee(s) || (isPreorder && s === "handed_over" && !handoverOpen);
                                   return (
-                                    <SelectItem key={s} value={s} disabled={disabled}>
+                                     <SelectItem key={s} value={s}>
                                       <span className="flex items-center gap-2 font-semibold">
                                         {STATUS_CONFIG[s].label}
-                                        {disabled && <span className="text-xs text-black font-medium">(assign partner first)</span>}
-                                         {isPreorder && s === "handed_over" && !handoverOpen && <span className="text-xs text-black font-medium">(at slot time)</span>}
                                       </span>
                                     </SelectItem>
                                   );
@@ -5829,24 +5799,12 @@ export default function Orders() {
                             </Select>
                             <Button
                               onClick={handleStatusUpdate}
-                              disabled={savingStatus || blocked || editStatus === displayStatus(selectedOrder.status, selectedOrder.deliveryType, selectedOrder.orderType)}
+                               disabled={savingStatus || editStatus === currentViewStatus}
                               className="bg-[#F05B4E] hover:bg-[#D94A3D] h-11 px-5 text-white font-bold rounded-xl"
                             >
                               {savingStatus ? "Saving..." : "Update"}
                             </Button>
                           </div>
-                          {isOtherDay && (
-                            <p className="text-sm font-semibold text-orange-700 bg-orange-50 border border-orange-100 rounded-lg px-3 py-2.5">
-                              This order is scheduled for <strong>{selectedOrder.deliveryDate}</strong>. Out for Delivery and Delivered are only available on the delivery day.
-                            </p>
-                          )}
-                          {!isOtherDay && blocked && (
-                            <p className="text-sm font-semibold text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2.5">
-                               {isPreorder && editStatus === "handed_over"
-                                 ? `This preorder can be marked handed over from ${selectedOrder.timeslotStart || "the scheduled slot"} on ${selectedOrder.deliveryDate}.`
-                                 : "Assign a delivery partner above before marking as Out for Delivery or Delivered."}
-                            </p>
-                          )}
                         </>
                       );
                     })()}
