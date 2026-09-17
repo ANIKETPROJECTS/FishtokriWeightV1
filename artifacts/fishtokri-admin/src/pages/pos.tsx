@@ -11,6 +11,7 @@ import {
   Minus,
   Plus,
   RefreshCw,
+  Scale,
   Search,
   ShoppingBasket,
   Smartphone,
@@ -236,6 +237,9 @@ export default function POS() {
   const [timeslots, setTimeslots] = useState<Timeslot[]>([]);
   const [selectedTimeslotId, setSelectedTimeslotId] = useState("");
   const [loadingTimeslots, setLoadingTimeslots] = useState(false);
+  const [scaleProductId, setScaleProductId] = useState("");
+  const [scaleKg, setScaleKg] = useState("");
+  const [scaleGrams, setScaleGrams] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [phone, setPhone] = useState("");
   const [paymentMode, setPaymentMode] = useState<PaymentMode>("cash");
@@ -312,6 +316,9 @@ export default function POS() {
     setSelectedCategory("all");
     setSearch("");
     setSelectedTimeslotId("");
+    setScaleProductId("");
+    setScaleKg("");
+    setScaleGrams("");
   }, [preorderDate, saleMode]);
 
   const subtotal = useMemo(
@@ -328,18 +335,56 @@ export default function POS() {
   const addProduct = (product: Product) => {
     const available = Number(product.quantity) || 0;
     if (available <= 0) return;
+    const basis = getPricingBasis(product.unit);
     setSubmitError("");
+    if (basis.isWeightBased) {
+      setScaleProductId(product._id);
+    }
     setCart((current) => {
       const found = current.find((line) => line._id === product._id);
       if (found) {
-        const step = getPricingBasis(product.unit).isWeightBased ? 0.05 : 1;
+        const step = basis.isWeightBased ? 0.05 : 1;
         const nextQuantity = Math.min(available, found.cartQuantity + step);
         return current.map((line) => line._id === product._id
-          ? { ...line, cartQuantity: getPricingBasis(product.unit).isWeightBased ? roundWeight(nextQuantity) : nextQuantity }
+          ? { ...line, cartQuantity: basis.isWeightBased ? roundWeight(nextQuantity) : nextQuantity }
           : line);
       }
-      const initialQuantity = getPricingBasis(product.unit).isWeightBased ? Math.min(0, available) : Math.min(1, available);
+      const initialQuantity = basis.isWeightBased ? 0 : Math.min(1, available);
       return [...current, { ...product, cartQuantity: initialQuantity }];
+    });
+  };
+
+  const selectedScaleProduct = products.find((product) => product._id === scaleProductId) || null;
+  const scaleWeightKg = roundWeight(
+    Math.max(0, Number(scaleKg) || 0) + Math.max(0, Number(scaleGrams) || 0) / 1000,
+  );
+  const scalePreviewAmount = selectedScaleProduct
+    ? lineTotal({ ...selectedScaleProduct, cartQuantity: scaleWeightKg })
+    : 0;
+
+  const applyScaleWeight = () => {
+    if (!selectedScaleProduct) {
+      setSubmitError("Select a weight-based product for the test scale.");
+      return;
+    }
+    if (scaleWeightKg <= 0) {
+      setSubmitError("Enter a weight greater than 0.");
+      return;
+    }
+    const available = Number(selectedScaleProduct.quantity) || 0;
+    if (scaleWeightKg > available) {
+      setSubmitError(`Entered weight exceeds available stock (${formatWeight(available)}).`);
+      return;
+    }
+    setSubmitError("");
+    setCart((current) => {
+      const existing = current.some((line) => line._id === selectedScaleProduct._id);
+      if (existing) {
+        return current.map((line) => line._id === selectedScaleProduct._id
+          ? { ...line, cartQuantity: scaleWeightKg }
+          : line);
+      }
+      return [...current, { ...selectedScaleProduct, cartQuantity: scaleWeightKg }];
     });
   };
 
@@ -519,6 +564,56 @@ export default function POS() {
                 })}
               </div>
             )}
+
+             <section className="mt-4 rounded-xl border border-dashed border-[#F1A59D] bg-[#FFF8F6] p-3" data-testid="section-test-weighing-scale">
+               <div className="flex items-start gap-2">
+                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#FDE5E1] text-[#D94A3D]">
+                   <Scale className="h-4 w-4" />
+                 </div>
+                 <div>
+                   <h3 className="text-sm font-bold text-[#162B4D]">Test weighing scale</h3>
+                   <p className="text-[11px] text-[#8D3D36]">Temporary POS test control — select a fish, enter kg and grams, then send the weight to the sale.</p>
+                 </div>
+               </div>
+               <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_100px_100px_auto] sm:items-end">
+                 <label className="block">
+                   <span className="mb-1 block text-[11px] font-semibold text-[#51617A]">Weight-based product</span>
+                   <select
+                     value={scaleProductId}
+                     onChange={(event) => {
+                       const nextId = event.target.value;
+                       setScaleProductId(nextId);
+                       const nextProduct = products.find((product) => product._id === nextId);
+                       if (nextProduct && !cart.some((line) => line._id === nextId)) {
+                         setCart((current) => [...current, { ...nextProduct, cartQuantity: 0 }]);
+                       }
+                     }}
+                     className="h-9 w-full rounded-lg border border-[#E9B8B1] bg-white px-2.5 text-xs font-semibold text-[#162B4D] outline-none focus:border-[#F05B4E]"
+                     data-testid="select-test-scale-product"
+                   >
+                     <option value="">Select product</option>
+                     {products.filter((product) => getPricingBasis(product.unit).isWeightBased && product.status !== "unavailable" && !product.isArchived).map((product) => (
+                       <option key={product._id} value={product._id}>{product.name} · {productRateLabel(product)}</option>
+                     ))}
+                   </select>
+                 </label>
+                 <label className="block">
+                   <span className="mb-1 block text-[11px] font-semibold text-[#51617A]">Kilograms</span>
+                   <input type="number" min="0" step="1" value={scaleKg} onChange={(event) => setScaleKg(event.target.value)} placeholder="0" className="h-9 w-full rounded-lg border border-[#E9B8B1] bg-white px-2.5 text-sm font-bold text-[#162B4D] outline-none focus:border-[#F05B4E]" data-testid="input-test-scale-kg" />
+                 </label>
+                 <label className="block">
+                   <span className="mb-1 block text-[11px] font-semibold text-[#51617A]">Grams</span>
+                   <input type="number" min="0" max="999" step="1" value={scaleGrams} onChange={(event) => setScaleGrams(event.target.value)} placeholder="0" className="h-9 w-full rounded-lg border border-[#E9B8B1] bg-white px-2.5 text-sm font-bold text-[#162B4D] outline-none focus:border-[#F05B4E]" data-testid="input-test-scale-grams" />
+                 </label>
+                 <button type="button" onClick={applyScaleWeight} className="h-9 rounded-lg bg-[#F05B4E] px-3 text-xs font-bold text-white hover:bg-[#D94A3D]" data-testid="button-apply-test-scale">
+                   Add weight
+                 </button>
+               </div>
+               <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-[#7E8998]">
+                 <span>Scale reading: <strong className="text-[#162B4D]">{formatWeight(scaleWeightKg)}</strong></span>
+                 <span>Calculated price: <strong className="text-[#162B4D]">{formatRupees(scalePreviewAmount)}</strong></span>
+               </div>
+             </section>
           </section>
 
            <aside className="sticky top-2 rounded-2xl border border-[#D7E0EE] bg-[#F8FAFD] shadow-[0_6px_24px_rgba(22,43,77,0.08)]" data-testid="section-sale">
@@ -535,7 +630,14 @@ export default function POS() {
                 return (
                 <div key={line._id} className="border-b border-[#E8EDF3] py-3 last:border-0" data-testid={`row-cart-${line._id}`}>
                   <div className="flex items-start gap-2"><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-[#162B4D]">{line.name}</p><p className="mt-0.5 text-[11px] text-[#8A95A5]">{productRateLabel(line)}</p></div><p className="text-sm font-bold text-[#162B4D]">{formatRupees(amount)}</p><button type="button" onClick={() => setCart((current) => current.filter((item) => item._id !== line._id))} className="rounded p-1 text-[#A1AAB7] hover:bg-[#FFF0ED] hover:text-[#D94A3D]" aria-label={`Remove ${line.name}`} data-testid={`button-remove-cart-${line._id}`}><Trash2 className="h-3.5 w-3.5" /></button></div>
-                   <div className="mt-2 flex items-center justify-between"><span className="text-[10px] font-semibold uppercase tracking-wide text-[#9A8F84]">{basis.isWeightBased ? "Weight from scale" : "Quantity"}</span><div className="flex items-center gap-1.5"><button type="button" onClick={() => shiftQuantity(line, -1)} className="flex h-7 w-7 items-center justify-center rounded-md border border-[#D8E0EA] bg-white text-[#52627A] hover:border-[#F1A59D] hover:text-[#D94A3D]" aria-label={`Decrease ${line.name}`} data-testid={`button-decrease-cart-${line._id}`}><Minus className="h-3 w-3" /></button><input type="number" min="0" max={line.quantity} step={basis.isWeightBased ? "0.001" : "1"} value={basis.isWeightBased ? line.cartQuantity.toFixed(3) : line.cartQuantity} onChange={(event) => updateQuantity(line._id, event.target.value)} className="h-7 w-[78px] rounded-md border border-[#D8E0EA] bg-white px-2 text-center text-xs font-bold text-[#162B4D] outline-none focus:border-[#F05B4E]" aria-label={`${basis.isWeightBased ? "Weight in kilograms" : "Quantity"} for ${line.name}`} data-testid={`input-quantity-${line._id}`} /><button type="button" onClick={() => shiftQuantity(line, 1)} disabled={line.cartQuantity >= Number(line.quantity)} className="flex h-7 w-7 items-center justify-center rounded-md border border-[#D8E0EA] bg-white text-[#52627A] hover:border-[#F1A59D] hover:text-[#D94A3D] disabled:cursor-not-allowed disabled:opacity-40" aria-label={`Increase ${line.name}`} data-testid={`button-increase-cart-${line._id}`}><Plus className="h-3 w-3" /></button><span className="w-8 text-[10px] text-[#7E8998]">{basis.isWeightBased ? "kg" : line.unit || "unit"}</span></div></div>
+                 {basis.isWeightBased ? (
+                   <div className="mt-2 flex items-center justify-between rounded-lg bg-[#F8FAFD] px-2.5 py-2">
+                     <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9A8F84]">Weight from scale</span>
+                     <strong className="text-xs text-[#162B4D]" data-testid={`text-weight-${line._id}`}>{formatWeight(line.cartQuantity)}</strong>
+                   </div>
+                 ) : (
+                   <div className="mt-2 flex items-center justify-between"><span className="text-[10px] font-semibold uppercase tracking-wide text-[#9A8F84]">Quantity</span><div className="flex items-center gap-1.5"><button type="button" onClick={() => shiftQuantity(line, -1)} className="flex h-7 w-7 items-center justify-center rounded-md border border-[#D8E0EA] bg-white text-[#52627A] hover:border-[#F1A59D] hover:text-[#D94A3D]" aria-label={`Decrease ${line.name}`} data-testid={`button-decrease-cart-${line._id}`}><Minus className="h-3 w-3" /></button><input type="number" min="0" max={line.quantity} step="1" value={line.cartQuantity} onChange={(event) => updateQuantity(line._id, event.target.value)} className="h-7 w-[78px] rounded-md border border-[#D8E0EA] bg-white px-2 text-center text-xs font-bold text-[#162B4D] outline-none focus:border-[#F05B4E]" aria-label={`Quantity for ${line.name}`} data-testid={`input-quantity-${line._id}`} /><button type="button" onClick={() => shiftQuantity(line, 1)} disabled={line.cartQuantity >= Number(line.quantity)} className="flex h-7 w-7 items-center justify-center rounded-md border border-[#D8E0EA] bg-white text-[#52627A] hover:border-[#F1A59D] hover:text-[#D94A3D] disabled:cursor-not-allowed disabled:opacity-40" aria-label={`Increase ${line.name}`} data-testid={`button-increase-cart-${line._id}`}><Plus className="h-3 w-3" /></button><span className="w-8 text-[10px] text-[#7E8998]">{line.unit || "unit"}</span></div></div>
+                 )}
                   {basis.isWeightBased && <p className="mt-1 text-[10px] text-[#7E8998]">{line.cartQuantity > 0 ? `${formatWeight(line.cartQuantity)} · ${formatRupees(amount)}` : "Waiting for weight from scale"}</p>}
                 </div>
                 );
