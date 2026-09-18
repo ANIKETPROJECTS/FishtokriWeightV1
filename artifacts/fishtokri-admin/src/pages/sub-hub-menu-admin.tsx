@@ -42,6 +42,10 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+
+function formatQuantity(value: number | null | undefined): string {
+  return (Number(value) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+}
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
   DropdownMenuLabel, DropdownMenuTrigger, DropdownMenuCheckboxItem,
@@ -1517,7 +1521,7 @@ function ProductsTab({ subHubId, onSetExcel }: { subHubId: string; onSetExcel: (
                   <td className="px-5 py-4 text-center">
                     <div className="flex flex-col items-center gap-0.5">
                       <span className={`text-base font-bold ${(p.quantity ?? 0) === 0 ? "text-red-500" : (p.lowStockThreshold > 0 && (p.quantity ?? 0) <= p.lowStockThreshold) ? "text-amber-500" : "text-black"}`}>
-                        {p.quantity ?? 0}
+                        {formatQuantity(p.quantity)}
                       </span>
                       {p.lowStockThreshold > 0 && (p.quantity ?? 0) <= p.lowStockThreshold && (p.quantity ?? 0) > 0 && (
                         <span className="inline-flex items-center gap-0.5 text-xs font-semibold text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full leading-none whitespace-nowrap">
