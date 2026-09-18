@@ -1570,10 +1570,24 @@ export default function Orders() {
     const savedBigFish = subHubProducts.find((product) =>
       product.isDemoBigFishSelector === true || product.demoKey === "big-fish-parts"
     );
-    const bigFishSelector = savedBigFish
-      ? { ...DEMO_BIG_FISH_SELECTOR, ...savedBigFish, category: "Fish", isDemoBigFishSelector: true }
-      : DEMO_BIG_FISH_SELECTOR;
-    return [...products.filter((product) => !product.isDemoBigFishSelector && product.demoKey !== "big-fish-parts"), ...combos, bigFishSelector];
+    const partWeights = savedBigFish?.partWeights ?? {};
+    const configuredParts = Array.isArray(savedBigFish?.demoParts) ? savedBigFish.demoParts : [];
+    const bigFishParts = DEMO_BIG_FISH_PARTS.map((part) => {
+      const configured = configuredParts.find((item: any) => item?.partName === part.partName);
+      return {
+        ...part,
+        displayName: part.partName,
+        parentProductId: String(savedBigFish?._id ?? savedBigFish?.productId ?? DEMO_BIG_FISH_ID),
+        category: "Big Fish",
+        price: Number(configured?.price) >= 0 ? Number(configured.price) : part.price,
+        quantity: Math.max(0, Number(partWeights[part.partName]) || 0),
+      };
+    });
+    return [
+      ...products.filter((product) => !product.isDemoBigFishSelector && product.demoKey !== "big-fish-parts"),
+      ...combos,
+      ...bigFishParts,
+    ];
   }, [subHubProducts, subHubCombos, posProductMode, orderDate]);
 
   // A preorder date must be valid for every product already in the cart.
@@ -1664,22 +1678,11 @@ export default function Orders() {
   }, [productsForMode, productSearch, pickerCategory]);
 
   const bigFishPartOptions = useMemo(() => {
-    const bigFishSelector = productsForMode.find((product) => product.isDemoBigFishSelector);
-    const partWeights = bigFishSelector?.partWeights ?? {};
-    const configuredParts = Array.isArray(bigFishSelector?.demoParts) ? bigFishSelector.demoParts : [];
-    return DEMO_BIG_FISH_PARTS.map((part) => {
-      const configured = configuredParts.find((item: any) => item?.partName === part.partName);
-      return {
-      ...part,
-      parentProductId: String(bigFishSelector?._id ?? bigFishSelector?.productId ?? ""),
-      price: Number(configured?.price) >= 0 ? Number(configured.price) : part.price,
-      quantity: Math.max(0, Number(partWeights[part.partName]) || 0),
-      };
-    });
+    return productsForMode.filter((product) => product.isDemoBigFishPart);
   }, [productsForMode]);
 
   const scaleProducts = useMemo(() => {
-    return [...productsForMode.filter((product) => !product.isDemoBigFishSelector), ...bigFishPartOptions];
+    return productsForMode;
   }, [productsForMode, bigFishPartOptions]);
   const selectedScaleProduct = scaleProducts.find((product) => String(product._id) === scaleProductId) || null;
   const scaleWeightKg = Math.round((
@@ -4237,6 +4240,7 @@ export default function Orders() {
                     const cartItem = selectedProducts.find((sp) => sp.productId === pid);
                     const scaleSelected = scaleProductId === pid;
                     const isBigFishSelector = Boolean(p.isDemoBigFishSelector);
+                     const isBigFishPart = Boolean(p.isDemoBigFishPart);
                     const demoPartItems = isBigFishSelector
                       ? selectedProducts.filter((sp) => String(sp.parentProductId) === pid)
                       : [];
@@ -4325,7 +4329,7 @@ export default function Orders() {
                           <img src={p.imageUrl} alt="" className="w-full h-20 object-cover rounded-t-[10px]" />
                         )}
                         <div className="p-2.5 flex flex-col flex-1">
-                          <p className="text-sm font-medium text-[#162B4D] leading-snug line-clamp-2 min-h-[2.5rem]">{p.name}</p>
+                           <p className="text-sm font-medium text-[#162B4D] leading-snug line-clamp-2 min-h-[2.5rem]">{p.displayName ?? p.name}</p>
                           <p className="text-xs text-gray-400 uppercase tracking-wide truncate h-4">{p.category || "\u00A0"}</p>
                           <div className="flex items-center justify-between mt-auto pt-1.5 gap-1">
                             <div className="min-w-0 flex-1">
