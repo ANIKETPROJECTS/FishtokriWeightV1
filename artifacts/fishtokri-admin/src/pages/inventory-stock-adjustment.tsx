@@ -46,7 +46,7 @@ type Batch = {
   id: string;
   batchNumber: string;
   quantity: number;
-  partWeights?: { Head?: number; Middle?: number; Tail?: number } | null;
+  partWeights?: { Head?: number; Body?: number; Middle?: number; Tail?: number } | null;
   price?: number | null;
   rawWeight?: number | null;
   cleanedWeight?: number | null;
@@ -57,7 +57,17 @@ type Batch = {
   expiryTime?: string;
   notes: string;
 };
-type Product = { id: string; name: string; shortCode?: string; category: string; unit: string; quantity: number; batches?: Batch[]; demoKey?: string };
+type Product = {
+  id: string;
+  name: string;
+  shortCode?: string;
+  category: string;
+  unit: string;
+  quantity: number;
+  batches?: Batch[];
+  demoKey?: string;
+  demoParts?: Array<{ partName?: string; price?: number }>;
+};
 
 type FormMode = "add" | "remove" | "add_existing";
 type FormRow = {
@@ -68,7 +78,8 @@ type FormRow = {
   quantityBefore: number;
   mode: FormMode;
   addQuantity: string;
-  partWeights: { Head: string; Middle: string; Tail: string };
+  partWeights: { Head: string; Body: string; Tail: string };
+  partPrices: { Head: string; Body: string; Tail: string };
   batchPrice: string;
   rawWeight: string;
   cleanedWeight: string;
@@ -161,7 +172,7 @@ function generateNextBatchNumber(productName: string, productBatches: Batch[], s
 function emptyRow(): FormRow {
   return {
     productId: "", productName: "", category: "", unit: "", quantityBefore: 0,
-    mode: "add", addQuantity: "", partWeights: { Head: "", Middle: "", Tail: "" }, batchPrice: "", rawWeight: "", cleanedWeight: "", shelfLifeDays: "", expiryDate: "", expiryTime: getCurrentTime12h(), batchNumber: "",
+    mode: "add", addQuantity: "", partWeights: { Head: "", Body: "", Tail: "" }, partPrices: { Head: "400", Body: "900", Tail: "500" }, batchPrice: "", rawWeight: "", cleanedWeight: "", shelfLifeDays: "", expiryDate: "", expiryTime: getCurrentTime12h(), batchNumber: "",
     batchNotes: "",
     removeQuantity: "", selectedBatchId: "", search: "",
   };
@@ -170,6 +181,19 @@ function emptyRow(): FormRow {
 function isBigFishRow(row: FormRow): boolean {
   return row.productName.trim().toLowerCase() === "big fish"
     || row.productName.trim().toLowerCase() === "big fish (demo)";
+}
+
+function initialBigFishPartPrices(product: Product): { Head: string; Body: string; Tail: string } {
+  const configured = product.demoParts ?? [];
+  const priceFor = (partName: string, fallback: number) => {
+    const price = Number(configured.find((part) => part.partName === partName)?.price);
+    return String(Number.isFinite(price) && price >= 0 ? price : fallback);
+  };
+  return {
+    Head: priceFor("Head", 400),
+    Body: priceFor("Body", Number(configured.find((part) => part.partName === "Middle")?.price) || 900),
+    Tail: priceFor("Tail", 500),
+  };
 }
 
 function addDaysISO(days: number): string {
@@ -1040,7 +1064,7 @@ export default function InventoryStockAdjustment() {
       ...r,
       productId: p.id, productName: p.name, category: p.category || "",
       unit: p.unit, quantityBefore: p.quantity, search: p.name,
-      addQuantity: "", partWeights: { Head: "", Middle: "", Tail: "" }, batchPrice: String(p.price ?? ""), rawWeight: "", cleanedWeight: "", removeQuantity: "",
+      addQuantity: "", partWeights: { Head: "", Body: "", Tail: "" }, partPrices: initialBigFishPartPrices(p), batchPrice: String(p.price ?? ""), rawWeight: "", cleanedWeight: "", removeQuantity: "",
       batchNumber: r.mode === "add" ? autoNum : "",
       batchNotes: "",
       selectedBatchId: "",
@@ -1050,7 +1074,7 @@ export default function InventoryStockAdjustment() {
   function clearProduct(i: number) {
     updateRow(i, {
       productId: "", productName: "", category: "", unit: "", quantityBefore: 0, search: "",
-      addQuantity: "", partWeights: { Head: "", Middle: "", Tail: "" }, batchPrice: "", rawWeight: "", cleanedWeight: "", removeQuantity: "",
+      addQuantity: "", partWeights: { Head: "", Body: "", Tail: "" }, partPrices: { Head: "400", Body: "900", Tail: "500" }, batchPrice: "", rawWeight: "", cleanedWeight: "", removeQuantity: "",
       batchNumber: "", selectedBatchId: "",
     });
   }
@@ -1058,7 +1082,7 @@ export default function InventoryStockAdjustment() {
   function onSearchChange(i: number, val: string) {
     updateRow(i, {
       search: val, productId: "", productName: "", category: "", unit: "", quantityBefore: 0,
-      addQuantity: "", partWeights: { Head: "", Middle: "", Tail: "" }, batchPrice: "", rawWeight: "", cleanedWeight: "", removeQuantity: "",
+      addQuantity: "", partWeights: { Head: "", Body: "", Tail: "" }, partPrices: { Head: "400", Body: "900", Tail: "500" }, batchPrice: "", rawWeight: "", cleanedWeight: "", removeQuantity: "",
       batchNumber: "", selectedBatchId: "",
     });
   }
@@ -1109,12 +1133,17 @@ export default function InventoryStockAdjustment() {
     updateRow(i, patch);
   }
 
-  function setBigFishPartWeight(i: number, part: "Head" | "Middle" | "Tail", value: string) {
+  function setBigFishPartWeight(i: number, part: "Head" | "Body" | "Tail", value: string) {
     const row = formRows[i];
     const partWeights = { ...row.partWeights, [part]: value };
     const total = Object.values(partWeights).reduce((sum, weight) => sum + Math.max(0, Number(weight) || 0), 0);
     const totalValue = total > 0 ? String(total) : "";
     updateRow(i, { partWeights, cleanedWeight: totalValue, addQuantity: totalValue });
+  }
+
+  function setBigFishPartPrice(i: number, part: "Head" | "Body" | "Tail", value: string) {
+    const row = formRows[i];
+    updateRow(i, { partPrices: { ...row.partPrices, [part]: value } });
   }
 
   function resetForm() {
@@ -1178,8 +1207,15 @@ export default function InventoryStockAdjustment() {
                partWeights: isBigFishRow(r)
                  ? {
                    Head: Math.max(0, Number(r.partWeights.Head) || 0),
-                   Middle: Math.max(0, Number(r.partWeights.Middle) || 0),
+                   Body: Math.max(0, Number(r.partWeights.Body) || 0),
                    Tail: Math.max(0, Number(r.partWeights.Tail) || 0),
+                 }
+                 : undefined,
+               partPrices: isBigFishRow(r)
+                 ? {
+                   Head: Math.max(0, Number(r.partPrices.Head) || 0),
+                   Body: Math.max(0, Number(r.partPrices.Body) || 0),
+                   Tail: Math.max(0, Number(r.partPrices.Tail) || 0),
                  }
                  : undefined,
               shelfLifeDays: r.shelfLifeDays !== "" ? Number(r.shelfLifeDays) : undefined,
@@ -1474,7 +1510,7 @@ export default function InventoryStockAdjustment() {
                              </div>
                            </div>
                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                             {(["Head", "Middle", "Tail"] as const).map((part) => (
+                             {(["Head", "Body", "Tail"] as const).map((part) => (
                                <div key={part} className="space-y-1">
                                  <label className="text-[10px] font-bold text-[#364F9F] uppercase tracking-wider">{part} ({row.unit || "kg"})</label>
                                  <input
@@ -1528,6 +1564,25 @@ export default function InventoryStockAdjustment() {
                               {row.rawWeight && row.cleanedWeight
                                 ? `${Math.max(0, Number(row.rawWeight) - Number(row.cleanedWeight)).toFixed(2)} ${row.unit || ""}`
                                 : "—"}
+                            </div>
+                            <div className="mt-3 border-t border-blue-100 pt-3">
+                              <p className="text-[10px] font-bold text-[#364F9F] uppercase tracking-wider mb-2">Part sale prices (₹ / kg)</p>
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                {(["Head", "Body", "Tail"] as const).map((part) => (
+                                  <div key={part} className="space-y-1">
+                                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{part} price</label>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="1"
+                                      value={row.partPrices[part]}
+                                      onChange={(e) => setBigFishPartPrice(idx, part, e.target.value)}
+                                      placeholder="e.g. 400"
+                                      className="w-full h-9 px-3 text-sm font-semibold text-[#162B4D] border border-blue-200 rounded-lg bg-white outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                                    />
+                                  </div>
+                                ))}
+                              </div>
                             </div>
                           </div>
                           <div className="space-y-1">

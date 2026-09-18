@@ -833,10 +833,10 @@ const DEMO_BIG_FISH_PARTS = [
     isCombo: false,
   },
   {
-    _id: "__demo_big_fish_middle__",
-    productId: "__demo_big_fish_middle__",
-    name: "Big Fish - Middle",
-    partName: "Middle",
+    _id: "__demo_big_fish_body__",
+    productId: "__demo_big_fish_body__",
+    name: "Big Fish - Body",
+    partName: "Body",
     price: 900,
     unit: "per kg",
     quantity: 50,
@@ -863,9 +863,10 @@ const DEMO_BIG_FISH_SELECTOR = {
   _id: DEMO_BIG_FISH_ID,
   name: "Big Fish",
   category: "Fish",
-  description: "Choose Head, Middle, or Tail",
+  description: "Choose Head, Body, or Tail",
   quantity: 1,
   unit: "",
+  demoParts: DEMO_BIG_FISH_PARTS.map((part) => ({ partName: part.partName, price: part.price, unit: part.unit, isWeightBased: true })),
   isDemoBigFishSelector: true,
   isCombo: false,
 };
@@ -1661,15 +1662,23 @@ export default function Orders() {
     });
   }, [productsForMode, productSearch, pickerCategory]);
 
-  const scaleProducts = useMemo(() => {
+  const bigFishPartOptions = useMemo(() => {
     const bigFishSelector = productsForMode.find((product) => product.isDemoBigFishSelector);
     const partWeights = bigFishSelector?.partWeights ?? {};
-    const availableParts = DEMO_BIG_FISH_PARTS.map((part) => ({
+    const configuredParts = Array.isArray(bigFishSelector?.demoParts) ? bigFishSelector.demoParts : [];
+    return DEMO_BIG_FISH_PARTS.map((part) => {
+      const configured = configuredParts.find((item: any) => item?.partName === part.partName);
+      return {
       ...part,
+      price: Number(configured?.price) >= 0 ? Number(configured.price) : part.price,
       quantity: Math.max(0, Number(partWeights[part.partName]) || 0),
-    }));
-    return [...productsForMode.filter((product) => !product.isDemoBigFishSelector), ...availableParts];
+      };
+    });
   }, [productsForMode]);
+
+  const scaleProducts = useMemo(() => {
+    return [...productsForMode.filter((product) => !product.isDemoBigFishSelector), ...bigFishPartOptions];
+  }, [productsForMode, bigFishPartOptions]);
   const selectedScaleProduct = scaleProducts.find((product) => String(product._id) === scaleProductId) || null;
   const scaleWeightKg = Math.round((
     Math.max(0, Number(scaleKg) || 0) +
@@ -4303,7 +4312,7 @@ export default function Orders() {
                                {isBigFishSelector ? (
                                  <>
                                    <p className="text-sm font-semibold text-[#1A56DB]">Choose a part</p>
-                                   <p className="text-[10px] font-medium leading-none text-[#364F9F]">Head · Middle · Tail</p>
+                                    <p className="text-[10px] font-medium leading-none text-[#364F9F]">Head · Body · Tail</p>
                                    <p className={`mt-1 text-[10px] font-semibold leading-none ${stock > 0 ? "text-[#364F9F]" : "text-red-500"}`}>
                                      {stock.toLocaleString("en-IN", { maximumFractionDigits: 2 })} {stockUnit} left
                                    </p>
@@ -5317,10 +5326,8 @@ export default function Orders() {
             Choose the part to weigh. The selected part will be added to the order after you enter its weight.
           </p>
           <div className="grid grid-cols-3 gap-3 pt-2">
-            {DEMO_BIG_FISH_PARTS.map((part) => {
+            {bigFishPartOptions.map((part) => {
               const selectedPart = selectedProducts.find((item) => item.productId === part.productId);
-              const bigFishSelector = productsForMode.find((product) => product.isDemoBigFishSelector);
-              const availableWeight = Math.max(0, Number(bigFishSelector?.partWeights?.[part.partName]) || 0);
               return (
                 <button
                   key={part.productId}

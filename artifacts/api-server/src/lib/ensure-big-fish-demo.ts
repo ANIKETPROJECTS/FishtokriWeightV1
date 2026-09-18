@@ -4,7 +4,7 @@ export const BIG_FISH_DEMO_KEY = "big-fish-parts";
 
 const BIG_FISH_PARTS = [
   { partName: "Head", price: 400, unit: "per kg" },
-  { partName: "Middle", price: 900, unit: "per kg" },
+  { partName: "Body", price: 900, unit: "per kg" },
   { partName: "Tail", price: 500, unit: "per kg" },
 ];
 
@@ -36,13 +36,28 @@ export async function ensureBigFishDemoCatalog(db: any) {
   const categoryName = String(fishCategory.name || "Fish");
   const now = new Date();
   const demoParts = BIG_FISH_PARTS.map((part) => ({ ...part, isWeightBased: true }));
+  let existing = await products.findOne({ demoKey: BIG_FISH_DEMO_KEY });
+  if (!existing) {
+    existing = await products.findOne({ name: "Big Fish (Demo)", category: categoryName });
+  }
+  const existingDemoParts = Array.isArray(existing?.demoParts) ? existing.demoParts : [];
+  const persistedDemoParts = demoParts.map((defaultPart) => {
+    const configuredPart = existingDemoParts.find((part: any) =>
+      String(part?.partName) === defaultPart.partName
+      || (defaultPart.partName === "Body" && String(part?.partName) === "Middle"),
+    );
+    return {
+      ...(configuredPart ?? defaultPart),
+      partName: defaultPart.partName,
+    };
+  });
   const demoMetadata = {
     name: "Big Fish",
     demoKey: BIG_FISH_DEMO_KEY,
     isDemoBigFishSelector: true,
-    demoParts,
+    demoParts: persistedDemoParts,
     category: categoryName,
-    description: "Choose Head, Middle, or Tail in POS",
+    description: "Choose Head, Body, or Tail in POS",
   };
   const demoFields = {
     ...demoMetadata,
@@ -61,11 +76,6 @@ export async function ensureBigFishDemoCatalog(db: any) {
     couponIds: [],
     updatedAt: now,
   };
-
-  let existing = await products.findOne({ demoKey: BIG_FISH_DEMO_KEY });
-  if (!existing) {
-    existing = await products.findOne({ name: "Big Fish (Demo)", category: categoryName });
-  }
 
   if (existing) {
     await products.updateOne(

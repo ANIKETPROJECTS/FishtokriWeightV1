@@ -78,7 +78,7 @@ type Batch = {
   _id?: any;
   batchNumber?: string;
   quantity: number;
-  partWeights?: { Head: number; Middle: number; Tail: number } | null;
+  partWeights?: { Head: number; Body: number; Tail: number } | null;
   price?: number | null;
   rawWeight?: number | null;
   cleanedWeight?: number | null;
@@ -89,6 +89,30 @@ type Batch = {
   notes?: string;
   createdAt?: Date;
 };
+
+const BIG_FISH_PART_NAMES = ["Head", "Body", "Tail"] as const;
+const BIG_FISH_DEFAULT_PART_PRICES = { Head: 400, Body: 900, Tail: 500 };
+
+function normalizeBigFishPartPrices(existing: any, raw: any) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const existingParts = Array.isArray(existing?.demoParts) ? existing.demoParts : [];
+  return BIG_FISH_PART_NAMES.map((partName) => {
+    const oldPart = existingParts.find((part: any) =>
+      String(part?.partName) === partName
+      || (partName === "Body" && String(part?.partName) === "Middle"),
+    );
+    const value = Number(raw[partName] ?? (partName === "Body" ? raw.Middle : undefined));
+    return {
+      ...(oldPart ?? {}),
+      partName,
+      price: Number.isFinite(value) && value >= 0
+        ? value
+        : Number(oldPart?.price) || BIG_FISH_DEFAULT_PART_PRICES[partName],
+      unit: "per kg",
+      isWeightBased: true,
+    };
+  });
+}
 
 function toDate(v: any): Date | null {
   if (!v) return null;
@@ -110,7 +134,7 @@ function normalizeBatch(b: any): Batch {
     partWeights: b?.partWeights && typeof b.partWeights === "object"
       ? {
         Head: Math.max(0, Number(b.partWeights.Head) || 0),
-        Middle: Math.max(0, Number(b.partWeights.Middle) || 0),
+        Body: Math.max(0, Number(b.partWeights.Body ?? b.partWeights.Middle) || 0),
         Tail: Math.max(0, Number(b.partWeights.Tail) || 0),
       }
       : null,
@@ -445,6 +469,7 @@ router.get("/products", async (req, res) => {
           quantity: qty,
           status: p.status ?? "available",
           imageUrl: p.imageUrl ?? "",
+           demoParts: p.demoKey === "big-fish-parts" && Array.isArray(p.demoParts) ? p.demoParts : null,
           batches: sortBatchesFIFO(batches).map((b) => ({
             id: String(b._id ?? ""),
             batchNumber: b.batchNumber ?? "",
@@ -588,6 +613,9 @@ router.post("/adjustments", async (req, res) => {
       const before = batchesTotal(currentBatches) || (Number(existing.quantity) || 0);
 
       const mode = String(it.mode || (it.addQuantity != null ? "add" : it.removeQuantity != null ? "remove" : "set"));
+      const demoParts = existing.demoKey === "big-fish-parts"
+        ? normalizeBigFishPartPrices(existing, it.partPrices)
+        : null;
 
       let newBatches = [...currentBatches];
       let delta = 0;
@@ -695,7 +723,13 @@ router.post("/adjustments", async (req, res) => {
         }
       }
 
-      const persisted = await persistBatches(products, pid, newBatches, {}, ctx.conn.db.collection("combos"));
+       const persisted = await persistBatches(
+         products,
+         pid,
+         newBatches,
+         demoParts ? { demoParts } : {},
+         ctx.conn.db.collection("combos"),
+       );
 
       adjustmentItems.push({
         productId: String(pid),
