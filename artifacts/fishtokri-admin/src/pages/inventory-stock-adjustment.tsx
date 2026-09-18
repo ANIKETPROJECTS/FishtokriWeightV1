@@ -1076,7 +1076,9 @@ export default function InventoryStockAdjustment() {
       ...r,
       productId: p.id, productName: p.name, category: p.category || "",
       unit: p.unit, quantityBefore: p.quantity, search: p.name,
-      addQuantity: "", partWeights: { Head: "", Body: "", Tail: "" }, partPrices: initialBigFishPartPrices(p), batchPrice: String(p.price ?? ""), rawWeight: "", cleanedWeight: "", removeQuantity: "",
+      addQuantity: "", partWeights: { Head: "", Body: "", Tail: "" }, partPrices: initialBigFishPartPrices(p),
+      batchPrice: p.demoKey === "big-fish-parts" || p.name.trim().toLowerCase() === "big fish" ? "" : String(p.price ?? ""),
+      rawWeight: "", cleanedWeight: "", removeQuantity: "",
       batchNumber: r.mode === "add" ? autoNum : "",
       batchNotes: "",
       selectedBatchId: "",
@@ -1443,16 +1445,22 @@ export default function InventoryStockAdjustment() {
                          {/* Batch price for a new batch */}
                          {isAdd && (
                            <div className="col-span-6 md:col-span-2 space-y-1">
-                             <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Batch Price / {row.unit || "unit"}</label>
+                              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                                {isBigFish ? "Calculated Batch Price" : "Batch Price"} / {row.unit || "unit"}
+                              </label>
                              <input
                                type="number"
                                min="0"
                                step="0.01"
                                value={row.batchPrice}
-                               onChange={(e) => updateRow(idx, { batchPrice: e.target.value })}
-                               placeholder="Product price"
-                               className="w-full h-9 px-3 text-sm font-semibold text-[#162B4D] border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-[#364F9F]/20 focus:border-[#364F9F]"
+                                onChange={(e) => { if (!isBigFish) updateRow(idx, { batchPrice: e.target.value }); }}
+                                readOnly={isBigFish}
+                                placeholder={isBigFish ? "Set part prices and weights" : "Product price"}
+                                className={`w-full h-9 px-3 text-sm font-semibold text-[#162B4D] border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-[#364F9F]/20 focus:border-[#364F9F] ${isBigFish ? "bg-emerald-50/60 cursor-not-allowed" : "bg-white"}`}
                              />
+                              {isBigFish && (
+                                <p className="text-[10px] text-gray-400">Weighted average from Head, Body, and Tail sale prices.</p>
+                              )}
                            </div>
                          )}
 
