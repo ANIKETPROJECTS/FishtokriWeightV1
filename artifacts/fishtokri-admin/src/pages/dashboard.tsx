@@ -40,6 +40,15 @@ function formatDate(d: any) {
   if (!d) return "—";
   return new Date(d).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 }
+function istDateKey(value: any): string {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return "";
+  const ist = new Date(date.getTime() + 5.5 * 60 * 60 * 1000);
+  return `${ist.getUTCFullYear()}-${String(ist.getUTCMonth() + 1).padStart(2, "0")}-${String(ist.getUTCDate()).padStart(2, "0")}`;
+}
+function todayISTKey(): string {
+  return istDateKey(new Date());
+}
 
 // ─── COLORS ───────────────────────────────────────────────────────────────────
 const HUB_COLORS   = ["#1A56DB", "#10B981", "#F59E0B", "#8B5CF6", "#EF4444"];
@@ -181,17 +190,21 @@ export default function Dashboard() {
   const isLoading = statsLoading || hubsLoading;
 
   // ── Derived order data ───────────────────────────────────────────────────
-  const totalOrders    = Object.values(orderStats).reduce((a, b) => a + b, 0);
+  // The API's `takeaway` bucket is an all-time status bucket used by the
+  // orders page. For this dashboard, "Today's Sale" must be today's POS
+  // takeaway count only.
+  const dashboardOrderStats = { ...orderStats, takeaway: orderSummary.todayPosSales };
+  const totalOrders    = Object.values(dashboardOrderStats).reduce((a, b) => a + b, 0);
   const activeOrders   = (orderStats.pending ?? 0) + (orderStats.confirmed ?? 0) + (orderStats.out_for_delivery ?? 0);
   const pendingOrders  = orderStats.pending ?? 0;
 
   const orderStatusPieData = Object.entries(ORDER_STATUS_CONFIG)
-    .map(([key, cfg]) => ({ name: cfg.label, value: orderStats[key] ?? 0, color: cfg.chart }))
+    .map(([key, cfg]) => ({ name: cfg.label, value: dashboardOrderStats[key] ?? 0, color: cfg.chart }))
     .filter((d) => d.value > 0);
 
   const orderStatusBarData = Object.entries(ORDER_STATUS_CONFIG).map(([key, cfg]) => ({
     name: cfg.label.replace(" for ", "\nfor "),
-    count: orderStats[key] ?? 0,
+    count: dashboardOrderStats[key] ?? 0,
     color: cfg.chart,
   }));
 
@@ -378,7 +391,13 @@ export default function Dashboard() {
                       </div>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-[10px] text-gray-400 flex items-center gap-0.5"><Phone className="w-2.5 h-2.5" />{o.phone}</span>
-                        <span className="text-[10px] text-gray-400">{o.orderType === "preorder" ? "Preorder" : "Today's Sale"}</span>
+                        <span className="text-[10px] text-gray-400">
+                          {o.orderType === "preorder"
+                            ? "Preorder"
+                            : istDateKey(o.createdAt) === todayISTKey()
+                              ? "Today's Sale"
+                              : "POS Sale"}
+                        </span>
                       </div>
                     </div>
                     <div className="text-right flex-shrink-0">
