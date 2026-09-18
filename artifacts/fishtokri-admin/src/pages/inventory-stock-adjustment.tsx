@@ -196,6 +196,18 @@ function initialBigFishPartPrices(product: Product): { Head: string; Body: strin
   };
 }
 
+function calculateBigFishBatchPrice(
+  partWeights: { Head: string; Body: string; Tail: string },
+  partPrices: { Head: string; Body: string; Tail: string },
+): number {
+  const totalWeight = (["Head", "Body", "Tail"] as const)
+    .reduce((sum, part) => sum + Math.max(0, Number(partWeights[part]) || 0), 0);
+  if (totalWeight <= 0) return 0;
+  const totalValue = (["Head", "Body", "Tail"] as const)
+    .reduce((sum, part) => sum + Math.max(0, Number(partWeights[part]) || 0) * Math.max(0, Number(partPrices[part]) || 0), 0);
+  return Math.round((totalValue / totalWeight) * 100) / 100;
+}
+
 function addDaysISO(days: number): string {
   const d = new Date();
   d.setDate(d.getDate() + days);
@@ -1138,12 +1150,23 @@ export default function InventoryStockAdjustment() {
     const partWeights = { ...row.partWeights, [part]: value };
     const total = Object.values(partWeights).reduce((sum, weight) => sum + Math.max(0, Number(weight) || 0), 0);
     const totalValue = total > 0 ? String(total) : "";
-    updateRow(i, { partWeights, cleanedWeight: totalValue, addQuantity: totalValue });
+    const batchPrice = calculateBigFishBatchPrice(partWeights, row.partPrices);
+    updateRow(i, {
+      partWeights,
+      cleanedWeight: totalValue,
+      addQuantity: totalValue,
+      batchPrice: batchPrice > 0 ? String(batchPrice) : "",
+    });
   }
 
   function setBigFishPartPrice(i: number, part: "Head" | "Body" | "Tail", value: string) {
     const row = formRows[i];
-    updateRow(i, { partPrices: { ...row.partPrices, [part]: value } });
+    const partPrices = { ...row.partPrices, [part]: value };
+    const batchPrice = calculateBigFishBatchPrice(row.partWeights, partPrices);
+    updateRow(i, {
+      partPrices,
+      batchPrice: batchPrice > 0 ? String(batchPrice) : "",
+    });
   }
 
   function resetForm() {
