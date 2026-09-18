@@ -200,12 +200,16 @@ function calculateBigFishTotalPrice(
   partWeights: { Head: string; Body: string; Tail: string },
   partPrices: { Head: string; Body: string; Tail: string },
 ): number {
-  const totalWeight = (["Head", "Body", "Tail"] as const)
-    .reduce((sum, part) => sum + Math.max(0, Number(partWeights[part]) || 0), 0);
+  const totalWeight = calculateBigFishPartWeightTotal(partWeights);
   if (totalWeight <= 0) return 0;
   const totalValue = (["Head", "Body", "Tail"] as const)
     .reduce((sum, part) => sum + Math.max(0, Number(partWeights[part]) || 0) * Math.max(0, Number(partPrices[part]) || 0), 0);
   return Math.round(totalValue * 100) / 100;
+}
+
+function calculateBigFishPartWeightTotal(partWeights: { Head: string; Body: string; Tail: string }): number {
+  return (["Head", "Body", "Tail"] as const)
+    .reduce((sum, part) => sum + Math.max(0, Number(partWeights[part]) || 0), 0);
 }
 
 function addDaysISO(days: number): string {
@@ -1138,6 +1142,19 @@ export default function InventoryStockAdjustment() {
   }
 
   function setWeight(i: number, field: "rawWeight" | "cleanedWeight", value: string) {
+    const row = formRows[i];
+    if (field === "cleanedWeight" && isBigFishRow(row) && value !== "") {
+      const cleaned = Number(value);
+      const partsTotal = calculateBigFishPartWeightTotal(row.partWeights);
+      if (Number.isFinite(cleaned) && partsTotal > cleaned + 0.01) {
+        toast({
+          title: "Cleaned weight is too low",
+          description: `Reduce the Head, Body, or Tail weight first. Current parts total is ${partsTotal.toLocaleString("en-IN", { maximumFractionDigits: 2 })} kg.`,
+          variant: "destructive",
+        });
+        return;
+      }
+    }
     const patch: Partial<FormRow> = { [field]: value };
     if (field === "cleanedWeight" && value !== "") {
       patch.addQuantity = value;
@@ -1152,11 +1169,20 @@ export default function InventoryStockAdjustment() {
     const partWeights = { ...row.partWeights, [part]: value };
     const total = Object.values(partWeights).reduce((sum, weight) => sum + Math.max(0, Number(weight) || 0), 0);
     const totalValue = total > 0 ? String(total) : "";
+    const hasCleanedWeight = row.cleanedWeight !== "" && Number.isFinite(Number(row.cleanedWeight));
+    if (hasCleanedWeight && total > Number(row.cleanedWeight) + 0.01) {
+      toast({
+        title: "Part weight exceeds cleaned weight",
+        description: `Head + Body + Tail cannot exceed ${Number(row.cleanedWeight).toLocaleString("en-IN", { maximumFractionDigits: 2 })} kg.`,
+        variant: "destructive",
+      });
+      return;
+    }
     const batchPrice = calculateBigFishTotalPrice(partWeights, row.partPrices);
     updateRow(i, {
       partWeights,
-      cleanedWeight: totalValue,
-      addQuantity: totalValue,
+      cleanedWeight: hasCleanedWeight ? row.cleanedWeight : totalValue,
+      addQuantity: hasCleanedWeight ? row.cleanedWeight : totalValue,
       batchPrice: batchPrice > 0 ? String(batchPrice) : "",
     });
   }
@@ -1208,6 +1234,21 @@ export default function InventoryStockAdjustment() {
       toast({
         title: "Enter valid fish weights",
         description: `For ${invalidWeights.productName}, enter raw and cleaned weights. Cleaned weight must not exceed raw weight.`,
+        variant: "destructive",
+      });
+      return;
+    }
+    const invalidBigFishParts = validRows.find((r) => {
+      if (r.mode !== "add" || !isBigFishRow(r)) return false;
+      const cleaned = Number(r.cleanedWeight);
+      const partsTotal = calculateBigFishPartWeightTotal(r.partWeights);
+      return !Number.isFinite(cleaned) || Math.abs(partsTotal - cleaned) > 0.01;
+    });
+    if (invalidBigFishParts) {
+      const partsTotal = calculateBigFishPartWeightTotal(invalidBigFishParts.partWeights);
+      toast({
+        title: "Big Fish weights do not match",
+        description: `For ${invalidBigFishParts.productName}, Head + Body + Tail must equal the cleaned weight. Current parts total: ${partsTotal.toLocaleString("en-IN", { maximumFractionDigits: 2 })} kg.`,
         variant: "destructive",
       });
       return;
@@ -1335,7 +1376,10 @@ export default function InventoryStockAdjustment() {
                 const isAddExisting = row.mode === "add_existing";
                 const isAddAny = isAdd || isAddExisting;
                 const isBigFish = isBigFishRow(row);
-                const bigFishPartTotal = Object.values(row.partWeights).reduce((sum, weight) => sum + Math.max(0, Number(weight) || 0), 0);
+                const bigFishPartTotal = calculateBigFishPartWeightTotal(row.partWeights);
+                const cleanedWeight = Number(row.cleanedWeight);
+                const bigFishPartsMismatch = isAdd && isBigFish && Number.isFinite(cleanedWeight) && cleanedWeight > 0
+                  && Math.abs(bigFishPartTotal - cleanedWeight) > 0.01;
                 const dLeft = isAdd ? daysUntil(row.expiryDate) : null;
                 const expTone = dLeft == null ? "text-gray-400"
                   : dLeft < 0 ? "text-red-600"
@@ -1536,10 +1580,17 @@ export default function InventoryStockAdjustment() {
                                <p className="text-[10px] text-gray-500">Enter the saleable weight for each part. Final weight is calculated automatically.</p>
                              </div>
                              <div className="text-right flex-shrink-0">
-                               <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Total saleable</p>
-                               <p className="text-sm font-bold text-[#1A56DB]">{bigFishPartTotal.toLocaleString("en-IN", { maximumFractionDigits: 2 })} {row.unit || "kg"}</p>
+                                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Total saleable / cleaned</p>
+                                <p className={`text-sm font-bold ${bigFishPartsMismatch ? "text-red-600" : "text-[#1A56DB]"}`}>
+                                  {bigFishPartTotal.toLocaleString("en-IN", { maximumFractionDigits: 2 })} / {Number.isFinite(cleanedWeight) && cleanedWeight > 0 ? cleanedWeight.toLocaleString("en-IN", { maximumFractionDigits: 2 }) : "—"} {row.unit || "kg"}
+                                </p>
                              </div>
                            </div>
+                            {bigFishPartsMismatch && (
+                              <p className="mb-2 rounded-md border border-red-200 bg-red-50 px-2 py-1 text-[10px] font-semibold text-red-700">
+                                Head + Body + Tail must equal the cleaned weight before saving this batch.
+                              </p>
+                            )}
                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                              {(["Head", "Body", "Tail"] as const).map((part) => (
                                <div key={part} className="space-y-1">

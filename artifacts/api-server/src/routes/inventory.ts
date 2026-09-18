@@ -689,6 +689,19 @@ router.post("/adjustments", async (req, res) => {
       if (mode === "add") {
         const addQty = Math.max(0, Number(it.addQuantity) || 0);
         if (addQty <= 0) continue;
+        if (existing.demoKey === "big-fish-parts") {
+          const cleanedWeight = Number(it.cleanedWeight);
+          const partWeights = it.partWeights ?? {};
+          const partTotal = ["Head", "Body", "Tail"]
+            .reduce((sum, part) => sum + Math.max(0, Number(partWeights[part] ?? (part === "Body" ? partWeights.Middle : 0)) || 0), 0);
+          if (!Number.isFinite(cleanedWeight) || Math.abs(partTotal - cleanedWeight) > 0.01) {
+            res.status(400).json({
+              error: "ValidationError",
+              message: "Big Fish Head, Body, and Tail weights must equal the cleaned weight.",
+            });
+            return;
+          }
+        }
         const batch = normalizeBatch({
           batchNumber: it.batchNumber,
           quantity: addQty,
