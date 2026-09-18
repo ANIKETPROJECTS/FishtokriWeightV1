@@ -158,6 +158,14 @@ router.get("/products", async (req, res) => {
         }
         return parts;
       }, { Head: 0, Body: 0, Tail: 0 });
+      // Keep legacy part totals aligned with the real parent Big Fish stock.
+      // Older batches may contain stale part weights or may have been reduced
+      // before part weights were recorded.
+      const partTotal = partWeights.Head + partWeights.Body + partWeights.Tail;
+      if (total > 0 && partTotal > 0 && Math.abs(partTotal - total) > 0.01) {
+        const scale = total / partTotal;
+        for (const part of ["Head", "Body", "Tail"]) partWeights[part] *= scale;
+      }
       return { ...p, quantity: total, partWeights };
     });
     res.json({ products: productsWithQty, total: productsWithQty.length });

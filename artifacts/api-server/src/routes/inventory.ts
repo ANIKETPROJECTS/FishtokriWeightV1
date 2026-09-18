@@ -155,6 +155,72 @@ function batchesTotal(batches: Batch[] | undefined | null): number {
   return batches.reduce((s, b) => s + (Number(b?.quantity) || 0), 0);
 }
 
+/**
+ * Keep Big Fish part stock aligned with the parent batch quantity.
+ * Older Big Fish batches may have no part weights, or may have part weights
+ * recorded before the parent quantity was reduced. When some part data exists,
+ * use its current proportions to backfill missing legacy batches and scale
+ * stale totals to the real batch quantity.
+ */
+function normalizeBigFishPartBatches(batches: Batch[]): Batch[] {
+  const working = batches.map((batch) => ({
+    ...batch,
+    partWeights: batch.partWeights ? { ...batch.partWeights } : null,
+  }));
+  const knownParts = { Head: 0, Body: 0, Tail: 0 };
+  const missing: Batch[] = [];
+
+  for (const batch of working) {
+    const partTotal = batch.partWeights
+      ? BIG_FISH_PART_NAMES.reduce((sum, part) => sum + Math.max(0, Number(batch.partWeights?.[part]) || 0), 0)
+      : 0;
+    const quantity = Math.max(0, Number(batch.quantity) || 0);
+    if (partTotal > 0 && quantity > 0) {
+      const scale = quantity / partTotal;
+      batch.partWeights = {
+        Head: Math.max(0, Number(batch.partWeights?.Head) || 0) * scale,
+        Body: Math.max(0, Number(batch.partWeights?.Body) || 0) * scale,
+        Tail: Math.max(0, Number(batch.partWeights?.Tail) || 0) * scale,
+      };
+      for (const part of BIG_FISH_PART_NAMES) knownParts[part] += batch.partWeights[part];
+    } else if (quantity > 0) {
+      missing.push(batch);
+    }
+  }
+
+  const knownTotal = knownParts.Head + knownParts.Body + knownParts.Tail;
+  if (knownTotal > 0 && missing.length > 0) {
+    for (const batch of missing) {
+      const quantity = Math.max(0, Number(batch.quantity) || 0);
+      batch.partWeights = {
+        Head: quantity * knownParts.Head / knownTotal,
+        Body: quantity * knownParts.Body / knownTotal,
+        Tail: quantity * knownParts.Tail / knownTotal,
+      };
+    }
+  }
+  return working;
+}
+
+function reduceBatchQuantity(batch: Batch, newQuantity: number) {
+  const quantity = Math.max(0, Number(batch.quantity) || 0);
+  const nextQuantity = Math.max(0, newQuantity);
+  const partTotal = batch.partWeights
+    ? BIG_FISH_PART_NAMES.reduce((sum, part) => sum + Math.max(0, Number(batch.partWeights?.[part]) || 0), 0)
+    : 0;
+  if (partTotal > 0 && quantity > 0) {
+    const scale = nextQuantity / partTotal;
+    batch.partWeights = {
+      Head: Math.max(0, Number(batch.partWeights?.Head) || 0) * scale,
+      Body: Math.max(0, Number(batch.partWeights?.Body) || 0) * scale,
+      Tail: Math.max(0, Number(batch.partWeights?.Tail) || 0) * scale,
+    };
+  } else if (batch.partWeights && nextQuantity <= 0) {
+    batch.partWeights = { Head: 0, Body: 0, Tail: 0 };
+  }
+  batch.quantity = nextQuantity;
+}
+
 function sortBatchesFIFO(batches: Batch[]): Batch[] {
   // earliest expiry first; batches without expiry sort to the end
   return [...batches].sort((a, b) => {
@@ -186,7 +252,7 @@ function consumeBatches(batches: Batch[], qty: number, now: Date = new Date()): 
   for (const b of sorted) {
     if (remaining <= 0) break;
     const take = Math.min(b.quantity, remaining);
-    b.quantity -= take;
+    reduceBatchQuantity(b, b.quantity - take);
     remaining -= take;
   }
 
@@ -674,7 +740,10 @@ router.post("/adjustments", async (req, res) => {
       const existing = await products.findOne({ _id: pid });
       if (!existing) continue;
 
-      const currentBatches: Batch[] = Array.isArray(existing.batches) ? existing.batches.map((b: any) => normalizeBatch(b)) : [];
+      let currentBatches: Batch[] = Array.isArray(existing.batches) ? existing.batches.map((b: any) => normalizeBatch(b)) : [];
+      if (existing.demoKey === "big-fish-parts") {
+        currentBatches = normalizeBigFishPartBatches(currentBatches);
+      }
       const before = batchesTotal(currentBatches) || (Number(existing.quantity) || 0);
 
       const mode = String(it.mode || (it.addQuantity != null ? "add" : it.removeQuantity != null ? "remove" : "set"));
@@ -725,7 +794,12 @@ router.post("/adjustments", async (req, res) => {
         if (!it.batchId) continue;
         const targetIdx = currentBatches.findIndex((b) => String(b._id) === String(it.batchId));
         if (targetIdx < 0) continue;
-        newBatches = currentBatches.map((b, i) => i === targetIdx ? { ...b, quantity: b.quantity + addQty } : b);
+        newBatches = currentBatches.map((b, i) => {
+          if (i !== targetIdx) return b;
+          const target = { ...b, partWeights: b.partWeights ? { ...b.partWeights } : null };
+          reduceBatchQuantity(target, target.quantity + addQty);
+          return target;
+        });
         delta = addQty;
         appliedBatch = newBatches[targetIdx];
       } else if (mode === "remove") {
@@ -740,7 +814,7 @@ router.post("/adjustments", async (req, res) => {
             const working = currentBatches.map((b) => ({ ...b }));
             const target = working[targetIdx];
             const take = Math.min(target.quantity, rmQty);
-            target.quantity -= take;
+            reduceBatchQuantity(target, target.quantity - take);
             const remaining = rmQty - take;
             if (remaining > 0) {
               // FIFO consume from the rest
