@@ -817,6 +817,59 @@ function comboAvailableQuantity(combo: any, products: any[]): number {
   })));
 }
 
+const DEMO_BIG_FISH_ID = "__demo_big_fish__";
+const DEMO_BIG_FISH_PARTS = [
+  {
+    _id: "__demo_big_fish_head__",
+    productId: "__demo_big_fish_head__",
+    name: "Big Fish - Head",
+    partName: "Head",
+    price: 400,
+    unit: "per kg",
+    quantity: 50,
+    category: "Demo",
+    isDemoBigFishPart: true,
+    parentProductId: DEMO_BIG_FISH_ID,
+    isCombo: false,
+  },
+  {
+    _id: "__demo_big_fish_middle__",
+    productId: "__demo_big_fish_middle__",
+    name: "Big Fish - Middle",
+    partName: "Middle",
+    price: 900,
+    unit: "per kg",
+    quantity: 50,
+    category: "Demo",
+    isDemoBigFishPart: true,
+    parentProductId: DEMO_BIG_FISH_ID,
+    isCombo: false,
+  },
+  {
+    _id: "__demo_big_fish_tail__",
+    productId: "__demo_big_fish_tail__",
+    name: "Big Fish - Tail",
+    partName: "Tail",
+    price: 500,
+    unit: "per kg",
+    quantity: 50,
+    category: "Demo",
+    isDemoBigFishPart: true,
+    parentProductId: DEMO_BIG_FISH_ID,
+    isCombo: false,
+  },
+];
+const DEMO_BIG_FISH_SELECTOR = {
+  _id: DEMO_BIG_FISH_ID,
+  name: "Big Fish (Demo)",
+  category: "Demo",
+  description: "Choose Head, Middle, or Tail",
+  quantity: 1,
+  unit: "",
+  isDemoBigFishSelector: true,
+  isCombo: false,
+};
+
 // ─── MAIN PAGE ─────────────────────────────────────────────────────────────────
 export default function Orders() {
   const { toast } = useToast();
@@ -961,10 +1014,20 @@ export default function Orders() {
   const [productPickerOpen, setProductPickerOpen] = useState(false);
   const [pickerCategory, setPickerCategory] = useState<string | null>(null);
   const [posProductMode, setPosProductMode] = useState<"normal" | "preorder">("normal");
-  const [selectedProducts, setSelectedProducts] = useState<{ productId: string; name: string; price: number; unit: string; quantity: number; isCombo?: boolean }[]>([]);
+  const [selectedProducts, setSelectedProducts] = useState<{
+    productId: string;
+    name: string;
+    price: number;
+    unit: string;
+    quantity: number;
+    isCombo?: boolean;
+    isDemoBigFishPart?: boolean;
+    parentProductId?: string;
+  }[]>([]);
   const [scaleProductId, setScaleProductId] = useState("");
   const [scaleKg, setScaleKg] = useState("");
   const [scaleGrams, setScaleGrams] = useState("");
+  const [bigFishPartPickerOpen, setBigFishPartPickerOpen] = useState(false);
 
   // Coupons / timeslots / scheduling
   const [coupons, setCoupons] = useState<any[]>([]);
@@ -1036,6 +1099,7 @@ export default function Orders() {
     setScaleProductId("");
     setScaleKg("");
     setScaleGrams("");
+    setBigFishPartPickerOpen(false);
     setProductSearch(""); setProductPickerOpen(false);
     setPosProductMode("normal");
     setAppliedCouponIds([]); setCouponCode(""); setCouponError("");
@@ -1501,7 +1565,7 @@ export default function Orders() {
         quantity: comboAvailableQuantity(combo, subHubProducts),
         isCombo: true,
       }));
-    return [...products, ...combos];
+    return [...products, ...combos, DEMO_BIG_FISH_SELECTOR];
   }, [subHubProducts, subHubCombos, posProductMode, orderDate]);
 
   // A preorder date must be valid for every product already in the cart.
@@ -1591,7 +1655,11 @@ export default function Orders() {
     });
   }, [productsForMode, productSearch, pickerCategory]);
 
-  const selectedScaleProduct = productsForMode.find((product) => String(product._id) === scaleProductId) || null;
+  const scaleProducts = useMemo(
+    () => [...productsForMode.filter((product) => !product.isDemoBigFishSelector), ...DEMO_BIG_FISH_PARTS],
+    [productsForMode],
+  );
+  const selectedScaleProduct = scaleProducts.find((product) => String(product._id) === scaleProductId) || null;
   const scaleWeightKg = Math.round((
     Math.max(0, Number(scaleKg) || 0) +
     Math.max(0, Number(scaleGrams) || 0) / 1000
@@ -1908,7 +1976,7 @@ export default function Orders() {
     const productItems = selectedProducts
       .filter((p) => p.quantity > 0)
       .map((p) => ({
-        productId: p.productId,
+        ...(p.isDemoBigFishPart ? {} : { productId: p.productId }),
         name: p.name,
         price: orderProductPriceForApi(p),
         quantity: p.quantity,
@@ -3994,6 +4062,7 @@ export default function Orders() {
                 setScaleProductId("");
                 setScaleKg("");
                 setScaleGrams("");
+                setBigFishPartPickerOpen(false);
                 setPickerCategory(null);
                 setProductSearch("");
                 setSelectedTimeslotId("");
@@ -4012,6 +4081,7 @@ export default function Orders() {
                 setScaleProductId("");
                 setScaleKg("");
                 setScaleGrams("");
+                setBigFishPartPickerOpen(false);
                 setPickerCategory(null);
                 setProductSearch("");
                 setSelectedTimeslotId("");
@@ -4131,7 +4201,11 @@ export default function Orders() {
                     const pid = String(p._id);
                     const cartItem = selectedProducts.find((sp) => sp.productId === pid);
                     const scaleSelected = scaleProductId === pid;
-                    const selectedForCard = Boolean(cartItem) || scaleSelected;
+                    const isBigFishSelector = Boolean(p.isDemoBigFishSelector);
+                    const demoPartItems = isBigFishSelector
+                      ? selectedProducts.filter((sp) => sp.parentProductId === DEMO_BIG_FISH_ID)
+                      : [];
+                    const selectedForCard = Boolean(cartItem) || scaleSelected || demoPartItems.length > 0;
                     const weightBased = isWeightBasedProduct(p);
                     const stock = Number(p.quantity) || 0;
                      const rawUnit = String(p.unit || "kg").trim() || "kg";
@@ -4151,6 +4225,10 @@ export default function Orders() {
                         }`}
                         onClick={() => {
                           if (outOfStock) { toast({ title: "Out of stock", description: `${p.name} is unavailable.`, variant: "destructive" }); return; }
+                          if (isBigFishSelector) {
+                            setBigFishPartPickerOpen(true);
+                            return;
+                          }
                           if (weightBased) {
                             if (scaleProductId !== pid) {
                               setScaleKg("");
@@ -4185,8 +4263,14 @@ export default function Orders() {
                             title="Remove from order"
                             onClick={(event) => {
                               event.stopPropagation();
-                              setSelectedProducts((prev) => prev.filter((sp) => sp.productId !== pid));
+                              setSelectedProducts((prev) => isBigFishSelector
+                                ? prev.filter((sp) => sp.parentProductId !== DEMO_BIG_FISH_ID)
+                                : prev.filter((sp) => sp.productId !== pid));
                               if (scaleProductId === pid) {
+                                setScaleProductId("");
+                                setScaleKg("");
+                                setScaleGrams("");
+                              } else if (isBigFishSelector && scaleProductId.startsWith("__demo_big_fish_")) {
                                 setScaleProductId("");
                                 setScaleKg("");
                                 setScaleGrams("");
@@ -4205,15 +4289,28 @@ export default function Orders() {
                           <p className="text-xs text-gray-400 uppercase tracking-wide truncate h-4">{p.category || "\u00A0"}</p>
                           <div className="flex items-center justify-between mt-auto pt-1.5 gap-1">
                             <div className="min-w-0 flex-1">
-                               <p className="text-sm font-semibold text-[#1A56DB]">₹{Number(p.price).toLocaleString("en-IN")}/{stockUnit}</p>
-                               {!outOfStock && (
-                                 <p className={`text-[10px] font-medium leading-none ${lowStock ? "text-amber-600" : "text-[#364F9F]"}`}>
-                                   {stock.toLocaleString("en-IN", { maximumFractionDigits: 2 })} {stockUnit} left
-                                 </p>
+                               {isBigFishSelector ? (
+                                 <>
+                                   <p className="text-sm font-semibold text-[#1A56DB]">Choose a part</p>
+                                   <p className="text-[10px] font-medium leading-none text-[#364F9F]">Head · Middle · Tail</p>
+                                 </>
+                               ) : (
+                                 <>
+                                   <p className="text-sm font-semibold text-[#1A56DB]">₹{Number(p.price).toLocaleString("en-IN")}/{stockUnit}</p>
+                                   {!outOfStock && (
+                                     <p className={`text-[10px] font-medium leading-none ${lowStock ? "text-amber-600" : "text-[#364F9F]"}`}>
+                                       {stock.toLocaleString("en-IN", { maximumFractionDigits: 2 })} {stockUnit} left
+                                     </p>
+                                   )}
+                                   {outOfStock && <p className="text-[10px] font-bold text-red-500 leading-none">Out of stock</p>}
+                                 </>
                                )}
-                              {outOfStock && <p className="text-[10px] font-bold text-red-500 leading-none">Out of stock</p>}
                             </div>
-                             {cartItem && weightBased ? (
+                              {isBigFishSelector ? (
+                                <span className="rounded-lg bg-[#F05B4E] px-2 py-1 text-[10px] font-bold text-white">
+                                  {demoPartItems.length > 0 ? `${demoPartItems.length} part${demoPartItems.length > 1 ? "s" : ""}` : "Demo"}
+                                </span>
+                              ) : cartItem && weightBased ? (
                                <span className="rounded-lg bg-[#1A56DB] px-2 py-1 text-[10px] font-bold text-white">
                                  {cartItem.quantity > 0 ? formatOrderWeight(cartItem.quantity) : "Scale"}
                                </span>
@@ -5196,6 +5293,41 @@ export default function Orders() {
       </div>,
       document.body
       )}
+
+      <Dialog open={bigFishPartPickerOpen} onOpenChange={setBigFishPartPickerOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Big Fish — Choose a part</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-500">
+            Choose the part to weigh. The selected part will be added to the order after you enter its weight.
+          </p>
+          <div className="grid grid-cols-3 gap-3 pt-2">
+            {DEMO_BIG_FISH_PARTS.map((part) => {
+              const selectedPart = selectedProducts.find((item) => item.productId === part.productId);
+              return (
+                <button
+                  key={part.productId}
+                  type="button"
+                  onClick={() => {
+                    setScaleProductId(part.productId);
+                    setScaleKg("");
+                    setScaleGrams("");
+                    setBigFishPartPickerOpen(false);
+                  }}
+                  className="rounded-xl border border-gray-200 bg-white p-3 text-left transition-colors hover:border-[#1A56DB] hover:bg-blue-50"
+                >
+                  <span className="block text-sm font-bold text-[#162B4D]">{part.partName}</span>
+                  <span className="mt-1 block text-xs font-semibold text-[#1A56DB]">{formatRupees(part.price)}/kg</span>
+                  <span className="mt-2 block text-[10px] text-gray-500">
+                    {selectedPart ? formatOrderWeight(selectedPart.quantity) : "Ready to weigh"}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
 
 
       {/* Order Detail Sheet — slides in from the right */}
