@@ -4130,6 +4130,8 @@ export default function Orders() {
                   {filteredProducts.map((p) => {
                     const pid = String(p._id);
                     const cartItem = selectedProducts.find((sp) => sp.productId === pid);
+                    const scaleSelected = scaleProductId === pid;
+                    const selectedForCard = Boolean(cartItem) || scaleSelected;
                     const weightBased = isWeightBasedProduct(p);
                     const stock = Number(p.quantity) || 0;
                      const rawUnit = String(p.unit || "kg").trim() || "kg";
@@ -4143,24 +4145,22 @@ export default function Orders() {
                         className={`relative rounded-xl border-2 transition-all select-none flex flex-col ${
                           outOfStock
                             ? "border-gray-100 bg-gray-50 opacity-40 cursor-not-allowed"
-                            : cartItem
+                            : selectedForCard
                               ? "border-[#1A56DB] bg-blue-50/60 shadow-md shadow-blue-100 cursor-pointer"
                               : "border-gray-200 bg-white hover:border-[#1A56DB]/60 hover:shadow-md cursor-pointer"
                         }`}
                         onClick={() => {
                           if (outOfStock) { toast({ title: "Out of stock", description: `${p.name} is unavailable.`, variant: "destructive" }); return; }
                           if (weightBased) {
-                            setScaleProductId(pid);
-                            if (!cartItem) {
-                              setSelectedProducts((prev) => [...prev, {
-                                productId: pid,
-                                name: p.name,
-                                price: Number(p.price) || 0,
-                                unit: p.unit ?? "",
-                                quantity: 0,
-                                isCombo: false,
-                              }]);
+                            if (scaleProductId !== pid) {
+                              setScaleKg("");
+                              setScaleGrams("");
                             }
+                            setScaleProductId(pid);
+                            // Selecting a weight product only chooses the product
+                            // for the scale. It enters the order after a positive
+                            // weight is added, so the basket never shows 0 g rows.
+                            setSelectedProducts((prev) => prev.filter((item) => item.productId !== pid || Number(item.quantity) > 0));
                             return;
                           }
                           if (atMax) { toast({ title: "Stock limit reached", description: `Only ${stock} available.`, variant: "destructive" }); return; }
@@ -4178,7 +4178,7 @@ export default function Orders() {
                           });
                         }}
                       >
-                        {cartItem && (
+                        {selectedForCard && (
                           <button
                             type="button"
                             aria-label={`Remove ${p.name} from order`}
