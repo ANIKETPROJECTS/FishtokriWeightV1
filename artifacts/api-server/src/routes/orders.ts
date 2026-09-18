@@ -1286,6 +1286,8 @@ router.post("/", async (req: ScopedRequest, res) => {
 
     const cleanItems = items.map((it: any) => ({
       productId: it.productId ? String(it.productId) : undefined,
+      parentProductId: it.parentProductId ? String(it.parentProductId) : undefined,
+      partName: ["Head", "Body", "Tail"].includes(String(it.partName)) ? String(it.partName) : undefined,
       name: String(it.name ?? "").trim(),
       price: Number(it.price) || 0,
       quantity: Number(it.quantity) || 1,
@@ -1959,6 +1961,8 @@ router.put("/:id", async (req: ScopedRequest, res) => {
     if (Array.isArray(items)) {
       update.items = items.map((it: any) => ({
         productId: it?.productId ? String(it.productId) : undefined,
+        parentProductId: it?.parentProductId ? String(it.parentProductId) : undefined,
+        partName: ["Head", "Body", "Tail"].includes(String(it?.partName)) ? String(it.partName) : undefined,
         name: String(it?.name ?? "").trim(),
         price: Number(it?.price) || 0,
         quantity: Number(it?.quantity) || 0,

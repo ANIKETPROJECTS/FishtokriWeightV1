@@ -1024,6 +1024,7 @@ export default function Orders() {
     isCombo?: boolean;
     isDemoBigFishPart?: boolean;
     parentProductId?: string;
+    partName?: "Head" | "Body" | "Tail";
   }[]>([]);
   const [scaleProductId, setScaleProductId] = useState("");
   const [scaleKg, setScaleKg] = useState("");
@@ -1670,6 +1671,7 @@ export default function Orders() {
       const configured = configuredParts.find((item: any) => item?.partName === part.partName);
       return {
       ...part,
+      parentProductId: String(bigFishSelector?._id ?? bigFishSelector?.productId ?? ""),
       price: Number(configured?.price) >= 0 ? Number(configured.price) : part.price,
       quantity: Math.max(0, Number(partWeights[part.partName]) || 0),
       };
@@ -1716,6 +1718,13 @@ export default function Orders() {
         unit: selectedScaleProduct.unit ?? "",
         quantity: scaleWeightKg,
         isCombo: false,
+        ...(selectedScaleProduct.isDemoBigFishPart
+          ? {
+            isDemoBigFishPart: true,
+            parentProductId: selectedScaleProduct.parentProductId,
+            partName: selectedScaleProduct.partName,
+          }
+          : {}),
       }];
     });
     toast({ title: "Weight added", description: `${selectedScaleProduct.name} · ${formatOrderWeight(scaleWeightKg)}` });
@@ -1996,7 +2005,13 @@ export default function Orders() {
     const productItems = selectedProducts
       .filter((p) => p.quantity > 0)
       .map((p) => ({
-        ...(p.isDemoBigFishPart ? {} : { productId: p.productId }),
+        ...(p.isDemoBigFishPart
+          ? {
+            productId: p.parentProductId,
+            parentProductId: p.parentProductId,
+            partName: p.partName,
+          }
+          : { productId: p.productId }),
         name: p.name,
         price: orderProductPriceForApi(p),
         quantity: p.quantity,
@@ -4223,7 +4238,7 @@ export default function Orders() {
                     const scaleSelected = scaleProductId === pid;
                     const isBigFishSelector = Boolean(p.isDemoBigFishSelector);
                     const demoPartItems = isBigFishSelector
-                      ? selectedProducts.filter((sp) => sp.parentProductId === DEMO_BIG_FISH_ID)
+                      ? selectedProducts.filter((sp) => String(sp.parentProductId) === pid)
                       : [];
                     const selectedForCard = Boolean(cartItem) || scaleSelected || demoPartItems.length > 0;
                     const weightBased = isWeightBasedProduct(p);
@@ -4284,7 +4299,7 @@ export default function Orders() {
                             onClick={(event) => {
                               event.stopPropagation();
                               setSelectedProducts((prev) => isBigFishSelector
-                                ? prev.filter((sp) => sp.parentProductId !== DEMO_BIG_FISH_ID)
+                                 ? prev.filter((sp) => String(sp.parentProductId) !== pid)
                                 : prev.filter((sp) => sp.productId !== pid));
                               if (scaleProductId === pid) {
                                 setScaleProductId("");

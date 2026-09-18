@@ -196,6 +196,71 @@ function consumeBatches(batches: Batch[], qty: number, now: Date = new Date()): 
   return { batches: result, remaining };
 }
 
+type BigFishPartName = "Head" | "Body" | "Tail";
+
+function isBigFishPartName(value: unknown): value is BigFishPartName {
+  return BIG_FISH_PART_NAMES.includes(String(value) as BigFishPartName);
+}
+
+function bigFishPartQuantity(batches: Batch[], partName: BigFishPartName, now = new Date()): number {
+  const nowMs = now.getTime();
+  return batches
+    .filter((batch) => !batch.expiryDate || new Date(batch.expiryDate).getTime() >= nowMs)
+    .reduce((sum, batch) => sum + Math.max(0, Number(batch.partWeights?.[partName]) || 0), 0);
+}
+
+function adjustBigFishPartStock(
+  batches: Batch[],
+  partName: BigFishPartName,
+  quantity: number,
+  direction: "deduct" | "restore",
+  now = new Date(),
+): { batches: Batch[]; remaining: number; batchNumbers: string[] } {
+  const nowMs = now.getTime();
+  const working = batches.map((batch) => ({
+    ...batch,
+    partWeights: batch.partWeights ? { ...batch.partWeights } : null,
+  }));
+  const active = working.filter((batch) => !batch.expiryDate || new Date(batch.expiryDate).getTime() >= nowMs);
+  const batchNumbers: string[] = [];
+
+  if (direction === "restore") {
+    const target = [...active].sort((a, b) => {
+      const at = a.receivedDate ? new Date(a.receivedDate).getTime() : 0;
+      const bt = b.receivedDate ? new Date(b.receivedDate).getTime() : 0;
+      return bt - at;
+    })[0];
+    if (target) {
+      target.partWeights = target.partWeights ?? { Head: 0, Body: 0, Tail: 0 };
+      target.partWeights[partName] = Math.max(0, Number(target.partWeights[partName]) || 0) + quantity;
+      target.quantity = Math.max(0, Number(target.quantity) || 0) + quantity;
+      if (target.batchNumber) batchNumbers.push(target.batchNumber);
+      return { batches: working, remaining: 0, batchNumbers };
+    }
+    const newBatch = normalizeBatch({
+      quantity,
+      partWeights: { Head: 0, Body: 0, Tail: 0, [partName]: quantity },
+      receivedDate: now,
+      createdAt: now,
+    });
+    return { batches: [...working, newBatch], remaining: 0, batchNumbers };
+  }
+
+  let remaining = Math.max(0, quantity);
+  for (const batch of sortBatchesFIFO(active)) {
+    if (remaining <= 0) break;
+    const available = Math.max(0, Number(batch.partWeights?.[partName]) || 0);
+    const take = Math.min(available, remaining);
+    if (take <= 0) continue;
+    batch.partWeights = batch.partWeights ?? { Head: 0, Body: 0, Tail: 0 };
+    batch.partWeights[partName] = available - take;
+    batch.quantity = Math.max(0, (Number(batch.quantity) || 0) - take);
+    remaining -= take;
+    if (batch.batchNumber) batchNumbers.push(batch.batchNumber);
+  }
+  return { batches: [...working.filter((batch) => batch.expiryDate && new Date(batch.expiryDate).getTime() < nowMs), ...sortBatchesFIFO(active)], remaining, batchNumbers };
+}
+
 /**
  * Sync a product document so `quantity` matches the sum of its batches,
  * keeps batches normalized and persisted.
@@ -896,7 +961,7 @@ type OrderForSync = {
   subHubId?: string;
   subHubName?: string;
   status?: string;
-  items?: Array<{ productId?: string; name?: string; quantity?: number; unit?: string }>;
+  items?: Array<{ productId?: string; parentProductId?: string; partName?: BigFishPartName; name?: string; quantity?: number; unit?: string }>;
 };
 
 const ACTIVE_STATUSES = new Set(["pending", "confirmed", "out_for_delivery", "delivered", "takeaway"]);
@@ -929,9 +994,9 @@ function orderShouldDeduct(order: OrderForSync, options: OrderInventoryOptions =
 async function expandOrderItems(
   productsCol: any,
   combosCol: any,
-  rawItems: Array<{ productId?: string; name?: string; quantity?: number; unit?: string }>,
-): Promise<Array<{ productId: string; name: string; quantity: number; unit: string }>> {
-  const aggregated = new Map<string, { productId: string; name: string; quantity: number; unit: string }>();
+  rawItems: Array<{ productId?: string; parentProductId?: string; partName?: BigFishPartName; name?: string; quantity?: number; unit?: string }>,
+): Promise<Array<{ productId: string; parentProductId?: string; partName?: BigFishPartName; name: string; quantity: number; unit: string }>> {
+  const aggregated = new Map<string, { productId: string; parentProductId?: string; partName?: BigFishPartName; name: string; quantity: number; unit: string }>();
 
   /** Helper: expand a resolved combo document into aggregated constituent products */
   async function expandCombo(combo: any, qty: number) {
@@ -969,6 +1034,34 @@ async function expandOrderItems(
     if (qty <= 0) continue;
 
     let resolved = false;
+
+    // Big Fish part lines point at the parent product but must retain their
+    // part name so inventory can deduct only Head, Body, or Tail stock.
+    const requestedPart = isBigFishPartName(it.partName) ? it.partName : undefined;
+    const requestedParentId = it.parentProductId ?? it.productId;
+    if (requestedPart && requestedParentId) {
+      const parentId = toId(String(requestedParentId));
+      if (parentId) {
+        const parent = await productsCol.findOne(
+          { _id: parentId },
+          { projection: { _id: 1, name: 1, unit: 1, demoKey: 1 } },
+        );
+        if (parent?.demoKey === "big-fish-parts") {
+          const key = `${String(parentId)}:${requestedPart}`;
+          const entry = aggregated.get(key);
+          if (entry) entry.quantity += qty;
+          else aggregated.set(key, {
+            productId: String(parentId),
+            parentProductId: String(parentId),
+            partName: requestedPart,
+            name: it.name ?? `${parent.name ?? "Big Fish"} - ${requestedPart}`,
+            quantity: qty,
+            unit: it.unit ?? parent.unit ?? "per kg",
+          });
+          resolved = true;
+        }
+      }
+    }
 
     // ── Path A: productId-based lookup (also accepts `id` field used by some customer apps) ──
     const rawId = (it as any).productId ?? (it as any).id ?? null;
@@ -1091,9 +1184,11 @@ async function applyDelta(
         ? product.batches.map((b: any) => normalizeBatch(b))
         : [];
       // Available stock: use batch totals if batches exist, otherwise the raw quantity field
-      const available = currentBatches.length > 0
-        ? batchesTotal(currentBatches)
-        : Math.max(0, Number(product.quantity) || 0);
+      const available = it.partName && product.demoKey === "big-fish-parts"
+        ? bigFishPartQuantity(currentBatches, it.partName)
+        : currentBatches.length > 0
+          ? batchesTotal(currentBatches)
+          : Math.max(0, Number(product.quantity) || 0);
       if (available < it.quantity) {
         logger.warn(
           { orderId, productId: String(pid), productName: product.name, available, requested: it.quantity },
@@ -1123,7 +1218,14 @@ async function applyDelta(
     let newBatches = currentBatches;
     let appliedExpiry: Date | null = null;
     let appliedBatchNumbers: string | undefined;
-    if (direction === "deduct") {
+    if (direction === "deduct" && it.partName && existing.demoKey === "big-fish-parts") {
+      const adjusted = adjustBigFishPartStock(currentBatches, it.partName, qty, "deduct", now);
+      if (adjusted.remaining > 0) {
+        throw new InsufficientStockError(`${existing.name ?? "Big Fish"} - ${it.partName}`, qty - adjusted.remaining, qty);
+      }
+      newBatches = adjusted.batches;
+      appliedBatchNumbers = adjusted.batchNumbers.join(", ") || undefined;
+    } else if (direction === "deduct") {
       if (currentBatches.length > 0) {
         const now2 = new Date();
         const nowMs2 = now2.getTime();
@@ -1161,6 +1263,10 @@ async function applyDelta(
         deductedCount++;
         continue;
       }
+    } else if (it.partName && existing.demoKey === "big-fish-parts") {
+      const adjusted = adjustBigFishPartStock(currentBatches, it.partName, qty, "restore", now);
+      newBatches = adjusted.batches;
+      appliedBatchNumbers = adjusted.batchNumbers.join(", ") || undefined;
     } else {
       // restore: add quantity back into the most recently received active (non-expired) batch
       // to avoid creating extra batches on every cancellation/delete.

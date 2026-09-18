@@ -196,7 +196,7 @@ function initialBigFishPartPrices(product: Product): { Head: string; Body: strin
   };
 }
 
-function calculateBigFishBatchPrice(
+function calculateBigFishTotalPrice(
   partWeights: { Head: string; Body: string; Tail: string },
   partPrices: { Head: string; Body: string; Tail: string },
 ): number {
@@ -205,7 +205,7 @@ function calculateBigFishBatchPrice(
   if (totalWeight <= 0) return 0;
   const totalValue = (["Head", "Body", "Tail"] as const)
     .reduce((sum, part) => sum + Math.max(0, Number(partWeights[part]) || 0) * Math.max(0, Number(partPrices[part]) || 0), 0);
-  return Math.round((totalValue / totalWeight) * 100) / 100;
+  return Math.round(totalValue * 100) / 100;
 }
 
 function addDaysISO(days: number): string {
@@ -1152,7 +1152,7 @@ export default function InventoryStockAdjustment() {
     const partWeights = { ...row.partWeights, [part]: value };
     const total = Object.values(partWeights).reduce((sum, weight) => sum + Math.max(0, Number(weight) || 0), 0);
     const totalValue = total > 0 ? String(total) : "";
-    const batchPrice = calculateBigFishBatchPrice(partWeights, row.partPrices);
+    const batchPrice = calculateBigFishTotalPrice(partWeights, row.partPrices);
     updateRow(i, {
       partWeights,
       cleanedWeight: totalValue,
@@ -1164,7 +1164,7 @@ export default function InventoryStockAdjustment() {
   function setBigFishPartPrice(i: number, part: "Head" | "Body" | "Tail", value: string) {
     const row = formRows[i];
     const partPrices = { ...row.partPrices, [part]: value };
-    const batchPrice = calculateBigFishBatchPrice(row.partWeights, partPrices);
+    const batchPrice = calculateBigFishTotalPrice(row.partWeights, partPrices);
     updateRow(i, {
       partPrices,
       batchPrice: batchPrice > 0 ? String(batchPrice) : "",
@@ -1401,7 +1401,7 @@ export default function InventoryStockAdjustment() {
                           />
                           {row.productId && (
                             <p className="text-[10px] text-gray-400 font-medium">
-                              {row.unit} · <span className="text-[#162B4D] font-bold">{row.quantityBefore}</span> available
+                              {row.unit} · <span className="text-[#162B4D] font-bold">{formatQuantity(row.quantityBefore)}</span> available
                             </p>
                           )}
                         </div>
@@ -1446,7 +1446,7 @@ export default function InventoryStockAdjustment() {
                          {isAdd && (
                            <div className="col-span-6 md:col-span-2 space-y-1">
                               <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                                {isBigFish ? "Calculated Batch Price" : "Batch Price"} / {row.unit || "unit"}
+                                {isBigFish ? "Calculated Total Fish Price" : "Batch Price"}{isBigFish ? "" : ` / ${row.unit || "unit"}`}
                               </label>
                              <input
                                type="number"
@@ -1459,7 +1459,7 @@ export default function InventoryStockAdjustment() {
                                 className={`w-full h-9 px-3 text-sm font-semibold text-[#162B4D] border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-[#364F9F]/20 focus:border-[#364F9F] ${isBigFish ? "bg-emerald-50/60 cursor-not-allowed" : "bg-white"}`}
                              />
                               {isBigFish && (
-                                <p className="text-[10px] text-gray-400">Weighted average from Head, Body, and Tail sale prices.</p>
+                                <p className="text-[10px] text-gray-400">Total of Head, Body, and Tail values. POS sells each part separately.</p>
                               )}
                            </div>
                          )}
@@ -1556,6 +1556,25 @@ export default function InventoryStockAdjustment() {
                                </div>
                              ))}
                            </div>
+                            <div className="mt-3 border-t border-blue-100 pt-3">
+                              <p className="text-[10px] font-bold text-[#364F9F] uppercase tracking-wider mb-2">Part sale prices (₹ / kg)</p>
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                {(["Head", "Body", "Tail"] as const).map((part) => (
+                                  <div key={part} className="space-y-1">
+                                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{part} price</label>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="1"
+                                      value={row.partPrices[part]}
+                                      onChange={(e) => setBigFishPartPrice(idx, part, e.target.value)}
+                                      placeholder="e.g. 400"
+                                      className="w-full h-9 px-3 text-sm font-semibold text-[#162B4D] border border-blue-200 rounded-lg bg-white outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
                          </div>
                        )}
 
@@ -1595,25 +1614,6 @@ export default function InventoryStockAdjustment() {
                               {row.rawWeight && row.cleanedWeight
                                 ? `${Math.max(0, Number(row.rawWeight) - Number(row.cleanedWeight)).toFixed(2)} ${row.unit || ""}`
                                 : "—"}
-                            </div>
-                            <div className="mt-3 border-t border-blue-100 pt-3">
-                              <p className="text-[10px] font-bold text-[#364F9F] uppercase tracking-wider mb-2">Part sale prices (₹ / kg)</p>
-                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                {(["Head", "Body", "Tail"] as const).map((part) => (
-                                  <div key={part} className="space-y-1">
-                                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{part} price</label>
-                                    <input
-                                      type="number"
-                                      min="0"
-                                      step="1"
-                                      value={row.partPrices[part]}
-                                      onChange={(e) => setBigFishPartPrice(idx, part, e.target.value)}
-                                      placeholder="e.g. 400"
-                                      className="w-full h-9 px-3 text-sm font-semibold text-[#162B4D] border border-blue-200 rounded-lg bg-white outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                                    />
-                                  </div>
-                                ))}
-                              </div>
                             </div>
                           </div>
                           <div className="space-y-1">
