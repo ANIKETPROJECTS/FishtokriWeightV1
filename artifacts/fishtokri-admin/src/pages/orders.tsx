@@ -5328,6 +5328,7 @@ export default function Orders() {
           <div className="grid grid-cols-3 gap-3 pt-2">
             {bigFishPartOptions.map((part) => {
               const selectedPart = selectedProducts.find((item) => item.productId === part.productId);
+              const availableWeight = Math.max(0, Number(part.quantity) || 0);
               return (
                 <button
                   key={part.productId}
