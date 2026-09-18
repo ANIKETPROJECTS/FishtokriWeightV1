@@ -6,6 +6,7 @@ import { getSubHubDbConnection } from "../db/sub-hub-connections.js";
 import { requireAuth } from "../middlewares/auth.js";
 import { loadScope, type ScopedRequest } from "../middlewares/scope.js";
 import { logger } from "../lib/logger.js";
+import { ensureBigFishDemoCatalog } from "../lib/ensure-big-fish-demo.js";
 
 const router: IRouter = Router();
 router.use(requireAuth as any);
@@ -417,6 +418,7 @@ router.get("/products", async (req, res) => {
     if (!subHubId) { res.status(400).json({ error: "ValidationError", message: "subHubId is required" }); return; }
     const ctx = await getCtx(subHubId, res, req as ScopedRequest);
     if (!ctx) return;
+    await ensureBigFishDemoCatalog(ctx.conn.db);
     const search = String(req.query.search || "");
     const query: any = search ? { name: { $regex: search, $options: "i" } } : {};
     const products = await ctx.conn.db.collection("products").find(query).sort({ category: 1, name: 1 }).toArray();

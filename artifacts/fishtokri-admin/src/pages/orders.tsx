@@ -827,7 +827,7 @@ const DEMO_BIG_FISH_PARTS = [
     price: 400,
     unit: "per kg",
     quantity: 50,
-    category: "Demo",
+    category: "Fish",
     isDemoBigFishPart: true,
     parentProductId: DEMO_BIG_FISH_ID,
     isCombo: false,
@@ -840,7 +840,7 @@ const DEMO_BIG_FISH_PARTS = [
     price: 900,
     unit: "per kg",
     quantity: 50,
-    category: "Demo",
+    category: "Fish",
     isDemoBigFishPart: true,
     parentProductId: DEMO_BIG_FISH_ID,
     isCombo: false,
@@ -853,7 +853,7 @@ const DEMO_BIG_FISH_PARTS = [
     price: 500,
     unit: "per kg",
     quantity: 50,
-    category: "Demo",
+    category: "Fish",
     isDemoBigFishPart: true,
     parentProductId: DEMO_BIG_FISH_ID,
     isCombo: false,
@@ -861,8 +861,8 @@ const DEMO_BIG_FISH_PARTS = [
 ];
 const DEMO_BIG_FISH_SELECTOR = {
   _id: DEMO_BIG_FISH_ID,
-  name: "Big Fish (Demo)",
-  category: "Demo",
+  name: "Big Fish",
+  category: "Fish",
   description: "Choose Head, Middle, or Tail",
   quantity: 1,
   unit: "",
@@ -1565,7 +1565,13 @@ export default function Orders() {
         quantity: comboAvailableQuantity(combo, subHubProducts),
         isCombo: true,
       }));
-    return [...products, ...combos, DEMO_BIG_FISH_SELECTOR];
+    const savedBigFish = subHubProducts.find((product) =>
+      product.isDemoBigFishSelector === true || product.demoKey === "big-fish-parts"
+    );
+    const bigFishSelector = savedBigFish
+      ? { ...DEMO_BIG_FISH_SELECTOR, ...savedBigFish, category: "Fish", isDemoBigFishSelector: true }
+      : DEMO_BIG_FISH_SELECTOR;
+    return [...products.filter((product) => !product.isDemoBigFishSelector && product.demoKey !== "big-fish-parts"), ...combos, bigFishSelector];
   }, [subHubProducts, subHubCombos, posProductMode, orderDate]);
 
   // A preorder date must be valid for every product already in the cart.
@@ -4210,7 +4216,7 @@ export default function Orders() {
                     const stock = Number(p.quantity) || 0;
                      const rawUnit = String(p.unit || "kg").trim() || "kg";
                      const stockUnit = /kg/i.test(rawUnit) ? "kg" : rawUnit;
-                    const outOfStock = stock <= 0;
+                    const outOfStock = !isBigFishSelector && stock <= 0;
                     const lowStock = stock > 0 && stock <= 5;
                     const atMax = cartItem ? cartItem.quantity >= stock : false;
                     return (
@@ -4293,6 +4299,9 @@ export default function Orders() {
                                  <>
                                    <p className="text-sm font-semibold text-[#1A56DB]">Choose a part</p>
                                    <p className="text-[10px] font-medium leading-none text-[#364F9F]">Head · Middle · Tail</p>
+                                   <p className={`mt-1 text-[10px] font-semibold leading-none ${stock > 0 ? "text-[#364F9F]" : "text-red-500"}`}>
+                                     {stock.toLocaleString("en-IN", { maximumFractionDigits: 2 })} {stockUnit} left
+                                   </p>
                                  </>
                                ) : (
                                  <>
@@ -4308,7 +4317,7 @@ export default function Orders() {
                             </div>
                               {isBigFishSelector ? (
                                 <span className="rounded-lg bg-[#F05B4E] px-2 py-1 text-[10px] font-bold text-white">
-                                  {demoPartItems.length > 0 ? `${demoPartItems.length} part${demoPartItems.length > 1 ? "s" : ""}` : "Demo"}
+                                   {demoPartItems.length > 0 ? `${demoPartItems.length} part${demoPartItems.length > 1 ? "s" : ""}` : "Select part"}
                                 </span>
                               ) : cartItem && weightBased ? (
                                <span className="rounded-lg bg-[#1A56DB] px-2 py-1 text-[10px] font-bold text-white">

@@ -598,23 +598,23 @@ export default function SubHubMenuAdmin() {
         <div className="flex items-center w-full gap-3 min-w-0">
           <button
             onClick={() => history.back()}
-            className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-[#162B4D] transition-colors flex-shrink-0"
+            className="w-8 h-8 flex items-center justify-center rounded-lg border border-white/30 text-white hover:bg-white/10 hover:text-white transition-colors flex-shrink-0"
           >
             <ArrowLeft className="w-4 h-4" />
           </button>
-          <h2 className="text-sm font-bold text-[#162B4D] whitespace-nowrap flex-shrink-0">
+          <h2 className="text-sm font-bold text-white whitespace-nowrap flex-shrink-0">
             {subHubName || "Sub Hub"} Sub Hub
           </h2>
           <div className="flex-1" />
           <button
             onClick={() => { loadStats(); }}
-            className="flex-shrink-0 p-1.5 rounded hover:bg-gray-100 transition-colors"
+            className="flex-shrink-0 p-1.5 rounded hover:bg-white/10 transition-colors"
             title="Refresh"
           >
             <span
               className="block w-5 h-5"
               style={{
-                backgroundColor: "#1A56DB",
+                backgroundColor: "#FFFFFF",
                 WebkitMaskImage: `url(${recycleIcon})`,
                 maskImage: `url(${recycleIcon})`,
                 WebkitMaskRepeat: "no-repeat",
@@ -1773,7 +1773,7 @@ function CategoriesTab({ subHubId, onRefreshStats, onSetExcel }: { subHubId: str
                             </div>
                             {Array.isArray(c.subCategories) && c.subCategories.length > 0 && <p className="text-xs text-gray-400 mt-0.5">{c.subCategories.length} sub-categories</p>}
                           </div>
-                          <span className="text-xs text-gray-400 flex-shrink-0">#{c.sortOrder ?? 0}</span>
+                          <span className="text-xs text-gray-400 flex-shrink-0">#{c.productCount ?? 0}</span>
                           <div className="flex items-center gap-1">
                             {Array.isArray(c.subCategories) && c.subCategories.length > 0 && (
                               <button onClick={() => setExpandedId(expanded ? null : String(c._id))} className="w-7 h-7 flex items-center justify-center rounded border border-gray-200 text-gray-400 hover:bg-gray-50 transition-colors">
@@ -1813,7 +1813,7 @@ function CategoriesTab({ subHubId, onRefreshStats, onSetExcel }: { subHubId: str
                     </div>
                     {Array.isArray(c.subCategories) && c.subCategories.length > 0 && <p className="text-xs text-gray-400 mt-0.5">{c.subCategories.length} sub-categories</p>}
                   </div>
-                  <span className="text-xs text-gray-400 flex-shrink-0">#{c.sortOrder ?? 0}</span>
+                   <span className="text-xs text-gray-400 flex-shrink-0">#{c.productCount ?? 0}</span>
                   <div className="flex items-center gap-1">
                     {Array.isArray(c.subCategories) && c.subCategories.length > 0 && (
                       <button onClick={() => setExpandedId(expanded ? null : String(c._id))} className="w-7 h-7 flex items-center justify-center rounded border border-gray-200 text-gray-400 hover:bg-gray-50 transition-colors">

@@ -4,6 +4,7 @@ import { SubHub } from "../db/models/sub-hub.js";
 import { getSubHubDbConnection } from "../db/sub-hub-connections.js";
 import { requireAuth } from "../middlewares/auth.js";
 import { loadScope, type ScopedRequest } from "../middlewares/scope.js";
+import { ensureBigFishDemoCatalog } from "../lib/ensure-big-fish-demo.js";
 
 const router: IRouter = Router({ mergeParams: true });
 router.use(requireAuth as any);
@@ -139,6 +140,7 @@ router.get("/products", async (req, res) => {
   try {
     const ctx = await getSubHubDb(req.params.id, res, req as ScopedRequest);
     if (!ctx) return;
+    await ensureBigFishDemoCatalog(ctx.conn.db);
     const search = String(req.query.search || "");
     const query: any = search ? { name: { $regex: search, $options: "i" } } : {};
     const products = await ctx.conn.db.collection("products").find(query).sort({ sortOrder: 1, name: 1 }).toArray();
@@ -394,8 +396,14 @@ router.get("/categories", async (req, res) => {
   try {
     const ctx = await getSubHubDb(req.params.id, res, req as ScopedRequest);
     if (!ctx) return;
+    await ensureBigFishDemoCatalog(ctx.conn.db);
     const categories = await ctx.conn.db.collection("categories").find({}).sort({ sortOrder: 1, name: 1 }).toArray();
-    res.json({ categories, total: categories.length });
+    const products = ctx.conn.db.collection("products");
+    const categoriesWithCounts = await Promise.all(categories.map(async (category: any) => ({
+      ...category,
+      productCount: await products.countDocuments({ category: category.name }),
+    })));
+    res.json({ categories: categoriesWithCounts, total: categoriesWithCounts.length });
   } catch (err) {
     req.log.error({ err }, "Failed to get categories");
     res.status(500).json({ error: "InternalError", message: "Failed to fetch categories" });
