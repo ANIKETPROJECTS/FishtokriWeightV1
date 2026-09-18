@@ -37,6 +37,10 @@ function formatDate(iso: string | null) {
   return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 }
 
+function formatQuantity(value: number | null | undefined): string {
+  return (Number(value) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+}
+
 type SubHub = { id: string; name: string; location?: string };
 type Batch = {
   id: string;
@@ -431,7 +435,6 @@ function ProductSelector({
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const portalRef = useRef<HTMLDivElement>(null);
-  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const available = allProducts.filter((p) => !(usedIds.has(p.id) && p.id !== row.productId));
   const grouped: Record<string, Product[]> = {};
@@ -448,9 +451,7 @@ function ProductSelector({
     : [];
 
   function doClose() { setOpen(false); setSelectedCategory(null); }
-  function doOpen() { if (!open) setSelectedCategory(null); setOpen(true); }
-  function scheduleClose() { closeTimerRef.current = setTimeout(doClose, 120); }
-  function cancelClose() { if (closeTimerRef.current) clearTimeout(closeTimerRef.current); }
+  function doOpen() { setOpen(true); }
 
   useEffect(() => {
     if (!open) return;
@@ -477,8 +478,7 @@ function ProductSelector({
   }
 
   const dropdown = (
-    <div ref={portalRef} style={style} className="bg-white border border-gray-200 rounded-xl shadow-2xl overflow-hidden"
-      onMouseEnter={cancelClose} onMouseLeave={scheduleClose}>
+    <div ref={portalRef} style={style} className="bg-white border border-gray-200 rounded-xl shadow-2xl overflow-hidden">
       {isSearching ? (
         <>
           <div className="px-3 py-2 border-b border-gray-100 bg-gray-50">
@@ -498,7 +498,7 @@ function ProductSelector({
                   <p className="text-xs text-gray-400 font-medium">{p.category || "Uncategorized"}</p>
                 </div>
                 <p className="text-xs font-bold text-gray-500 flex-shrink-0">
-                  {p.quantity} <span className="font-normal text-gray-400">{p.unit}</span>
+                  {formatQuantity(p.quantity)} <span className="font-normal text-gray-400">{p.unit}</span>
                 </p>
               </button>
             ))}
@@ -516,8 +516,7 @@ function ProductSelector({
               ) : categories.map((cat) => (
                 <button
                   key={cat} type="button"
-                  onMouseEnter={() => setSelectedCategory(cat)}
-                  onMouseDown={(e) => { e.preventDefault(); setSelectedCategory(cat); }}
+                  onClick={() => setSelectedCategory(cat)}
                   className={`w-full text-left px-4 py-3 transition-colors flex items-center justify-between gap-2 border-b border-gray-50 last:border-0 ${
                     selectedCategory === cat ? "bg-[#364F9F]/5" : "hover:bg-[#364F9F]/5"
                   }`}
@@ -537,7 +536,7 @@ function ProductSelector({
             </div>
             <div className="max-h-64 overflow-y-auto">
               {selectedCategory === null ? (
-                <div className="px-4 py-8 text-sm text-gray-400 text-center">Hover a category to see products</div>
+                <div className="px-4 py-8 text-sm text-gray-400 text-center">Select a category to see products</div>
               ) : (grouped[selectedCategory] ?? []).length === 0 ? (
                 <div className="px-4 py-4 text-sm text-gray-400 text-center">No products</div>
               ) : (grouped[selectedCategory] ?? []).map((p) => (
@@ -551,7 +550,7 @@ function ProductSelector({
                     <p className="text-xs text-gray-400">{p.unit || "—"}</p>
                   </div>
                   <p className="text-xs font-bold text-gray-500 flex-shrink-0">
-                    {p.quantity} <span className="font-normal text-gray-400">{p.unit}</span>
+                    {formatQuantity(p.quantity)} <span className="font-normal text-gray-400">{p.unit}</span>
                   </p>
                 </button>
               ))}
@@ -563,12 +562,13 @@ function ProductSelector({
   );
 
   return (
-    <div ref={wrapperRef} className="relative w-full" onMouseEnter={() => { cancelClose(); doOpen(); }} onMouseLeave={scheduleClose}>
+    <div ref={wrapperRef} className="relative w-full">
       <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none z-10" />
       <input
         type="text" value={row.search}
         onChange={(e) => { onSearchChange(idx, e.target.value); setOpen(true); }}
         onFocus={doOpen}
+        onClick={doOpen}
         placeholder="Choose Product"
         className={`w-full h-9 pl-8 pr-8 text-sm font-medium border rounded-lg outline-none transition-all
           focus:ring-2 focus:ring-[#364F9F]/20 focus:border-[#364F9F]
