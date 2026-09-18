@@ -148,10 +148,16 @@ router.get("/products", async (req, res) => {
     const nowMs = Date.now();
     const productsWithQty = products.map((p: any) => {
       const batches: any[] = Array.isArray(p.batches) ? p.batches : [];
-      const total = batches
-        .filter((b: any) => !b?.expiryDate || new Date(b.expiryDate).getTime() >= nowMs)
-        .reduce((s: number, b: any) => s + (Math.max(0, Number(b?.quantity) || 0)), 0);
-      return { ...p, quantity: total };
+      const activeBatches = batches.filter((b: any) => !b?.expiryDate || new Date(b.expiryDate).getTime() >= nowMs);
+      const total = activeBatches.reduce((s: number, b: any) => s + (Math.max(0, Number(b?.quantity) || 0)), 0);
+      if (p.demoKey !== "big-fish-parts") return { ...p, quantity: total };
+      const partWeights = activeBatches.reduce((parts: Record<string, number>, batch: any) => {
+        for (const part of ["Head", "Middle", "Tail"]) {
+          parts[part] += Math.max(0, Number(batch?.partWeights?.[part]) || 0);
+        }
+        return parts;
+      }, { Head: 0, Middle: 0, Tail: 0 });
+      return { ...p, quantity: total, partWeights };
     });
     res.json({ products: productsWithQty, total: productsWithQty.length });
   } catch (err) {

@@ -78,6 +78,7 @@ type Batch = {
   _id?: any;
   batchNumber?: string;
   quantity: number;
+  partWeights?: { Head: number; Middle: number; Tail: number } | null;
   price?: number | null;
   rawWeight?: number | null;
   cleanedWeight?: number | null;
@@ -106,6 +107,13 @@ function normalizeBatch(b: any): Batch {
     _id: b?._id ?? new mongoose.Types.ObjectId(),
     batchNumber: b?.batchNumber ? String(b.batchNumber).trim() : "",
     quantity: Math.max(0, Number(b?.quantity) || 0),
+    partWeights: b?.partWeights && typeof b.partWeights === "object"
+      ? {
+        Head: Math.max(0, Number(b.partWeights.Head) || 0),
+        Middle: Math.max(0, Number(b.partWeights.Middle) || 0),
+        Tail: Math.max(0, Number(b.partWeights.Tail) || 0),
+      }
+      : null,
     price: b?.price != null && Number.isFinite(Number(b.price)) ? Number(b.price) : null,
     rawWeight: b?.rawWeight != null && Number.isFinite(Number(b.rawWeight)) ? Number(b.rawWeight) : null,
     cleanedWeight: b?.cleanedWeight != null && Number.isFinite(Number(b.cleanedWeight)) ? Number(b.cleanedWeight) : null,
@@ -441,6 +449,7 @@ router.get("/products", async (req, res) => {
             id: String(b._id ?? ""),
             batchNumber: b.batchNumber ?? "",
             quantity: Number(b.quantity) || 0,
+            partWeights: b.partWeights ?? null,
             price: b.price ?? null,
             rawWeight: b.rawWeight ?? null,
             cleanedWeight: b.cleanedWeight ?? null,
@@ -594,6 +603,7 @@ router.post("/adjustments", async (req, res) => {
           rawWeight: it.rawWeight,
           cleanedWeight: it.cleanedWeight,
           yieldPercentage: it.yieldPercentage,
+          partWeights: it.partWeights,
           shelfLifeDays: it.shelfLifeDays,
           expiryDate: it.expiryDate,
           receivedDate: it.receivedDate ?? now,
@@ -701,6 +711,7 @@ router.post("/adjustments", async (req, res) => {
            rawWeight: appliedBatch.rawWeight,
            cleanedWeight: appliedBatch.cleanedWeight,
            yieldPercentage: appliedBatch.yieldPercentage,
+            partWeights: appliedBatch.partWeights,
           shelfLifeDays: appliedBatch.shelfLifeDays,
           expiryDate: appliedBatch.expiryDate,
         } : undefined,
@@ -719,6 +730,7 @@ router.post("/adjustments", async (req, res) => {
         rawWeight: appliedBatch?.rawWeight ?? undefined,
         cleanedWeight: appliedBatch?.cleanedWeight ?? undefined,
         yieldPercentage: appliedBatch?.yieldPercentage ?? undefined,
+          partWeights: appliedBatch?.partWeights ?? undefined,
         expiryDate: appliedBatch?.expiryDate || undefined,
         receivedDate: appliedBatch?.receivedDate || undefined,
         createdAt: now,

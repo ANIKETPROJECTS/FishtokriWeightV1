@@ -1661,10 +1661,15 @@ export default function Orders() {
     });
   }, [productsForMode, productSearch, pickerCategory]);
 
-  const scaleProducts = useMemo(
-    () => [...productsForMode.filter((product) => !product.isDemoBigFishSelector), ...DEMO_BIG_FISH_PARTS],
-    [productsForMode],
-  );
+  const scaleProducts = useMemo(() => {
+    const bigFishSelector = productsForMode.find((product) => product.isDemoBigFishSelector);
+    const partWeights = bigFishSelector?.partWeights ?? {};
+    const availableParts = DEMO_BIG_FISH_PARTS.map((part) => ({
+      ...part,
+      quantity: Math.max(0, Number(partWeights[part.partName]) || 0),
+    }));
+    return [...productsForMode.filter((product) => !product.isDemoBigFishSelector), ...availableParts];
+  }, [productsForMode]);
   const selectedScaleProduct = scaleProducts.find((product) => String(product._id) === scaleProductId) || null;
   const scaleWeightKg = Math.round((
     Math.max(0, Number(scaleKg) || 0) +
@@ -5314,6 +5319,8 @@ export default function Orders() {
           <div className="grid grid-cols-3 gap-3 pt-2">
             {DEMO_BIG_FISH_PARTS.map((part) => {
               const selectedPart = selectedProducts.find((item) => item.productId === part.productId);
+              const bigFishSelector = productsForMode.find((product) => product.isDemoBigFishSelector);
+              const availableWeight = Math.max(0, Number(bigFishSelector?.partWeights?.[part.partName]) || 0);
               return (
                 <button
                   key={part.productId}
@@ -5329,7 +5336,7 @@ export default function Orders() {
                   <span className="block text-sm font-bold text-[#162B4D]">{part.partName}</span>
                   <span className="mt-1 block text-xs font-semibold text-[#1A56DB]">{formatRupees(part.price)}/kg</span>
                   <span className="mt-2 block text-[10px] text-gray-500">
-                    {selectedPart ? formatOrderWeight(selectedPart.quantity) : "Ready to weigh"}
+                    {selectedPart ? formatOrderWeight(selectedPart.quantity) : `${formatOrderWeight(availableWeight)} available`}
                   </span>
                 </button>
               );

@@ -42,6 +42,7 @@ type Batch = {
   id: string;
   batchNumber: string;
   quantity: number;
+  partWeights?: { Head?: number; Middle?: number; Tail?: number } | null;
   price?: number | null;
   rawWeight?: number | null;
   cleanedWeight?: number | null;
@@ -52,7 +53,7 @@ type Batch = {
   expiryTime?: string;
   notes: string;
 };
-type Product = { id: string; name: string; shortCode?: string; category: string; unit: string; quantity: number; batches?: Batch[] };
+type Product = { id: string; name: string; shortCode?: string; category: string; unit: string; quantity: number; batches?: Batch[]; demoKey?: string };
 
 type FormMode = "add" | "remove" | "add_existing";
 type FormRow = {
@@ -63,6 +64,7 @@ type FormRow = {
   quantityBefore: number;
   mode: FormMode;
   addQuantity: string;
+  partWeights: { Head: string; Middle: string; Tail: string };
   batchPrice: string;
   rawWeight: string;
   cleanedWeight: string;
@@ -155,10 +157,15 @@ function generateNextBatchNumber(productName: string, productBatches: Batch[], s
 function emptyRow(): FormRow {
   return {
     productId: "", productName: "", category: "", unit: "", quantityBefore: 0,
-    mode: "add", addQuantity: "", batchPrice: "", rawWeight: "", cleanedWeight: "", shelfLifeDays: "", expiryDate: "", expiryTime: getCurrentTime12h(), batchNumber: "",
+    mode: "add", addQuantity: "", partWeights: { Head: "", Middle: "", Tail: "" }, batchPrice: "", rawWeight: "", cleanedWeight: "", shelfLifeDays: "", expiryDate: "", expiryTime: getCurrentTime12h(), batchNumber: "",
     batchNotes: "",
     removeQuantity: "", selectedBatchId: "", search: "",
   };
+}
+
+function isBigFishRow(row: FormRow): boolean {
+  return row.productName.trim().toLowerCase() === "big fish"
+    || row.productName.trim().toLowerCase() === "big fish (demo)";
 }
 
 function addDaysISO(days: number): string {
@@ -1033,7 +1040,7 @@ export default function InventoryStockAdjustment() {
       ...r,
       productId: p.id, productName: p.name, category: p.category || "",
       unit: p.unit, quantityBefore: p.quantity, search: p.name,
-      addQuantity: "", batchPrice: String(p.price ?? ""), rawWeight: "", cleanedWeight: "", removeQuantity: "",
+      addQuantity: "", partWeights: { Head: "", Middle: "", Tail: "" }, batchPrice: String(p.price ?? ""), rawWeight: "", cleanedWeight: "", removeQuantity: "",
       batchNumber: r.mode === "add" ? autoNum : "",
       batchNotes: "",
       selectedBatchId: "",
@@ -1043,7 +1050,7 @@ export default function InventoryStockAdjustment() {
   function clearProduct(i: number) {
     updateRow(i, {
       productId: "", productName: "", category: "", unit: "", quantityBefore: 0, search: "",
-      addQuantity: "", batchPrice: "", rawWeight: "", cleanedWeight: "", removeQuantity: "",
+      addQuantity: "", partWeights: { Head: "", Middle: "", Tail: "" }, batchPrice: "", rawWeight: "", cleanedWeight: "", removeQuantity: "",
       batchNumber: "", selectedBatchId: "",
     });
   }
@@ -1051,7 +1058,7 @@ export default function InventoryStockAdjustment() {
   function onSearchChange(i: number, val: string) {
     updateRow(i, {
       search: val, productId: "", productName: "", category: "", unit: "", quantityBefore: 0,
-      addQuantity: "", batchPrice: "", rawWeight: "", cleanedWeight: "", removeQuantity: "",
+      addQuantity: "", partWeights: { Head: "", Middle: "", Tail: "" }, batchPrice: "", rawWeight: "", cleanedWeight: "", removeQuantity: "",
       batchNumber: "", selectedBatchId: "",
     });
   }
@@ -1100,6 +1107,14 @@ export default function InventoryStockAdjustment() {
       patch.addQuantity = "";
     }
     updateRow(i, patch);
+  }
+
+  function setBigFishPartWeight(i: number, part: "Head" | "Middle" | "Tail", value: string) {
+    const row = formRows[i];
+    const partWeights = { ...row.partWeights, [part]: value };
+    const total = Object.values(partWeights).reduce((sum, weight) => sum + Math.max(0, Number(weight) || 0), 0);
+    const totalValue = total > 0 ? String(total) : "";
+    updateRow(i, { partWeights, cleanedWeight: totalValue, addQuantity: totalValue });
   }
 
   function resetForm() {
@@ -1160,6 +1175,13 @@ export default function InventoryStockAdjustment() {
                rawWeight: Number(r.rawWeight),
                cleanedWeight: Number(r.cleanedWeight),
                yieldPercentage: Number(r.cleanedWeight) / Number(r.rawWeight) * 100,
+               partWeights: isBigFishRow(r)
+                 ? {
+                   Head: Math.max(0, Number(r.partWeights.Head) || 0),
+                   Middle: Math.max(0, Number(r.partWeights.Middle) || 0),
+                   Tail: Math.max(0, Number(r.partWeights.Tail) || 0),
+                 }
+                 : undefined,
               shelfLifeDays: r.shelfLifeDays !== "" ? Number(r.shelfLifeDays) : undefined,
               expiryDate: r.expiryDate
                 ? (r.expiryTime ? `${r.expiryDate}T${to24hTime(r.expiryTime)}:00+05:30` : r.expiryDate)
@@ -1251,6 +1273,8 @@ export default function InventoryStockAdjustment() {
                 const isAdd = row.mode === "add";
                 const isAddExisting = row.mode === "add_existing";
                 const isAddAny = isAdd || isAddExisting;
+                const isBigFish = isBigFishRow(row);
+                const bigFishPartTotal = Object.values(row.partWeights).reduce((sum, weight) => sum + Math.max(0, Number(weight) || 0), 0);
                 const dLeft = isAdd ? daysUntil(row.expiryDate) : null;
                 const expTone = dLeft == null ? "text-gray-400"
                   : dLeft < 0 ? "text-red-600"
@@ -1436,6 +1460,37 @@ export default function InventoryStockAdjustment() {
                           </div>
                         ) : null}
                       </div>
+
+                       {isAdd && isBigFish && (
+                         <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50/40 p-3">
+                           <div className="flex items-center justify-between gap-3 mb-2">
+                             <div>
+                               <p className="text-[10px] font-bold text-[#364F9F] uppercase tracking-wider">Big Fish part weights</p>
+                               <p className="text-[10px] text-gray-500">Enter the saleable weight for each part. Final weight is calculated automatically.</p>
+                             </div>
+                             <div className="text-right flex-shrink-0">
+                               <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Total saleable</p>
+                               <p className="text-sm font-bold text-[#1A56DB]">{bigFishPartTotal.toLocaleString("en-IN", { maximumFractionDigits: 2 })} {row.unit || "kg"}</p>
+                             </div>
+                           </div>
+                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                             {(["Head", "Middle", "Tail"] as const).map((part) => (
+                               <div key={part} className="space-y-1">
+                                 <label className="text-[10px] font-bold text-[#364F9F] uppercase tracking-wider">{part} ({row.unit || "kg"})</label>
+                                 <input
+                                   type="number"
+                                   min="0"
+                                   step="0.01"
+                                   value={row.partWeights[part]}
+                                   onChange={(e) => setBigFishPartWeight(idx, part, e.target.value)}
+                                   placeholder="e.g. 2.5"
+                                   className="w-full h-9 px-3 text-sm font-semibold text-[#162B4D] border border-blue-200 rounded-lg bg-white outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                                 />
+                               </div>
+                             ))}
+                           </div>
+                         </div>
+                       )}
 
                       {isAdd && (
                         <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-3 rounded-lg border border-emerald-100 bg-emerald-50/40 p-3">
