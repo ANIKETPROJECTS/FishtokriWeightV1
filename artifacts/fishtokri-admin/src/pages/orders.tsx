@@ -4240,6 +4240,11 @@ export default function Orders() {
                     const demoPartItems = isBigFishSelector
                       ? selectedProducts.filter((sp) => String(sp.parentProductId) === pid)
                       : [];
+                    const bigFishPartSummary = isBigFishSelector
+                      ? bigFishPartOptions
+                        .map((part) => `${part.partName} ${formatOrderWeight(Number(part.quantity) || 0)}`)
+                        .join(" · ")
+                      : "";
                     const selectedForCard = Boolean(cartItem) || scaleSelected || demoPartItems.length > 0;
                     const weightBased = isWeightBasedProduct(p);
                     const stock = Number(p.quantity) || 0;
@@ -4327,7 +4332,7 @@ export default function Orders() {
                                {isBigFishSelector ? (
                                  <>
                                    <p className="text-sm font-semibold text-[#1A56DB]">Choose a part</p>
-                                    <p className="text-[10px] font-medium leading-none text-[#364F9F]">Head · Body · Tail</p>
+                                     <p className="text-[10px] font-medium leading-none text-[#364F9F]">{bigFishPartSummary}</p>
                                    <p className={`mt-1 text-[10px] font-semibold leading-none ${stock > 0 ? "text-[#364F9F]" : "text-red-500"}`}>
                                      {stock.toLocaleString("en-IN", { maximumFractionDigits: 2 })} {stockUnit} left
                                    </p>
