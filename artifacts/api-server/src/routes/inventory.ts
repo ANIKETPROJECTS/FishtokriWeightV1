@@ -766,7 +766,7 @@ router.post("/adjustments", async (req, res) => {
           if (!Number.isFinite(cleanedWeight) || Math.abs(partTotal - cleanedWeight) > 0.01) {
             res.status(400).json({
               error: "ValidationError",
-              message: "Big Fish Head, Body, and Tail weights must equal the cleaned weight.",
+              message: "Surmai Head, Body, and Tail weights must equal the cleaned weight.",
             });
             return;
           }
@@ -1141,7 +1141,7 @@ async function expandOrderItems(
             productId: String(parentId),
             parentProductId: String(parentId),
             partName: requestedPart,
-            name: it.name ?? `${parent.name ?? "Big Fish"} - ${requestedPart}`,
+            name: it.name ?? `${parent.name ?? "Surmai"} - ${requestedPart}`,
             quantity: qty,
             unit: it.unit ?? parent.unit ?? "per kg",
           });
@@ -1308,7 +1308,7 @@ async function applyDelta(
     if (direction === "deduct" && it.partName && existing.demoKey === "big-fish-parts") {
       const adjusted = adjustBigFishPartStock(currentBatches, it.partName, qty, "deduct", now);
       if (adjusted.remaining > 0) {
-        throw new InsufficientStockError(`${existing.name ?? "Big Fish"} - ${it.partName}`, qty - adjusted.remaining, qty);
+        throw new InsufficientStockError(`${existing.name ?? "Surmai"} - ${it.partName}`, qty - adjusted.remaining, qty);
       }
       newBatches = adjusted.batches;
       appliedBatchNumbers = adjusted.batchNumbers.join(", ") || undefined;
