@@ -822,7 +822,7 @@ const DEMO_BIG_FISH_PARTS = [
   {
     _id: "__demo_big_fish_head__",
     productId: "__demo_big_fish_head__",
-    name: "Big Fish - Head",
+    name: "Surmai - Head",
     partName: "Head",
     price: 400,
     unit: "per kg",
@@ -835,7 +835,7 @@ const DEMO_BIG_FISH_PARTS = [
   {
     _id: "__demo_big_fish_body__",
     productId: "__demo_big_fish_body__",
-    name: "Big Fish - Body",
+    name: "Surmai - Body",
     partName: "Body",
     price: 900,
     unit: "per kg",
@@ -848,7 +848,7 @@ const DEMO_BIG_FISH_PARTS = [
   {
     _id: "__demo_big_fish_tail__",
     productId: "__demo_big_fish_tail__",
-    name: "Big Fish - Tail",
+    name: "Surmai - Tail",
     partName: "Tail",
     price: 500,
     unit: "per kg",
@@ -861,9 +861,9 @@ const DEMO_BIG_FISH_PARTS = [
 ];
 const DEMO_BIG_FISH_SELECTOR = {
   _id: DEMO_BIG_FISH_ID,
-  name: "Big Fish",
+   name: "Surmai",
   category: "Fish",
-  description: "Choose Head, Body, or Tail",
+   description: "Choose Surmai Head, Body, or Tail",
   quantity: 1,
   unit: "",
   demoParts: DEMO_BIG_FISH_PARTS.map((part) => ({ partName: part.partName, price: part.price, unit: part.unit, isWeightBased: true })),
@@ -1578,7 +1578,7 @@ export default function Orders() {
         ...part,
         displayName: part.partName,
         parentProductId: String(savedBigFish?._id ?? savedBigFish?.productId ?? DEMO_BIG_FISH_ID),
-        category: "Big Fish",
+        category: "Surmai",
         price: Number(configured?.price) >= 0 ? Number(configured.price) : part.price,
         quantity: Math.max(0, Number(partWeights[part.partName]) || 0),
       };
@@ -5344,7 +5344,7 @@ export default function Orders() {
       <Dialog open={bigFishPartPickerOpen} onOpenChange={setBigFishPartPickerOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Big Fish — Choose a part</DialogTitle>
+            <DialogTitle>Surmai — Choose a part</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-gray-500">
             Choose the part to weigh. The selected part will be added to the order after you enter its weight.

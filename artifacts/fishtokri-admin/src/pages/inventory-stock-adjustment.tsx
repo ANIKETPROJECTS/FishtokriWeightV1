@@ -179,8 +179,10 @@ function emptyRow(): FormRow {
 }
 
 function isBigFishRow(row: FormRow): boolean {
-  return row.productName.trim().toLowerCase() === "big fish"
-    || row.productName.trim().toLowerCase() === "big fish (demo)";
+  const name = row.productName.trim().toLowerCase();
+  return name === "surmai"
+    || name === "big fish"
+    || name === "big fish (demo)";
 }
 
 function initialBigFishPartPrices(product: Product): { Head: string; Body: string; Tail: string } {
@@ -1081,7 +1083,7 @@ export default function InventoryStockAdjustment() {
       productId: p.id, productName: p.name, category: p.category || "",
       unit: p.unit, quantityBefore: p.quantity, search: p.name,
       addQuantity: "", partWeights: { Head: "", Body: "", Tail: "" }, partPrices: initialBigFishPartPrices(p),
-      batchPrice: p.demoKey === "big-fish-parts" || p.name.trim().toLowerCase() === "big fish" ? "" : String(p.price ?? ""),
+      batchPrice: p.demoKey === "big-fish-parts" || ["surmai", "big fish", "big fish (demo)"].includes(p.name.trim().toLowerCase()) ? "" : String(p.price ?? ""),
       rawWeight: "", cleanedWeight: "", removeQuantity: "",
       batchNumber: r.mode === "add" ? autoNum : "",
       batchNotes: "",
@@ -1247,7 +1249,7 @@ export default function InventoryStockAdjustment() {
     if (invalidBigFishParts) {
       const partsTotal = calculateBigFishPartWeightTotal(invalidBigFishParts.partWeights);
       toast({
-        title: "Big Fish weights do not match",
+        title: "Surmai weights do not match",
         description: `For ${invalidBigFishParts.productName}, Head + Body + Tail must equal the cleaned weight. Current parts total: ${partsTotal.toLocaleString("en-IN", { maximumFractionDigits: 2 })} kg.`,
         variant: "destructive",
       });
@@ -1576,7 +1578,7 @@ export default function InventoryStockAdjustment() {
                          <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50/40 p-3">
                            <div className="flex items-center justify-between gap-3 mb-2">
                              <div>
-                               <p className="text-[10px] font-bold text-[#364F9F] uppercase tracking-wider">Big Fish part weights</p>
+                               <p className="text-[10px] font-bold text-[#364F9F] uppercase tracking-wider">Surmai part weights</p>
                                <p className="text-[10px] text-gray-500">Enter the saleable weight for each part. Final weight is calculated automatically.</p>
                              </div>
                              <div className="text-right flex-shrink-0">

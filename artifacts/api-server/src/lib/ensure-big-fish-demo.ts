@@ -52,12 +52,12 @@ export async function ensureBigFishDemoCatalog(db: any) {
     };
   });
   const demoMetadata = {
-    name: "Big Fish",
+    name: "Surmai",
     demoKey: BIG_FISH_DEMO_KEY,
     isDemoBigFishSelector: true,
     demoParts: persistedDemoParts,
     category: categoryName,
-    description: "Choose Head, Body, or Tail in POS",
+    description: "Choose Surmai Head, Body, or Tail in POS",
   };
   const demoFields = {
     ...demoMetadata,
