@@ -5,11 +5,13 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DEFAULT_INVOICE_HEADER, type InvoiceHeaderSettings } from "@/lib/invoice-header";
 
 type Settings = {
   name: string;
   email: string;
   hub: { id: string; name: string; location: string; superHubName: string } | null;
+  invoiceHeader: InvoiceHeaderSettings;
 };
 
 function getToken() {
@@ -78,6 +80,7 @@ export default function SettingsPage() {
     email: "",
     currentPassword: "",
     newPassword: "",
+    invoiceHeader: { ...DEFAULT_INVOICE_HEADER },
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -92,6 +95,7 @@ export default function SettingsPage() {
           hubName: next.hub?.name || "",
           name: next.name || "",
           email: next.email || "",
+          invoiceHeader: { ...DEFAULT_INVOICE_HEADER, ...(next.invoiceHeader || {}) },
         }));
       })
       .catch((error) => toast({ title: "Could not load Hub Settings", description: error.message, variant: "destructive" }))
@@ -100,6 +104,13 @@ export default function SettingsPage() {
 
   const update = (field: keyof typeof form, value: string) => {
     setForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const updateInvoiceHeader = (field: keyof InvoiceHeaderSettings, value: string) => {
+    setForm((current) => ({
+      ...current,
+      invoiceHeader: { ...current.invoiceHeader, [field]: value },
+    }));
   };
 
   const save = async (event: React.FormEvent) => {
@@ -183,6 +194,35 @@ export default function SettingsPage() {
                 disabled={saving}
               />
               <p className="text-xs text-gray-400">Use at least 8 characters. The eye icon only reveals what you typed.</p>
+            </div>
+          </div>
+
+          <div className="border-t border-gray-100 pt-5 space-y-4">
+            <div>
+              <h3 className="font-semibold text-[#162B4D]">Invoice header details</h3>
+              <p className="text-sm text-gray-500 mt-1">These details appear on the invoice preview and printed customer invoice. The contact number is also used in the invoice footer.</p>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label>Business / company name</Label>
+                <Input value={form.invoiceHeader.companyName} onChange={(e) => updateInvoiceHeader("companyName", e.target.value)} disabled={saving} required />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Address</Label>
+                <Input value={form.invoiceHeader.address} onChange={(e) => updateInvoiceHeader("address", e.target.value)} disabled={saving} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Contact number</Label>
+                <Input value={form.invoiceHeader.phone} onChange={(e) => updateInvoiceHeader("phone", e.target.value)} disabled={saving} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>GST number</Label>
+                <Input value={form.invoiceHeader.gstNumber} onChange={(e) => updateInvoiceHeader("gstNumber", e.target.value)} disabled={saving} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>FSSAI number</Label>
+                <Input value={form.invoiceHeader.fssaiNumber} onChange={(e) => updateInvoiceHeader("fssaiNumber", e.target.value)} disabled={saving} />
+              </div>
             </div>
           </div>
 

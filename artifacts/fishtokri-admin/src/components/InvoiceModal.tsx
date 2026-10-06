@@ -2,13 +2,14 @@
  * Shared invoice modal — used by both Orders and Day End Report.
  * Renders a Customer Invoice with print support.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { printHtmlWithQZ } from "@/lib/qz-print";
 import { normalizeOrderReference } from "@/lib/order-reference";
+import { DEFAULT_INVOICE_HEADER, type InvoiceHeaderSettings } from "@/lib/invoice-header";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -84,6 +85,9 @@ function combinedPaymentLabel(order: any): string {
 
 export function InvoiceModal({ order, onClose }: { order: any; onClose: () => void }) {
   const { toast } = useToast();
+  const [invoiceHeader, setInvoiceHeader] = useState<InvoiceHeaderSettings>({ ...DEFAULT_INVOICE_HEADER });
+  const [invoiceHeaderLoading, setInvoiceHeaderLoading] = useState(true);
+  const [invoiceHeaderError, setInvoiceHeaderError] = useState<string | null>(null);
   const items: any[] = order.items ?? [];
   const subtotal =
     Number(order.subtotal) > 0 ? Number(order.subtotal) : orderItemsTotal(items);
@@ -133,7 +137,37 @@ export function InvoiceModal({ order, onClose }: { order: any; onClose: () => vo
     payStatusNorm === "paid" ? "#f0fdf4" : payStatusNorm === "partial" ? "#fffbeb" : "#fef2f2";
   const isPreorder = String(order?.orderType ?? "").toLowerCase() === "preorder";
 
+  useEffect(() => {
+    let active = true;
+    const base = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
+    fetch(`${base}/api/auth/invoice-header`, {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${localStorage.getItem("fishtokri_token") ?? ""}`,
+      },
+    })
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data?.message || "Could not load invoice details.");
+        return data;
+      })
+      .then((data) => {
+        if (active) {
+          setInvoiceHeader({ ...DEFAULT_INVOICE_HEADER, ...(data.invoiceHeader || {}) });
+          setInvoiceHeaderError(null);
+        }
+      })
+      .catch((error: any) => {
+        if (active) setInvoiceHeaderError(error?.message || "Could not load invoice details.");
+      })
+      .finally(() => {
+        if (active) setInvoiceHeaderLoading(false);
+      });
+    return () => { active = false; };
+  }, []);
+
   const handlePrint = async () => {
+    if (invoiceHeaderLoading || invoiceHeaderError) return;
     const itemRows = items
       .map((it: any) => {
         const qty = Number(it.quantity) || 1;
@@ -183,7 +217,18 @@ export function InvoiceModal({ order, onClose }: { order: any; onClose: () => vo
       ? `<div style="margin:4px 0;font-size:17px;"><b>Notes : ${order.notes}</b></div>`
       : "";
 
-    const headerHtml = `<div style="text-align:center;margin-bottom:4px;"><h2 style="font-size:22px;font-weight:800;margin:0 0 4px;">FISHTOKRI (ATHA FOODS Pvt Ltd)</h2><div style="font-size:14px;margin-top:4px;text-align:left;"><div><b>ADD :</b> Thane</div><div><b>Mob No :</b> 9220200100</div><div><b>GST No :</b> 27AAOCA7628P1ZT</div><div><b>FSSAI No :</b> 21521066000481</div></div></div>`;
+    const headerDetails: Array<[string, string]> = [
+      ["ADD :", invoiceHeader.address],
+      ["Mob No :", invoiceHeader.phone],
+      ["GST No :", invoiceHeader.gstNumber],
+      ["FSSAI No :", invoiceHeader.fssaiNumber],
+    ];
+    const headerHtml =
+      `<div style="text-align:center;margin-bottom:4px;"><h2 style="font-size:22px;font-weight:800;margin:0 0 4px;">${escapeHtml(invoiceHeader.companyName)}</h2>` +
+      `<div style="font-size:14px;margin-top:4px;text-align:left;">${headerDetails
+        .filter(([, value]) => String(value || "").trim())
+        .map(([label, value]) => `<div><b>${label}</b> ${escapeHtml(value)}</div>`)
+        .join("")}</div></div>`;
     const commonInfoHtml =
       `<div style="border-top:2px solid #444;margin:8px 0;"></div>` +
       `<div style="margin:4px 0;font-size:17px;"><b>Invoice :</b> ${invoiceNo}</div>` +
@@ -209,7 +254,7 @@ export function InvoiceModal({ order, onClose }: { order: any; onClose: () => vo
       `<div style="border-top:2px solid #444;margin:8px 0;"></div>` +
       `<div style="display:flex;justify-content:space-between;font-size:15px;font-weight:700;margin:4px 0;"><span>Grand Total:</span><span>${grandTotal.toFixed(2)}</span></div>` +
       walletRow + paidDueRow + upiTxnRow +
-      `<div style="text-align:center;font-size:15px;color:#555;line-height:1.8;margin-top:14px;">Thank you for your business!<br/>For any query - 9220200100</div></div>`;
+      `<div style="text-align:center;font-size:15px;color:#555;line-height:1.8;margin-top:14px;">Thank you for your business!${invoiceHeader.phone.trim() ? `<br/>For any query - ${escapeHtml(invoiceHeader.phone)}` : ""}</div></div>`;
 
     const PAGE_STYLE = `* { margin:0;padding:0;box-sizing:border-box; } body { font-family:Arial,sans-serif;color:#111;background:#fff; } @page { size:80mm auto;margin:0; }`;
     const customerHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${invoiceNo} - Customer</title><style>${PAGE_STYLE}</style></head><body>${customerBody}</body></html>`;
@@ -239,16 +284,22 @@ export function InvoiceModal({ order, onClose }: { order: any; onClose: () => vo
         </div>
 
         <div className="max-h-[70vh] overflow-y-auto p-5 bg-gray-50">
+          {invoiceHeaderLoading && <p className="text-center text-sm text-gray-500 mb-3">Loading saved invoice details…</p>}
+          {invoiceHeaderError && (
+            <div role="alert" className="max-w-md mx-auto mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              Could not load saved invoice details. Refresh and try again. {invoiceHeaderError}
+            </div>
+          )}
           <div className="bg-white max-w-md mx-auto p-5 text-[16px] text-gray-800 shadow-sm border border-gray-200 rounded">
               <div style={{ textAlign: "center", marginBottom: 4 }}>
                 <div style={{ fontSize: 18, fontWeight: 800, letterSpacing: "0.01em" }}>
-                  FISHTOKRI (ATHA FOODS Pvt Ltd)
+                  {invoiceHeader.companyName}
                 </div>
                 <div style={{ marginTop: 5, fontSize: 11, lineHeight: 1.6, textAlign: "left" }}>
-                  <div><b>ADD :</b> Thane</div>
-                  <div><b>Mob No :</b> 9220200100</div>
-                  <div><b>GST No :</b> 27AAOCA7628P1ZT</div>
-                  <div><b>FSSAI No :</b> 21521066000481</div>
+                  {invoiceHeader.address.trim() && <div><b>ADD :</b> {invoiceHeader.address}</div>}
+                  {invoiceHeader.phone.trim() && <div><b>Mob No :</b> {invoiceHeader.phone}</div>}
+                  {invoiceHeader.gstNumber.trim() && <div><b>GST No :</b> {invoiceHeader.gstNumber}</div>}
+                  {invoiceHeader.fssaiNumber.trim() && <div><b>FSSAI No :</b> {invoiceHeader.fssaiNumber}</div>}
                 </div>
               </div>
               <div className="border-t-2 border-gray-500 my-2" />
@@ -373,14 +424,14 @@ export function InvoiceModal({ order, onClose }: { order: any; onClose: () => vo
               )}
               <div className="text-center text-[15px] text-gray-600 mt-3">
                 Thank you for your business!<br />
-                For any query - 9220200100
+                {invoiceHeader.phone.trim() && <>For any query - {invoiceHeader.phone}</>}
               </div>
             </div>
           </div>
 
         <div className="flex justify-end gap-2 px-5 py-3 border-t border-gray-200 bg-white">
           <Button variant="outline" onClick={onClose} className="h-9">Close</Button>
-          <Button onClick={handlePrint} className="h-9 gap-1.5 bg-[#1A56DB] hover:bg-[#1447B4] text-white">
+          <Button onClick={handlePrint} disabled={invoiceHeaderLoading || Boolean(invoiceHeaderError)} className="h-9 gap-1.5 bg-[#1A56DB] hover:bg-[#1447B4] text-white">
             <Printer className="w-3.5 h-3.5" /> Print Invoice
           </Button>
         </div>

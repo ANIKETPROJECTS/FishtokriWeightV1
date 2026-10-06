@@ -17,6 +17,13 @@ const router: IRouter = Router();
 const LEGACY_ADMIN_EMAIL = "admin@fishtokri.com";
 const LEGACY_ADMIN_PASSWORD = "FishTokri@Admin2024";
 const JWT_SECRET = process.env.SESSION_SECRET;
+const DEFAULT_INVOICE_HEADER = {
+  companyName: "FISHTOKRI (ATHA FOODS Pvt Ltd)",
+  address: "Thane",
+  phone: "9220200100",
+  gstNumber: "27AAOCA7628P1ZT",
+  fssaiNumber: "21521066000481",
+};
 
 if (!JWT_SECRET) {
   throw new Error("SESSION_SECRET must be set.");
@@ -50,6 +57,10 @@ function publicSettings(settings: any) {
     email: settings.email,
     recoveryEmail: settings.recoveryEmail,
     mailConfigured: Boolean(process.env.SMTP_HOST && process.env.SMTP_FROM),
+    invoiceHeader: {
+      ...DEFAULT_INVOICE_HEADER,
+      ...(settings.invoiceHeader?.toObject?.() ?? settings.invoiceHeader ?? {}),
+    },
   };
 }
 
@@ -174,11 +185,27 @@ router.get("/master-admin/settings", requireAuth as any, requireMasterAdmin as a
   }
 });
 
+router.get("/invoice-header", requireAuth as any, async (_req, res) => {
+  try {
+    const settings = await getMasterAdminSettings();
+    res.json({ invoiceHeader: publicSettings(settings).invoiceHeader });
+  } catch {
+    res.status(500).json({ error: "InternalError", message: "Could not load invoice details" });
+  }
+});
+
 const settingsSchema = z.object({
   name: z.string().trim().min(1).max(100),
   email: z.string().trim().email().max(200),
   recoveryEmail: z.string().trim().email().max(200).optional(),
   hubName: z.string().trim().min(1).max(100),
+  invoiceHeader: z.object({
+    companyName: z.string().trim().min(1).max(160),
+    address: z.string().trim().max(300),
+    phone: z.string().trim().max(40),
+    gstNumber: z.string().trim().max(40),
+    fssaiNumber: z.string().trim().max(40),
+  }).optional(),
   currentPassword: z.string().min(1).max(200),
   newPassword: z.string().max(200).optional(),
 });
@@ -199,6 +226,7 @@ router.put("/master-admin/settings", requireAuth as any, requireMasterAdmin as a
     settings.email = parsed.data.email.toLowerCase();
     if (parsed.data.recoveryEmail) settings.recoveryEmail = parsed.data.recoveryEmail.toLowerCase();
     if (parsed.data.newPassword) settings.passwordHash = await bcrypt.hash(parsed.data.newPassword, 12);
+    if (parsed.data.invoiceHeader) settings.invoiceHeader = parsed.data.invoiceHeader;
     await settings.save();
     const primaryHub = await getPrimaryHub();
     if (primaryHub) {
