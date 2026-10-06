@@ -466,7 +466,6 @@ function isWeightBasedProduct(product: any) {
 }
 
 const POS_WEIGHT_OVERAGE_LIMIT_KG = 1;
-const POS_CART_WEIGHT_STEP_KG = 0.1;
 
 function formatOrderWeight(weightInKg: number) {
   const grams = Math.round((Number(weightInKg) || 0) * 1000);
@@ -4748,7 +4747,7 @@ export default function Orders() {
           <div className="w-[42vw] min-w-[380px] max-w-[560px] flex-shrink-0 border-l border-gray-200 bg-white flex flex-row overflow-hidden">
 
             {/* ── Left half: Customer + Address + Schedule ── */}
-            <div className="w-[45%] min-w-[190px] max-w-[250px] flex-shrink-0 border-r border-gray-200 flex flex-col overflow-hidden">
+            <div className="w-[40%] min-w-[170px] max-w-[225px] flex-shrink-0 border-r border-gray-200 flex flex-col overflow-hidden">
             <div className="flex-1 overflow-y-auto">
 
               {/* Customer — simple POS entry with optional existing-customer search */}
@@ -5347,80 +5346,49 @@ export default function Orders() {
                       const weightBased = isWeightBasedProduct(p);
                       const productDetails = productsForMode.find((candidate) => String(candidate._id) === p.productId);
                       const atMax = p.quantity >= stock;
-                      const weightStep = POS_CART_WEIGHT_STEP_KG;
-                      const weightBuffer = orderDeliveryType === "takeaway" && posProductMode === "normal" && weightBased && stock > 0
-                        ? POS_WEIGHT_OVERAGE_LIMIT_KG
-                        : 0;
-                      const weightAtMax = p.quantity + weightStep > stock + weightBuffer + 1e-9;
                       const editDraft = editingWeighedItem?.productId === p.productId ? editingWeighedItem : null;
                       const editedWeight = editDraft ? weightForScaleEntry(editDraft) : p.quantity;
-                      const adjustWeight = (direction: -1 | 1) => {
-                        const nextQuantity = Math.max(0, Math.round((p.quantity + direction * weightStep) * 1000) / 1000);
-                        if (direction > 0 && nextQuantity > stock + weightBuffer + 1e-9) return;
-                        setSelectedProducts((current) => nextQuantity <= 0
-                          ? current.filter((item) => item.productId !== p.productId)
-                          : current.map((item) => item.productId === p.productId
-                            ? { ...item, quantity: nextQuantity }
-                            : item));
-                      };
                       return (
-                        <div key={`${p.productId}:${p.partNote ?? ""}`} className="flex flex-wrap items-center gap-1.5 py-2 border-b border-gray-100 last:border-0">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex min-w-0 items-center gap-1">
-                              <p className="min-w-0 flex-1 truncate text-xs font-semibold leading-tight text-[#162B4D]">{p.name}</p>
-                              {weightBased && (
-                                <button
-                                  type="button"
-                                  aria-label={`Edit weight${p.partNote ? " and part note" : ""} for ${p.name}`}
-                                  title="Edit weight and part note"
-                                  onClick={() => beginEditingWeighedItem(p)}
-                                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-[#364F9F] hover:bg-blue-50"
-                                >
-                                  <Pencil className="h-3.5 w-3.5" />
-                                </button>
-                              )}
-                            </div>
-                            {p.partNote && <p className="text-[10px] text-gray-500 truncate">Note: {p.partNote}</p>}
-                            <p className="text-[11px] text-gray-400">{formatRupees(Number(p.price))}{p.unit ? ` / ${p.unit}` : ""}</p>
+                        <div key={`${p.productId}:${p.partNote ?? ""}`} className="flex flex-wrap items-center gap-2 py-2 border-b border-gray-100 last:border-0">
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-semibold leading-tight text-black">{p.name}</p>
+                            {p.partNote && <p className="truncate text-xs text-black">Note: {p.partNote}</p>}
+                            <p className="text-xs text-black">{formatRupees(Number(p.price))}{p.unit ? ` / ${p.unit}` : ""}</p>
                           </div>
                           {weightBased ? (
-                            <>
-                            <div className="flex items-center gap-0.5 rounded-md bg-[#F8FAFD] px-1 py-1 flex-shrink-0" title="Adjust weight in 100 g steps">
-                              <button
-                                type="button"
-                                aria-label={`Subtract 100 grams from ${p.name}`}
-                                title="Subtract 100 g"
-                                onClick={() => adjustWeight(-1)}
-                                className="h-6 w-6 rounded text-gray-600 hover:bg-gray-200 font-bold"
-                              >−</button>
-                              <span className="min-w-[44px] text-center text-xs font-bold text-[#162B4D]">{formatOrderWeight(p.quantity)}</span>
-                              <button
-                                type="button"
-                                aria-label={`Add 100 grams to ${p.name}`}
-                                title="Add 100 g"
-                                disabled={weightAtMax}
-                                onClick={() => adjustWeight(1)}
-                                className="h-6 w-6 rounded text-gray-600 hover:bg-gray-200 font-bold disabled:opacity-30"
-                              >+</button>
-                            </div>
-                            </>
+                            <span className="shrink-0 text-sm font-bold text-black" aria-label={`${p.name} weight`}>
+                              {formatOrderWeight(p.quantity)}
+                            </span>
                           ) : (
-                            <div className="flex items-center bg-white rounded-md border border-gray-200 overflow-hidden flex-shrink-0">
-                              <button onClick={() => setSelectedProducts((arr) => p.quantity <= 1 ? arr.filter((x) => x.productId !== p.productId) : arr.map((x) => x.productId === p.productId ? { ...x, quantity: x.quantity - 1 } : x))} className="w-6 h-6 flex items-center justify-center text-gray-500 hover:bg-gray-100 font-bold">−</button>
-                              <span className="text-xs font-bold text-gray-700 min-w-[18px] text-center">{p.quantity}</span>
-                              <button disabled={atMax} onClick={() => { if (!atMax) setSelectedProducts((arr) => arr.map((x) => x.productId === p.productId ? { ...x, quantity: x.quantity + 1 } : x)); }} className="w-6 h-6 flex items-center justify-center text-gray-500 hover:bg-gray-100 font-bold disabled:opacity-30">+</button>
+                            <div className="flex shrink-0 items-center overflow-hidden rounded-md border border-gray-200 bg-white">
+                              <button type="button" onClick={() => setSelectedProducts((arr) => p.quantity <= 1 ? arr.filter((x) => x.productId !== p.productId) : arr.map((x) => x.productId === p.productId ? { ...x, quantity: x.quantity - 1 } : x))} className="flex h-7 w-7 items-center justify-center font-bold text-black hover:bg-gray-100">−</button>
+                              <span className="min-w-[20px] text-center text-sm font-bold text-black">{p.quantity}</span>
+                              <button type="button" disabled={atMax} onClick={() => { if (!atMax) setSelectedProducts((arr) => arr.map((x) => x.productId === p.productId ? { ...x, quantity: x.quantity + 1 } : x)); }} className="flex h-7 w-7 items-center justify-center font-bold text-black hover:bg-gray-100 disabled:opacity-30">+</button>
                             </div>
                           )}
-                          <span className="text-xs font-bold text-[#162B4D] w-14 text-right flex-shrink-0">{formatRupees(orderProductAmount(p, p.quantity))}</span>
-                          <button
-                            type="button"
-                            aria-label={`Remove ${p.name} from order`}
-                            title="Remove item"
-                            onClick={() => removeSelectedProduct(p.productId)}
-                            className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-gray-400 hover:bg-red-50 hover:text-red-600"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
+                          <span className="w-14 shrink-0 text-right text-sm font-bold text-black">{formatRupees(orderProductAmount(p, p.quantity))}</span>
+                          <div className="flex shrink-0 items-center gap-1">
+                            {weightBased && (
+                              <button
+                                type="button"
+                                aria-label={`Edit weight${p.partNote ? " and part note" : ""} for ${p.name}`}
+                                title="Edit weighed item"
+                                onClick={() => beginEditingWeighedItem(p)}
+                                className="flex h-7 w-7 items-center justify-center rounded text-black hover:bg-blue-50"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              aria-label={`Remove ${p.name} from order`}
+                              title="Delete item"
+                              onClick={() => removeSelectedProduct(p.productId)}
+                              className="flex h-7 w-7 items-center justify-center rounded text-black hover:bg-red-50 hover:text-red-700"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
                           {weightBased && editDraft && (
                             <Dialog
                               open
