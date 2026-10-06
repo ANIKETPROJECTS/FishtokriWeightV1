@@ -1048,10 +1048,12 @@ type OrderForSync = {
   subHubId?: string;
   subHubName?: string;
   status?: string;
+  posWeightBuffer?: boolean;
   items?: Array<{ productId?: string; parentProductId?: string; partName?: BigFishPartName; name?: string; quantity?: number; unit?: string }>;
 };
 
 const ACTIVE_STATUSES = new Set(["pending", "confirmed", "out_for_delivery", "delivered", "takeaway"]);
+const POS_WEIGHT_OVERAGE_LIMIT_KG = 1;
 type OrderInventoryOptions = {
   allowFTW?: boolean;
 };
@@ -1256,12 +1258,22 @@ async function applyDelta(
     return 0;
   }
 
+  const itemKey = (item: { productId: string; partName?: BigFishPartName }) =>
+    `${item.productId}:${item.partName ?? ""}`;
+  const deductionPlan = new Map<string, { quantity: number; requestedQuantity: number; overageKg: number }>();
+
   // ── Pre-flight stock check (deduct only) ────────────────────────────────────
   // This runs INSIDE withDeductionLock so only one request at a time reaches
   // this point. If two orders race for the last unit, the second request enters
   // the lock only after the first has already deducted — it then sees available=0
   // and throws InsufficientStockError before any mutation occurs.
   if (direction === "deduct") {
+    const overageGroups = new Map<string, {
+      productName: string;
+      available: number;
+      overageKg: number;
+    }>();
+
     for (const it of items) {
       const pid = toId(it.productId);
       if (!pid || it.quantity <= 0) continue;
@@ -1276,22 +1288,96 @@ async function applyDelta(
         : currentBatches.length > 0
           ? batchesTotal(currentBatches)
           : Math.max(0, Number(product.quantity) || 0);
-      if (available < it.quantity) {
+      const requestedQuantity = Math.max(0, Number(it.quantity) || 0);
+      const overageKg = Math.max(0, requestedQuantity - available);
+      const isKgProduct = /kg/i.test(String(it.unit || product.unit || ""));
+      const productCategory = [
+        typeof product.category === "object" ? product.category?.name : product.category,
+        typeof product.subCategory === "object" ? product.subCategory?.name : product.subCategory,
+      ].filter(Boolean).join(" ");
+      const isFishProduct =
+        product.demoKey === "big-fish-parts" ||
+        /fish|surmai/i.test(productCategory);
+      const canUsePosBuffer = Boolean(order.posWeightBuffer) && isKgProduct && isFishProduct;
+      if (overageKg > 0 && (!canUsePosBuffer || available <= 0 || overageKg > POS_WEIGHT_OVERAGE_LIMIT_KG + 1e-9)) {
         logger.warn(
-          { orderId, productId: String(pid), productName: product.name, available, requested: it.quantity },
+          { orderId, productId: String(pid), productName: product.name, available, requested: requestedQuantity },
           "applyDelta: pre-flight stock check FAILED — insufficient stock, rejecting order"
         );
-        throw new InsufficientStockError(product.name ?? it.name ?? "Unknown product", available, it.quantity);
+        throw new InsufficientStockError(product.name ?? it.name ?? "Unknown product", available, requestedQuantity);
+      }
+
+      const key = itemKey(it);
+      deductionPlan.set(key, {
+        quantity: Math.min(requestedQuantity, available),
+        requestedQuantity,
+        overageKg,
+      });
+
+      if (canUsePosBuffer && (overageKg > 0 || it.parentProductId)) {
+        // Big-fish parts share one 1 kg allowance across Head, Body, and Tail.
+        // Other products each have their own single-SKU allowance.
+        const groupKey = it.parentProductId
+          ? `big-fish:${it.parentProductId}`
+          : `product:${pid}`;
+        const group = overageGroups.get(groupKey) ?? {
+          productName: it.parentProductId ? `${product.name ?? "Big fish"} parts` : (product.name ?? it.name ?? "Unknown product"),
+          available: 0,
+          overageKg: 0,
+        };
+        group.available += available;
+        group.overageKg += overageKg;
+        overageGroups.set(groupKey, group);
       }
     }
+
+    for (const group of overageGroups.values()) {
+      if (group.overageKg > POS_WEIGHT_OVERAGE_LIMIT_KG + 1e-9) {
+        throw new InsufficientStockError(
+          group.productName,
+          group.available,
+          group.available + group.overageKg,
+        );
+      }
+    }
+
     logger.info({ orderId, itemCount: items.length }, "applyDelta: pre-flight stock check passed — all items have sufficient stock");
+  } else {
+    // A POS order's billed weight can be higher than the stock quantity that was
+    // actually deducted. Restore only the amount recorded as deducted in the
+    // latest movement, so cancelling/editing the order cannot add the overage
+    // back into inventory.
+    for (const it of items) {
+      const movementFilter: any = {
+        orderId,
+        productId: String(it.productId),
+        type: { $in: ["order_deduct", "order_restore"] },
+        ...(it.partName ? { partName: it.partName } : { partName: { $exists: false } }),
+      };
+      const [latestMovement] = await movements
+        .find(movementFilter)
+        .sort({ createdAt: -1, _id: -1 })
+        .limit(1)
+        .toArray();
+      if (latestMovement?.type === "order_deduct") {
+        it.quantity = Math.min(
+          Math.max(0, Number(it.quantity) || 0),
+          Math.abs(Number(latestMovement.change) || 0),
+        );
+      } else if (latestMovement?.type === "order_restore") {
+        it.quantity = 0;
+      }
+    }
   }
 
   let deductedCount = 0;
   for (const it of items) {
     const pid = toId(it.productId);
     if (!pid) continue;
-    const qty = it.quantity;
+    const plan = direction === "deduct" ? deductionPlan.get(itemKey(it)) : undefined;
+    const qty = plan?.quantity ?? it.quantity;
+    const requestedQuantity = plan?.requestedQuantity ?? qty;
+    const weightOverageKg = plan?.overageKg ?? 0;
     if (qty <= 0) continue;
 
     const existing = await products.findOne({ _id: pid });
@@ -1346,6 +1432,11 @@ async function applyDelta(
           unit: (after as any)?.unit ?? it.unit ?? "",
           change: -qty, balance: Number((after as any)?.quantity) || 0,
           orderId, orderRef, ...(subReason ? { subReason } : {}), createdAt: now,
+          ...(direction === "deduct" ? {
+            requestedQuantity,
+            ...(weightOverageKg > 0 ? { weightOverageKg } : {}),
+            ...(it.partName ? { partName: it.partName } : {}),
+          } : {}),
         });
         deductedCount++;
         continue;
@@ -1399,6 +1490,11 @@ async function applyDelta(
       orderId,
       orderRef,
       ...(subReason ? { subReason } : {}),
+      ...(direction === "deduct" ? {
+        requestedQuantity,
+        ...(weightOverageKg > 0 ? { weightOverageKg } : {}),
+        ...(it.partName ? { partName: it.partName } : {}),
+      } : {}),
       ...(appliedBatchNumbers ? { batchNumbers: appliedBatchNumbers } : {}),
       expiryDate: appliedExpiry || undefined,
       createdAt: now,
@@ -1565,8 +1661,8 @@ export async function applyOrderInventoryOnDelete(
 function itemsSignature(items: any): string {
   if (!Array.isArray(items)) return "";
   return items
-    .map((i: any) => `${i?.productId ?? ""}:${Number(i?.quantity) || 0}`)
-    .filter((s: string) => s !== ":0")
+    .map((i: any) => `${i?.productId ?? ""}:${i?.partName ?? ""}:${Number(i?.quantity) || 0}`)
+    .filter((s: string) => !s.endsWith(":0"))
     .sort()
     .join("|");
 }

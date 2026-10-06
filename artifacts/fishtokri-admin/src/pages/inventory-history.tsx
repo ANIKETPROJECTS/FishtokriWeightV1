@@ -36,6 +36,8 @@ type Movement = {
   customerName?: string;
   batchNumbers?: string;
   subReason?: string;
+  requestedQuantity?: number;
+  weightOverageKg?: number;
   reason?: string;
   notes?: string;
   createdAt: string;
@@ -44,6 +46,10 @@ type Movement = {
 function formatDateTime(iso: string) {
   const d = new Date(iso);
   return d.toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function formatWeightKg(value: number) {
+  return `${Number(value).toLocaleString("en-IN", { maximumFractionDigits: 3 })} kg`;
 }
 
 type SubReasonMeta = { label: string; tone: string };
@@ -256,6 +262,11 @@ export default function InventoryHistory() {
                                 </div>
                                 {m.customerName && (
                                   <p className="text-xs text-gray-600 font-medium">{m.customerName}</p>
+                                )}
+                                {Number(m.weightOverageKg) > 0 && (
+                                  <p className="text-[11px] font-semibold text-amber-700">
+                                    {formatWeightKg(Number(m.weightOverageKg))} overage billed; not deducted from stock
+                                  </p>
                                 )}
                               </div>
                             ) : m.type === "adjustment" ? (

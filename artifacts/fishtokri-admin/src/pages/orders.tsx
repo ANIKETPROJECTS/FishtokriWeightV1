@@ -464,6 +464,19 @@ function isWeightBasedProduct(product: any) {
   return !product?.isCombo && getWeightPricing(product?.unit).isWeightBased;
 }
 
+function isFishWeightProduct(product: any) {
+  const category = product?.category && typeof product.category === "object"
+    ? product.category.name
+    : product?.category;
+  const subCategory = product?.subCategory && typeof product.subCategory === "object"
+    ? product.subCategory.name
+    : product?.subCategory;
+  return Boolean(product?.isDemoBigFishPart || product?.demoKey === "big-fish-parts") ||
+    /fish|surmai/i.test(`${category ?? ""} ${subCategory ?? ""}`);
+}
+
+const POS_WEIGHT_OVERAGE_LIMIT_KG = 1;
+
 function formatOrderWeight(weightInKg: number) {
   const grams = Math.round((Number(weightInKg) || 0) * 1000);
   if (grams < 1000) return `${grams} g`;
@@ -904,6 +917,7 @@ export default function Orders() {
   // Tracks FTW order IDs that currently have an in-flight UPI+RZPAY fix request.
   // Removed on completion (success or failure) so polls re-check until the DB confirms.
   const ftwInFlightRef = useRef<Set<string>>(new Set());
+  const orderLoadErrorShownRef = useRef(false);
 
   // Paid orders client-side filter
   const [payFilter, setPayFilter] = useState(false);
@@ -1710,10 +1724,49 @@ export default function Orders() {
       toast({ title: "Enter a weight", description: "Enter a weight greater than 0.", variant: "destructive" });
       return;
     }
-    const available = Number(selectedScaleProduct.quantity) || 0;
-    if (scaleWeightKg > available) {
-      toast({ title: "Weight exceeds stock", description: `Only ${formatOrderWeight(available)} is available.`, variant: "destructive" });
+    const available = Math.max(0, Number(selectedScaleProduct.quantity) || 0);
+    const overageKg = Math.max(0, scaleWeightKg - available);
+    const canUsePosBuffer =
+      orderDeliveryType === "takeaway" &&
+      posProductMode === "normal" &&
+      isWeightBasedProduct(selectedScaleProduct) &&
+      isFishWeightProduct(selectedScaleProduct);
+    if (
+      overageKg > 0 &&
+      (!canUsePosBuffer || available <= 0 || overageKg > POS_WEIGHT_OVERAGE_LIMIT_KG + 1e-9)
+    ) {
+      const allowed = canUsePosBuffer && available > 0
+        ? available + POS_WEIGHT_OVERAGE_LIMIT_KG
+        : available;
+      toast({
+        title: "Weight exceeds the POS limit",
+        description: canUsePosBuffer && available > 0
+          ? `Available stock is ${formatOrderWeight(available)}. The maximum with the 1 kg allowance is ${formatOrderWeight(allowed)}.`
+          : `Only ${formatOrderWeight(available)} is available.`,
+        variant: "destructive",
+      });
       return;
+    }
+    if (canUsePosBuffer && selectedScaleProduct.isDemoBigFishPart) {
+      const otherPartOverage = selectedProducts
+        .filter((item) =>
+          item.isDemoBigFishPart &&
+          item.parentProductId === selectedScaleProduct.parentProductId &&
+          item.productId !== String(selectedScaleProduct._id)
+        )
+        .reduce((total, item) => {
+          const part = bigFishPartOptions.find((option) => option.productId === item.productId);
+          const partAvailable = Math.max(0, Number(part?.quantity) || 0);
+          return total + Math.max(0, Number(item.quantity) - partAvailable);
+        }, 0);
+      if (otherPartOverage + overageKg > POS_WEIGHT_OVERAGE_LIMIT_KG + 1e-9) {
+        toast({
+          title: "Surmai weight allowance reached",
+          description: "The 1 kg allowance is shared across Head, Body, and Tail.",
+          variant: "destructive",
+        });
+        return;
+      }
     }
     setSelectedProducts((current) => {
       const existing = current.some((item) => item.productId === String(selectedScaleProduct._id));
@@ -2571,6 +2624,7 @@ export default function Orders() {
       if (subHubFilter) params.set("subHubId", subHubFilter);
 
       const data = await apiFetch(`/api/orders?${params}`);
+      orderLoadErrorShownRef.current = false;
       const loadedOrders = data.orders ?? [];
       setOrders(loadedOrders);
       setTotal(data.total ?? 0);
@@ -2651,7 +2705,10 @@ export default function Orders() {
       }
       if (changed) setFilterSubHubs(Array.from(knownSubHubsRef.current.values()));
     } catch (err: any) {
-      toast({ title: "Error loading orders", description: err.message, variant: "destructive" });
+      if (!orderLoadErrorShownRef.current) {
+        orderLoadErrorShownRef.current = true;
+        toast({ title: "Error loading orders", description: err.message, variant: "destructive" });
+      }
     } finally { setLoading(false); }
   }, [search, sortField, sortDir, page, activeTab, statusFilter, deliveryTypeFilter, dateFrom, dateTo, subHubFilter, toast]);
 
@@ -2670,12 +2727,18 @@ export default function Orders() {
     } catch { }
   }, []);
 
-  useEffect(() => { loadStats(); }, [loadStats]);
+  useEffect(() => {
+    if (isCreatePage) return;
+    loadStats();
+  }, [loadStats, isCreatePage]);
   useEffect(() => {
     if (activeTab === "current" || activeTab === "history") setActiveTab("all");
   }, [activeTab]);
   useEffect(() => { setPage(1); }, [activeTab, search, statusFilter, deliveryTypeFilter, dateFrom, dateTo, sortField, sortDir, subHubFilter]);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (isCreatePage) return;
+    load();
+  }, [load, isCreatePage]);
 
   // Clear the delivery-date range filter when leaving the "All Orders" tab —
   // it only applies there, so stale values shouldn't bleed into other tabs.
@@ -2687,9 +2750,10 @@ export default function Orders() {
   }, [activeTab]);
 
   useEffect(() => {
+    if (isCreatePage) return;
     const id = setInterval(() => { load(true); loadStats(); }, 5000);
     return () => clearInterval(id);
-  }, [load, loadStats]);
+  }, [load, loadStats, isCreatePage]);
 
   const handleStatusUpdate = async () => {
     if (!selectedOrder || !editStatus) return;
@@ -4535,6 +4599,11 @@ export default function Orders() {
                   <div className="min-w-0">
                     <h3 className="text-sm font-bold text-[#162B4D]">Test weighing scale</h3>
                     <p className="text-[11px] text-[#8D3D36]">Click a weight-based product above, then enter kg and grams to add it to the order.</p>
+                    {orderDeliveryType === "takeaway" && posProductMode === "normal" && (
+                      <p className="text-[10px] leading-4 text-[#8D3D36]">
+                        For fish sold by weight, you can add up to 1 kg above available stock when stock remains. The full scale weight is billed; the extra is logged separately and is not deducted from stock.
+                      </p>
+                    )}
                   </div>
                 </div>
                 <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_82px_82px_auto] sm:items-end">

@@ -1383,6 +1383,7 @@ router.post("/", async (req: ScopedRequest, res) => {
       total: totalNum,
       deliveryType: dt,
       orderType: normalizedOrderType,
+      posWeightBuffer: dt === "takeaway" && normalizedOrderType === "normal",
       address: dt === "delivery" ? String(address ?? "").trim() : "",
       deliveryArea: dt === "delivery" ? String(deliveryArea ?? "").trim() : "",
       deliveryAddressDetail: dt === "delivery" && deliveryAddressDetail ? deliveryAddressDetail : undefined,
@@ -1589,6 +1590,7 @@ router.post("/", async (req: ScopedRequest, res) => {
         subHubId: orderDoc.subHubId,
         subHubName: orderDoc.subHubName,
         status: orderDoc.status,
+        posWeightBuffer: orderDoc.posWeightBuffer,
         items: orderDoc.items,
       });
       req.log.info({ orderId: String(result.insertedId), deducted }, "order create: applyOrderInventoryOnCreate returned");
