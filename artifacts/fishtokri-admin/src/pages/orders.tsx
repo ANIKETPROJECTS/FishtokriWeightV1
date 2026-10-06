@@ -5325,7 +5325,7 @@ export default function Orders() {
             {/* ── Right half: Punched Orders / Cart ── */}
             <div className="flex-1 flex flex-col overflow-hidden bg-white">
               <div className="px-3 pt-3 pb-2 border-b border-gray-100 flex-shrink-0 flex items-center justify-between">
-                <p className="text-sm font-normal text-gray-900 flex items-center gap-1.5"><img src="/icon-order.png" className="w-4 h-4 object-contain" alt="" />Order</p>
+                <p className="flex items-center gap-1.5 text-sm font-semibold text-black"><img src="/icon-order.png" className="w-4 h-4 object-contain" alt="" />Order</p>
                 {selectedProducts.length > 0 && (
                   <span className="text-[11px] font-bold text-[#F05B4E]">{totalItemCount} item{totalItemCount !== 1 ? "s" : ""}</span>
                 )}
@@ -5336,8 +5336,8 @@ export default function Orders() {
                     <div className="w-12 h-12 rounded-2xl bg-gray-200 flex items-center justify-center mb-2">
                       <ShoppingBag className="w-5 h-5 text-gray-400" />
                     </div>
-                    <p className="text-sm font-medium text-gray-400">Cart is empty</p>
-                    <p className="text-xs text-gray-300 mt-0.5">Tap products to add</p>
+                    <p className="text-sm font-semibold text-black">Cart is empty</p>
+                    <p className="mt-0.5 text-xs text-black">Tap products to add</p>
                   </div>
                 ) : (
         <div className="px-3 py-2 space-y-0">
