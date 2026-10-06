@@ -465,6 +465,7 @@ function isWeightBasedProduct(product: any) {
 }
 
 const POS_WEIGHT_OVERAGE_LIMIT_KG = 1;
+const POS_CART_WEIGHT_STEP_KG = 0.1;
 
 function formatOrderWeight(weightInKg: number) {
   const grams = Math.round((Number(weightInKg) || 0) * 1000);
@@ -834,6 +835,13 @@ function isBigFishSelectorProduct(product: any): boolean {
     || normalizedName === "big fish (demo)";
 }
 
+const SURMAI_PART_NAMES = ["Head", "Body", "Tail"] as const;
+type SurmaiPartName = typeof SURMAI_PART_NAMES[number];
+
+function isSurmaiPartName(value: string): value is SurmaiPartName {
+  return (SURMAI_PART_NAMES as readonly string[]).includes(value);
+}
+
 // ─── MAIN PAGE ─────────────────────────────────────────────────────────────────
 export default function Orders() {
   const { toast } = useToast();
@@ -988,12 +996,12 @@ export default function Orders() {
     unit: string;
     quantity: number;
     isCombo?: boolean;
-    partName?: "Head" | "Body" | "Tail";
+    partNote?: string;
   }[]>([]);
   const [scaleProductId, setScaleProductId] = useState("");
   const [scaleKg, setScaleKg] = useState("");
   const [scaleGrams, setScaleGrams] = useState("");
-  const [scalePartName, setScalePartName] = useState<"" | "Head" | "Body" | "Tail">("");
+  const [scalePartNote, setScalePartNote] = useState("");
 
   // Coupons / timeslots / scheduling
   const [coupons, setCoupons] = useState<any[]>([]);
@@ -1656,7 +1664,7 @@ export default function Orders() {
       return;
     }
     const productId = String(selectedScaleProduct._id);
-    const partName = selectedScaleProduct.isDemoBigFishSelector ? (scalePartName || undefined) : undefined;
+    const partNote = selectedScaleProduct.isDemoBigFishSelector ? (scalePartNote.trim() || undefined) : undefined;
     const available = Math.max(0, Number(selectedScaleProduct.quantity) || 0);
     const existingProductWeight = selectedProducts
       .filter((item) => item.productId === productId)
@@ -1691,7 +1699,7 @@ export default function Orders() {
           ? {
             ...item,
             quantity: item.quantity + scaleWeightKg,
-            partName: partName ?? item.partName,
+            partNote: partNote ?? item.partNote,
           }
           : item);
       }
@@ -1702,13 +1710,23 @@ export default function Orders() {
         unit: selectedScaleProduct.unit ?? "",
         quantity: scaleWeightKg,
         isCombo: false,
-        ...(partName ? { partName } : {}),
+        ...(partNote ? { partNote } : {}),
       }];
     });
     toast({
       title: "Weight added",
-      description: `${selectedScaleProduct.name}${partName ? ` · ${partName}` : ""} · ${formatOrderWeight(scaleWeightKg)}`,
+      description: `${selectedScaleProduct.name}${partNote ? ` · ${partNote}` : ""} · ${formatOrderWeight(scaleWeightKg)}`,
     });
+  };
+
+  const removeSelectedProduct = (productId: string) => {
+    setSelectedProducts((current) => current.filter((item) => item.productId !== productId));
+    if (scaleProductId === productId) {
+      setScaleProductId("");
+      setScaleKg("");
+      setScaleGrams("");
+      setScalePartNote("");
+    }
   };
 
   const filteredCategories = useMemo(() => {
@@ -2002,7 +2020,12 @@ export default function Orders() {
       .filter((p) => p.quantity > 0)
       .map((p) => ({
         productId: p.productId,
-        ...(p.partName ? { partName: p.partName } : {}),
+        ...(p.partNote?.trim()
+          ? {
+            partNote: p.partNote.trim().slice(0, 100),
+            ...(isSurmaiPartName(p.partNote.trim()) ? { partName: p.partNote.trim() } : {}),
+          }
+          : {}),
         name: p.name,
         price: orderProductPriceForApi(p),
         quantity: p.quantity,
@@ -3047,8 +3070,8 @@ export default function Orders() {
         price: Number(it.price) || 0,
         unit: it.unit ?? "",
         quantity: Number(it.quantity) || 0,
-        ...(it.partName === "Head" || it.partName === "Body" || it.partName === "Tail"
-          ? { partName: it.partName }
+        ...((typeof it.partNote === "string" && it.partNote.trim()) || isSurmaiPartName(String(it.partName ?? ""))
+          ? { partNote: typeof it.partNote === "string" && it.partNote.trim() ? it.partNote.trim() : String(it.partName) }
           : {}),
       }));
     const customs = (o.items ?? [])
@@ -3519,7 +3542,7 @@ export default function Orders() {
                         </td>
                         <td className="px-4 py-3">
                           <p className="text-[#162B4D] font-medium text-sm">{(o.items ?? []).length} item{(o.items ?? []).length !== 1 ? "s" : ""}</p>
-                           <p className="text-xs text-gray-400 truncate max-w-[180px]">{(o.items ?? []).map((i: any) => `${i.name}${i.partName ? ` · Part: ${i.partName}` : ""} · ${orderLineSummary(i)}`).join(", ")}</p>
+                           <p className="text-xs text-gray-400 truncate max-w-[180px]">{(o.items ?? []).map((i: any) => `${i.name}${i.partNote || i.partName ? ` · Note: ${i.partNote || i.partName}` : ""} · ${orderLineSummary(i)}`).join(", ")}</p>
                         </td>
                         <td className="px-4 py-3">
                           <span className="font-bold text-[#162B4D]">{formatRupees(tot)}</span>
@@ -3607,7 +3630,7 @@ export default function Orders() {
                             {items.map((it: any, i: number) => (
                                <p key={i} className="text-sm text-black truncate">
                                   <span className="font-medium">{it.name}</span>
-                                  {it.partName && <span className="text-xs text-gray-500"> · Part: {it.partName}</span>}
+                                  {(it.partNote || it.partName) && <span className="text-xs text-gray-500"> · Note: {it.partNote || it.partName}</span>}
                                  <span> · {orderLineSummary(it)}</span>
                               </p>
                             ))}
@@ -4386,12 +4409,7 @@ export default function Orders() {
                               setScaleKg("");
                               setScaleGrams("");
                               const existingFishLine = selectedProducts.find((item) => item.productId === pid);
-                              setScalePartName(
-                                p.isDemoBigFishSelector &&
-                                  (existingFishLine?.partName === "Head" || existingFishLine?.partName === "Body" || existingFishLine?.partName === "Tail")
-                                  ? existingFishLine.partName
-                                  : ""
-                              );
+                              setScalePartNote(p.isDemoBigFishSelector ? existingFishLine?.partNote ?? "" : "");
                             }
                             setScaleProductId(pid);
                             // Selecting a weight product only chooses the product
@@ -4422,14 +4440,8 @@ export default function Orders() {
                             title="Remove from order"
                             onClick={(event) => {
                               event.stopPropagation();
-                              setSelectedProducts((prev) => prev.filter((sp) => sp.productId !== pid));
-                              if (scaleProductId === pid) {
-                                setScaleProductId("");
-                                setScaleKg("");
-                                setScaleGrams("");
-                                setScalePartName("");
-                              }
-                              if (isBigFishSelector) setScalePartName("");
+                              removeSelectedProduct(pid);
+                              if (isBigFishSelector) setScalePartNote("");
                             }}
                             className="absolute left-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-white/95 text-gray-500 shadow-sm ring-1 ring-gray-200 transition-colors hover:bg-red-50 hover:text-red-600"
                           >
@@ -4521,25 +4533,26 @@ export default function Orders() {
                   {selectedScaleProduct?.isDemoBigFishSelector && (
                     <label className="block">
                       <span className="mb-1 block text-[11px] font-semibold text-[#51617A]">Part note (optional)</span>
-                      <select
-                        value={scalePartName}
+                      <input
+                        type="text"
+                        list="surmai-part-note-options"
+                        value={scalePartNote}
                         onChange={(event) => {
-                          const nextPartName = event.target.value as "" | "Head" | "Body" | "Tail";
-                          setScalePartName(nextPartName);
+                          const nextPartNote = event.target.value.slice(0, 100);
+                          setScalePartNote(nextPartNote);
                           setSelectedProducts((current) => current.map((item) =>
                             item.productId === scaleProductId
-                              ? { ...item, partName: nextPartName || undefined }
+                              ? { ...item, partNote: nextPartNote || undefined }
                               : item
                           ));
                         }}
+                        placeholder="Choose or type"
                         className="h-9 w-full rounded-lg border border-[#E9B8B1] bg-white px-2 text-xs font-semibold text-[#162B4D] outline-none focus:border-[#F05B4E]"
-                        data-testid="select-scale-part-note"
-                      >
-                        <option value="">No note</option>
-                        <option value="Head">Head</option>
-                        <option value="Body">Body</option>
-                        <option value="Tail">Tail</option>
-                      </select>
+                        data-testid="input-scale-part-note"
+                      />
+                      <datalist id="surmai-part-note-options">
+                        {SURMAI_PART_NAMES.map((partName) => <option key={partName} value={partName} />)}
+                      </datalist>
                     </label>
                   )}
                   <label className="block">
@@ -5164,17 +5177,45 @@ export default function Orders() {
                       const stock = stockOf(p.productId);
                       const weightBased = isWeightBasedProduct(p);
                       const atMax = p.quantity >= stock;
+                      const weightStep = POS_CART_WEIGHT_STEP_KG;
+                      const weightBuffer = orderDeliveryType === "takeaway" && posProductMode === "normal" && weightBased && stock > 0
+                        ? POS_WEIGHT_OVERAGE_LIMIT_KG
+                        : 0;
+                      const weightAtMax = p.quantity + weightStep > stock + weightBuffer + 1e-9;
+                      const adjustWeight = (direction: -1 | 1) => {
+                        const nextQuantity = Math.max(0, Math.round((p.quantity + direction * weightStep) * 1000) / 1000);
+                        if (direction > 0 && nextQuantity > stock + weightBuffer + 1e-9) return;
+                        setSelectedProducts((current) => nextQuantity <= 0
+                          ? current.filter((item) => item.productId !== p.productId)
+                          : current.map((item) => item.productId === p.productId
+                            ? { ...item, quantity: nextQuantity }
+                            : item));
+                      };
                       return (
-                        <div key={`${p.productId}:${p.partName ?? ""}`} className="flex items-center gap-2 py-2 border-b border-gray-100 last:border-0">
+                        <div key={`${p.productId}:${p.partNote ?? ""}`} className="flex items-center gap-1.5 py-2 border-b border-gray-100 last:border-0">
                           <div className="flex-1 min-w-0">
                             <p className="text-xs font-semibold text-[#162B4D] leading-tight truncate">{p.name}</p>
-                            {p.partName && <p className="text-[10px] text-gray-500">Part: {p.partName}</p>}
+                            {p.partNote && <p className="text-[10px] text-gray-500 truncate">Note: {p.partNote}</p>}
                             <p className="text-[11px] text-gray-400">{formatRupees(Number(p.price))}{p.unit ? ` / ${p.unit}` : ""}</p>
                           </div>
                           {weightBased ? (
-                            <div className="rounded-md bg-[#F8FAFD] px-2 py-1 text-right flex-shrink-0">
-                              <p className="text-[10px] font-semibold uppercase tracking-wide text-[#9A8F84]">Weight from scale</p>
-                              <p className="text-xs font-bold text-[#162B4D]">{formatOrderWeight(p.quantity)}</p>
+                            <div className="flex items-center gap-0.5 rounded-md bg-[#F8FAFD] px-1 py-1 flex-shrink-0" title="Adjust weight in 100 g steps">
+                              <button
+                                type="button"
+                                aria-label={`Subtract 100 grams from ${p.name}`}
+                                title="Subtract 100 g"
+                                onClick={() => adjustWeight(-1)}
+                                className="h-6 w-6 rounded text-gray-600 hover:bg-gray-200 font-bold"
+                              >−</button>
+                              <span className="min-w-[44px] text-center text-xs font-bold text-[#162B4D]">{formatOrderWeight(p.quantity)}</span>
+                              <button
+                                type="button"
+                                aria-label={`Add 100 grams to ${p.name}`}
+                                title="Add 100 g"
+                                disabled={weightAtMax}
+                                onClick={() => adjustWeight(1)}
+                                className="h-6 w-6 rounded text-gray-600 hover:bg-gray-200 font-bold disabled:opacity-30"
+                              >+</button>
                             </div>
                           ) : (
                             <div className="flex items-center bg-white rounded-md border border-gray-200 overflow-hidden flex-shrink-0">
@@ -5183,7 +5224,16 @@ export default function Orders() {
                               <button disabled={atMax} onClick={() => { if (!atMax) setSelectedProducts((arr) => arr.map((x) => x.productId === p.productId ? { ...x, quantity: x.quantity + 1 } : x)); }} className="w-6 h-6 flex items-center justify-center text-gray-500 hover:bg-gray-100 font-bold disabled:opacity-30">+</button>
                             </div>
                           )}
-                          <span className="text-xs font-bold text-[#162B4D] w-16 text-right flex-shrink-0">{formatRupees(orderProductAmount(p, p.quantity))}</span>
+                          <span className="text-xs font-bold text-[#162B4D] w-14 text-right flex-shrink-0">{formatRupees(orderProductAmount(p, p.quantity))}</span>
+                          <button
+                            type="button"
+                            aria-label={`Remove ${p.name} from order`}
+                            title="Remove item"
+                            onClick={() => removeSelectedProduct(p.productId)}
+                            className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-gray-400 hover:bg-red-50 hover:text-red-600"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
                         </div>
                       );
                     })}
@@ -5596,7 +5646,7 @@ export default function Orders() {
                         <li key={i} className="flex items-center justify-between gap-3">
                           <div className="min-w-0 flex-1">
                             <p className="font-bold text-black text-base">{item.name}</p>
-                            {item.partName && <p className="text-xs font-medium text-gray-500 mt-0.5">Part: {item.partName}</p>}
+                            {(item.partNote || item.partName) && <p className="text-xs font-medium text-gray-500 mt-0.5">Note: {item.partNote || item.partName}</p>}
                             <p className="text-sm font-medium text-black mt-0.5">{orderLineSummary(item)}</p>
                           </div>
                           <span className="font-extrabold text-black text-base whitespace-nowrap">{formatRupees(lineTotal)}</span>

@@ -7,8 +7,8 @@ For normal POS takeaway orders, any product sold by weight may be sold up to 1 k
 
 **Why:** The user wants the same allowance for all weight-based products in the POS, not only fish or seafood, while preventing recorded stock from going negative.
 
-For Surmai, the parent product's cleaned batch quantity is the single stock pool. POS selects and weighs the whole product at its one per-kg price; Head, Body, or Tail may be saved only as an optional note on that order line. They are never separate POS products or stock pools. Legacy per-part weights and prices are not authoritative.
+For Surmai, the parent product's cleaned batch quantity is the single stock pool. POS selects and weighs the whole product at its one per-kg price; a free-text order-line note may record the part sold, with Head, Body, and Tail suggested. Keep one total weight line, not partwise weights or stock. Legacy per-part weights and prices are not authoritative.
 
-**Why:** The user wants to record fish inventory as one cleaned total and add a small part note at billing, without partwise weights, separate products, or different prices.
+**Why:** The user wants one cleaned inventory total and one weighed POS item, with flexible text to record which part was sold, without separate products or prices.
 
 **How to apply:** Keep the server as the authoritative stock check. Preserve partName as optional order/invoice metadata while deducting/restoring against the parent SKU. Preserve the full measured quantity on the order/invoice, cap inventory deduction at actual stock, and ensure cancellation/edit restores only what was deducted.

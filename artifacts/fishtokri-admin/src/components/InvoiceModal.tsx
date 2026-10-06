@@ -30,6 +30,16 @@ function formatOrderWeight(weightInKg: number) {
   return `${Number(weightInKg || 0).toLocaleString("en-IN", { maximumFractionDigits: 3 })} kg`;
 }
 
+function escapeHtml(value: unknown) {
+  return String(value ?? "").replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "\"": "&quot;",
+    "'": "&#39;",
+  })[character] ?? character);
+}
+
 function invoiceLineAmount(item: any) {
   const basis = getWeightPricing(item?.unit);
   const price = Number(item?.price) || 0;
@@ -132,10 +142,11 @@ export function InvoiceModal({ order, onClose }: { order: any; onClose: () => vo
         const displayRate = basis.isWeightBased ? rate * (1000 / basis.basisGrams) : rate;
         const quantityLabel = basis.isWeightBased ? formatOrderWeight(qty) : String(qty);
         const rateLabel = basis.isWeightBased ? `${formatRupees(displayRate)}/kg` : rate.toFixed(2);
-        const partNote = ["Head", "Body", "Tail"].includes(it.partName)
-          ? `<br/><span style="font-size:11px;font-weight:400;">Part: ${it.partName}</span>`
+        const note = String(it.partNote ?? it.partName ?? "").trim();
+        const itemNote = note
+          ? `<br/><span style="font-size:11px;font-weight:400;">Note: ${escapeHtml(note)}</span>`
           : "";
-        return `<tr><td style="padding:5px 4px;border:2px solid #444;font-weight:700;font-size:14px;word-break:break-word;">${it.name}${partNote}</td><td style="padding:5px 4px;border:2px solid #444;text-align:right;font-size:14px;">${quantityLabel}</td><td style="padding:5px 4px;border:2px solid #444;text-align:right;font-size:14px;">${rateLabel}</td><td style="padding:5px 4px;border:2px solid #444;text-align:right;font-size:14px;">${invoiceLineAmount(it).toFixed(2)}</td></tr>`;
+        return `<tr><td style="padding:5px 4px;border:2px solid #444;font-weight:700;font-size:14px;word-break:break-word;">${it.name}${itemNote}</td><td style="padding:5px 4px;border:2px solid #444;text-align:right;font-size:14px;">${quantityLabel}</td><td style="padding:5px 4px;border:2px solid #444;text-align:right;font-size:14px;">${rateLabel}</td><td style="padding:5px 4px;border:2px solid #444;text-align:right;font-size:14px;">${invoiceLineAmount(it).toFixed(2)}</td></tr>`;
       })
       .join("");
     const discountRows = [
@@ -283,8 +294,8 @@ export function InvoiceModal({ order, onClose }: { order: any; onClose: () => vo
                       <tr key={i}>
                         <td style={{ padding: "5px 4px", border: "1px solid #bbb", fontWeight: 600, wordBreak: "break-word", maxWidth: 150 }}>
                           {it.name}
-                          {["Head", "Body", "Tail"].includes(it.partName) && (
-                            <span style={{ display: "block", fontSize: 11, fontWeight: 400, color: "#666" }}>Part: {it.partName}</span>
+                          {(it.partNote || it.partName) && (
+                            <span style={{ display: "block", fontSize: 11, fontWeight: 400, color: "#666" }}>Note: {it.partNote || it.partName}</span>
                           )}
                         </td>
                         <td style={{ padding: "5px 4px", border: "1px solid #bbb", textAlign: "right" }}>{basis.isWeightBased ? formatOrderWeight(qty) : qty}</td>
