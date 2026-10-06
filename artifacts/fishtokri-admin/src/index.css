@@ -203,3 +203,26 @@
 .der-table-scroll::-webkit-scrollbar-thumb:hover {
   background: #718096;
 }
+
+/* New Order's customer and cart panels use darker labels and outlines for contrast. */
+.pos-customer-order-panels [class*="text-gray-"] {
+  color: #111827 !important;
+}
+
+.pos-customer-order-panels [class*="border-gray-"] {
+  border-color: #475569 !important;
+}
+
+.pos-customer-order-panels [class*="divide-gray-"] > :not(:last-child) {
+  border-color: #475569 !important;
+}
+
+.pos-customer-order-panels input::placeholder,
+.pos-customer-order-panels textarea::placeholder {
+  color: #111827 !important;
+  opacity: 1;
+}
+
+.pos-customer-order-panels .bg-gray-400 {
+  background-color: #334155 !important;
+}

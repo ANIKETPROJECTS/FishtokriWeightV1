@@ -4555,7 +4555,7 @@ export default function Orders() {
                                 {isBigFishSelector ? (
                                  <>
                                     <p className="text-sm font-semibold text-[#1A56DB]">₹{Number(p.price).toLocaleString("en-IN")}/{stockUnit}</p>
-                                    <p className={`mt-1 text-[10px] font-semibold leading-none ${stock > 0 ? "text-[#364F9F]" : "text-red-500"}`}>
+                                     <p className={`mt-1 text-[10px] font-semibold leading-none ${stock > 0 ? "text-amber-600" : "text-red-500"}`}>
                                      {stock.toLocaleString("en-IN", { maximumFractionDigits: 2 })} {stockUnit} left
                                    </p>
                                  </>
@@ -4682,12 +4682,18 @@ export default function Orders() {
                               <span className="mb-1 block text-sm font-semibold text-black">Kg</span>
                               <input
                                 type="number"
+                                inputMode="numeric"
                                 min="0"
                                 step="1"
                                 value={entry.kg}
-                                onChange={(event) => setScaleEntries((current) => current.map((candidate) =>
-                                  candidate.productId === entry.productId ? { ...candidate, kg: event.target.value } : candidate
-                                ))}
+                                onKeyDown={(event) => { if (/[eE+\-.,]/.test(event.key)) event.preventDefault(); }}
+                                onChange={(event) => {
+                                  const value = event.target.value;
+                                  if (!/^\d*$/.test(value)) return;
+                                  setScaleEntries((current) => current.map((candidate) =>
+                                    candidate.productId === entry.productId ? { ...candidate, kg: value } : candidate
+                                  ));
+                                }}
                                 placeholder="0"
                                 className="h-9 w-full appearance-none rounded-md border border-[#E9B8B1] bg-white px-2 text-base font-bold text-black placeholder:text-black [appearance:textfield] outline-none focus:border-[#F05B4E] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                                 aria-label={`${product.name} kilograms`}
@@ -4698,13 +4704,19 @@ export default function Orders() {
                               <span className="mb-1 block text-sm font-semibold text-black">Grams</span>
                               <input
                                 type="number"
+                                inputMode="numeric"
                                 min="0"
                                 max="999"
                                 step="1"
                                 value={entry.grams}
-                                onChange={(event) => setScaleEntries((current) => current.map((candidate) =>
-                                  candidate.productId === entry.productId ? { ...candidate, grams: event.target.value } : candidate
-                                ))}
+                                onKeyDown={(event) => { if (/[eE+\-.,]/.test(event.key)) event.preventDefault(); }}
+                                onChange={(event) => {
+                                  const value = event.target.value;
+                                  if (!/^\d*$/.test(value) || (value !== "" && Number(value) > 999)) return;
+                                  setScaleEntries((current) => current.map((candidate) =>
+                                    candidate.productId === entry.productId ? { ...candidate, grams: value } : candidate
+                                  ));
+                                }}
                                 placeholder="0"
                                 className="h-9 w-full appearance-none rounded-md border border-[#E9B8B1] bg-white px-2 text-base font-bold text-black placeholder:text-black [appearance:textfield] outline-none focus:border-[#F05B4E] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                                 aria-label={`${product.name} grams`}
@@ -4746,7 +4758,7 @@ export default function Orders() {
           </div>
 
           {/* ── RIGHT: ORDER PANEL — split: customer/schedule | cart ── */}
-          <div className="w-[42vw] min-w-[380px] max-w-[560px] flex-shrink-0 border-l border-gray-200 bg-white flex flex-row overflow-hidden">
+          <div className="pos-customer-order-panels w-[42vw] min-w-[380px] max-w-[560px] flex-shrink-0 border-l border-gray-200 bg-white flex flex-row overflow-hidden">
 
             {/* ── Left half: Customer + Address + Schedule ── */}
             <div className="w-[40%] min-w-[170px] max-w-[225px] flex-shrink-0 border-r border-gray-200 flex flex-col overflow-hidden">
@@ -5230,14 +5242,14 @@ export default function Orders() {
 
               {/* POS Schedule: future preorder pickup slot */}
               {(orderDeliveryType === "delivery" || posProductMode === "preorder") && (
-                <div className="px-4 pt-3 pb-3">
+                <div className="min-w-0 px-3 pt-3 pb-3">
                   <p className="text-sm font-semibold text-[#162B4D] flex items-center gap-1.5 mb-2">
                     <img src="/icon-schedule.png" className="w-4 h-4 object-contain" alt="" />
                     Pickup schedule
                   </p>
                   <>
                     {posProductMode === "preorder" ? (
-                        <div className="rounded-lg border border-orange-200 bg-orange-50 p-3">
+                        <div className="w-full min-w-0 rounded-lg border border-orange-200 bg-orange-50 p-2.5">
                           <label className="block text-xs font-semibold text-orange-800 mb-1.5">
                             Future pickup date
                           </label>
@@ -5245,7 +5257,7 @@ export default function Orders() {
                             <PopoverTrigger asChild>
                               <button
                                 type="button"
-                                className="w-full h-9 rounded-lg border border-orange-200 bg-white px-3 text-left text-sm text-gray-700 hover:bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-300"
+                                className="w-full h-9 rounded-lg border border-orange-200 bg-white px-3 text-left text-sm text-black hover:bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-300"
                               >
                                 {formatDeliveryDate(orderDate)}
                               </button>
@@ -5295,10 +5307,10 @@ export default function Orders() {
                       </div>
                     )}
                     {orderScheduleType === "slot" && (
-                      loadingTimeslots ? <p className="text-xs text-[#64748B]">Loading slots...</p>
+                      loadingTimeslots ? <p className="text-xs text-black">Loading slots...</p>
                       : activeTimeslots.length === 0 ? <p className="text-xs text-orange-700 flex items-center gap-1"><Zap className="w-3 h-3" />No slots available for this date</p>
                       : (
-                        <div className="grid grid-cols-2 gap-1.5">
+                        <div className="grid grid-cols-1 gap-1.5">
                           {activeTimeslots.map((t) => {
                             const id = String(t._id);
                             const isSelected = selectedTimeslotId === id;
@@ -5307,7 +5319,7 @@ export default function Orders() {
                             const displayEnd = addMinutesToTimeStr(t.endTime, pincodeTimeDelay);
                             return (
                               <button key={id} type="button" onClick={() => setSelectedTimeslotId(id)}
-                                className={`flex items-center justify-between px-3 py-2 rounded-lg border text-left transition-all ${isSelected ? "border-[#1A56DB] bg-blue-50" : "border-gray-200 bg-white hover:border-gray-300"}`}
+                                className={`flex w-full min-w-0 items-center justify-between px-3 py-2 rounded-lg border text-left transition-all ${isSelected ? "border-[#1A56DB] bg-blue-50" : "border-gray-200 bg-white hover:border-gray-300"}`}
                               >
                                 <span className={`text-xs font-semibold ${isSelected ? "text-[#1A56DB]" : "text-[#162B4D]"}`}>
                                   {displayStart}–{displayEnd}{extra > 0 ? ` +₹${extra}` : ""}
@@ -5406,12 +5418,18 @@ export default function Orders() {
                                     <span className="mb-1 block text-sm font-semibold text-black">Kilograms</span>
                                     <input
                                       type="number"
+                                      inputMode="numeric"
                                       min="0"
                                       step="1"
                                       value={editDraft.kg}
-                                      onChange={(event) => setEditingWeighedItem((current) =>
-                                        current ? { ...current, kg: event.target.value } : current
-                                      )}
+                                      onKeyDown={(event) => { if (/[eE+\-.,]/.test(event.key)) event.preventDefault(); }}
+                                      onChange={(event) => {
+                                        const value = event.target.value;
+                                        if (!/^\d*$/.test(value)) return;
+                                        setEditingWeighedItem((current) =>
+                                          current ? { ...current, kg: value } : current
+                                        );
+                                      }}
                                       className="h-10 w-full appearance-none rounded-md border border-gray-300 bg-white px-3 text-base font-semibold text-black placeholder:text-black [appearance:textfield] outline-none focus:border-[#1A56DB] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                                       aria-label={`${p.name} kilograms in order`}
                                     />
@@ -5420,13 +5438,19 @@ export default function Orders() {
                                     <span className="mb-1 block text-sm font-semibold text-black">Grams</span>
                                     <input
                                       type="number"
+                                      inputMode="numeric"
                                       min="0"
                                       max="999"
                                       step="1"
                                       value={editDraft.grams}
-                                      onChange={(event) => setEditingWeighedItem((current) =>
-                                        current ? { ...current, grams: event.target.value } : current
-                                      )}
+                                      onKeyDown={(event) => { if (/[eE+\-.,]/.test(event.key)) event.preventDefault(); }}
+                                      onChange={(event) => {
+                                        const value = event.target.value;
+                                        if (!/^\d*$/.test(value) || (value !== "" && Number(value) > 999)) return;
+                                        setEditingWeighedItem((current) =>
+                                          current ? { ...current, grams: value } : current
+                                        );
+                                      }}
                                       className="h-10 w-full appearance-none rounded-md border border-gray-300 bg-white px-3 text-base font-semibold text-black placeholder:text-black [appearance:textfield] outline-none focus:border-[#1A56DB] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                                       aria-label={`${p.name} grams in order`}
                                     />
@@ -5530,26 +5554,26 @@ export default function Orders() {
               <div className="flex-shrink-0 border-t border-gray-100 px-3 py-2">
                 <p className="text-sm font-normal text-gray-900 flex items-center gap-1.5 mb-2"><img src="/icon-payment.png" className="w-4 h-4 object-contain" alt="" />Payment</p>
                 {/* Main mode: Cash, UPI, or Card (+ Unpaid for takeaway) */}
-                <div className="flex items-center gap-2 mb-2">
+                <div className="flex items-center gap-1 mb-2">
                   <button type="button"
                     onClick={() => { setMainPaymentMode("upi"); setTakeawayUnpaid(false); }}
-                    className={`flex-1 flex h-10 items-center justify-center gap-1.5 rounded-none border-2 py-2 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111827] focus-visible:ring-offset-1 ${mainPaymentMode === "upi" && !takeawayUnpaid ? "border-[#1A56DB] bg-[#1A56DB] text-white shadow-sm" : "border-black bg-white text-black hover:bg-gray-50"}`}
+                    className={`flex min-w-0 flex-1 items-center justify-center gap-0.5 whitespace-nowrap rounded-none border-2 px-0.5 py-2 text-[11px] font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111827] focus-visible:ring-offset-1 ${mainPaymentMode === "upi" && !takeawayUnpaid ? "border-[#1A56DB] bg-[#1A56DB] text-white shadow-sm" : "border-black bg-white text-black hover:bg-gray-50"}`}
                   >
-                    <Smartphone className="w-4 h-4" />
+                    <Smartphone className="h-3 w-3 shrink-0" />
                     UPI
                   </button>
                   <button type="button"
                     onClick={() => { setMainPaymentMode("cash"); setTakeawayUnpaid(false); }}
-                    className={`flex-1 flex h-10 items-center justify-center gap-1.5 rounded-none border-2 py-2 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111827] focus-visible:ring-offset-1 ${mainPaymentMode === "cash" && !takeawayUnpaid ? "border-[#15803D] bg-[#15803D] text-white shadow-sm" : "border-black bg-white text-black hover:bg-gray-50"}`}
+                    className={`flex min-w-0 flex-1 items-center justify-center gap-0.5 whitespace-nowrap rounded-none border-2 px-0.5 py-2 text-[11px] font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111827] focus-visible:ring-offset-1 ${mainPaymentMode === "cash" && !takeawayUnpaid ? "border-[#15803D] bg-[#15803D] text-white shadow-sm" : "border-black bg-white text-black hover:bg-gray-50"}`}
                   >
-                    <Banknote className="w-4 h-4" />
+                    <Banknote className="h-3 w-3 shrink-0" />
                     Cash
                   </button>
                   <button type="button"
                     onClick={() => { setMainPaymentMode("card"); setTakeawayUnpaid(false); }}
-                    className={`flex-1 flex h-10 items-center justify-center gap-1.5 rounded-none border-2 py-2 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111827] focus-visible:ring-offset-1 ${mainPaymentMode === "card" && !takeawayUnpaid ? "border-[#334155] bg-[#334155] text-white shadow-sm" : "border-black bg-white text-black hover:bg-gray-50"}`}
+                    className={`flex min-w-0 flex-1 items-center justify-center gap-0.5 whitespace-nowrap rounded-none border-2 px-0.5 py-2 text-[11px] font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111827] focus-visible:ring-offset-1 ${mainPaymentMode === "card" && !takeawayUnpaid ? "border-[#334155] bg-[#334155] text-white shadow-sm" : "border-black bg-white text-black hover:bg-gray-50"}`}
                   >
-                    <CreditCard className="w-4 h-4" />
+                    <CreditCard className="h-3 w-3 shrink-0" />
                     Card
                   </button>
                   {orderDeliveryType === "takeaway" && (() => {
@@ -5562,9 +5586,8 @@ export default function Orders() {
                         disabled={walletFullyCovers}
                         onClick={() => setTakeawayUnpaid(true)}
                         title={walletFullyCovers ? "Wallet balance covers the full order — this order is fully paid" : undefined}
-                        className={`flex-1 flex h-10 items-center justify-center gap-1.5 rounded-none border-2 py-2 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111827] focus-visible:ring-offset-1 ${takeawayUnpaid && !walletFullyCovers ? "border-[#B42318] bg-[#B42318] text-white shadow-sm" : "border-black bg-white text-black hover:bg-gray-50"} ${walletFullyCovers ? "cursor-not-allowed opacity-50" : ""}`}
+                        className={`flex min-w-0 flex-1 items-center justify-center whitespace-nowrap rounded-none border-2 px-0.5 py-2 text-[11px] font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111827] focus-visible:ring-offset-1 ${takeawayUnpaid && !walletFullyCovers ? "border-[#B42318] bg-[#B42318] text-white shadow-sm" : "border-black bg-white text-black hover:bg-gray-50"} ${walletFullyCovers ? "cursor-not-allowed opacity-50" : ""}`}
                       >
-                        <Tag className="w-4 h-4" />
                         Unpaid
                       </button>
                     );
