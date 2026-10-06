@@ -4388,7 +4388,7 @@ export default function Orders() {
         <div className="flex flex-1 min-h-0 overflow-hidden">
 
            {/* ── CATEGORY RAIL ── */}
-           <aside className="w-[160px] flex-shrink-0 bg-[#364F9F] text-white flex flex-col overflow-hidden">
+           <aside className="w-[184px] flex-shrink-0 bg-[#364F9F] text-white flex flex-col overflow-hidden">
              <div className="px-4 pt-4 pb-3 text-[11px] font-bold uppercase tracking-[0.16em] text-white/60">
                Categories
              </div>
@@ -4396,15 +4396,15 @@ export default function Orders() {
                <button
                  type="button"
                  onClick={() => setPickerCategory(null)}
-                 className={`w-full min-h-10 px-3 flex items-center justify-between gap-2 border-l-[3px] text-left text-sm font-semibold transition-colors ${
+                  className={`w-full min-h-11 px-3 flex items-center justify-between gap-2 border-l-[3px] text-left text-sm font-semibold transition-colors ${
                    !pickerCategory
                      ? "border-[#F05B4E] bg-[#F05B4E] text-white"
-                     : "border-transparent text-white/90 hover:bg-white/10"
+                      : "border-transparent text-white hover:bg-white/10"
                  }`}
                >
                  <span className="truncate">All Items</span>
-                   <span className={`min-w-6 px-1.5 py-1 rounded-full text-center text-[11px] leading-none ${
-                   !pickerCategory ? "bg-white/20 text-white" : "bg-white/15 text-white"
+                    <span className={`min-w-6 px-1.5 py-1 rounded-full text-center text-[11px] leading-none ${
+                    !pickerCategory ? "bg-[#162B4D] text-white" : "bg-[#F05B4E] text-white"
                  }`}>
                    {productsForMode.length}
                  </span>
@@ -4416,14 +4416,16 @@ export default function Orders() {
                    key={cat.name}
                    type="button"
                    onClick={() => setPickerCategory(cat.name)}
-                     className={`w-full min-h-10 px-3 flex items-center justify-between gap-2 border-l-[3px] text-left text-sm font-medium capitalize transition-colors ${
+                      className={`w-full min-h-11 px-3 flex items-center justify-between gap-2 border-l-[3px] text-left text-sm font-semibold capitalize transition-colors ${
                      pickerCategory === cat.name
-                       ? "border-[#F05B4E] bg-white/15 text-white"
-                       : "border-transparent text-white/85 hover:bg-white/10"
+                        ? "border-[#F05B4E] bg-[#F05B4E] text-white"
+                        : "border-transparent text-white hover:bg-white/10"
                    }`}
                  >
                    <span className="truncate">{cat.name}</span>
-                   <span className="min-w-6 px-1.5 py-1 rounded-full bg-white/15 text-center text-[11px] leading-none text-white">
+                    <span className={`min-w-6 px-1.5 py-1 rounded-full text-center text-[11px] leading-none text-white ${
+                      pickerCategory === cat.name ? "bg-[#162B4D]" : "bg-[#F05B4E]"
+                    }`}>
                      {cat.count}
                    </span>
                  </button>
