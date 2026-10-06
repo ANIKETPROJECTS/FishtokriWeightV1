@@ -283,7 +283,7 @@ export default function Customers() {
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const LIMIT = 10;
+  const LIMIT = 25;
   const searchTimeout = useState<ReturnType<typeof setTimeout> | null>(null);
 
   const handleSearchChange = useCallback((val: string) => {
@@ -1047,6 +1047,25 @@ function shortOrderRef(order: any, index: number) {
   return `Order ${index + 1}`;
 }
 
+function formatOrderUnit(unit: unknown) {
+  return String(unit ?? "").trim().replace(/^per\s+/i, "");
+}
+
+function formatOrderQuantity(item: any) {
+  const quantity = Number(item?.quantity ?? 1);
+  const quantityText = Number.isFinite(quantity)
+    ? quantity.toLocaleString("en-IN", { maximumFractionDigits: 3 })
+    : "1";
+  const unit = formatOrderUnit(item?.unit);
+  return `${quantityText}${unit ? ` ${unit}` : ""}`;
+}
+
+function getOrderItemSummary(item: any) {
+  const name = item?.name ?? item?.productName ?? item?.title ?? "Item";
+  const note = String(item?.partNote ?? item?.partName ?? "").trim();
+  return `${name}${note ? ` · Note: ${note}` : ""} · ${formatOrderQuantity(item)}`;
+}
+
 function OrderCardCompact({ order, index }: { order: any; index: number }) {
   const ref = shortOrderRef(order, index);
   const items = Array.isArray(order.items) ? order.items : [];
@@ -1076,7 +1095,7 @@ function OrderCardCompact({ order, index }: { order: any; index: number }) {
       </div>
       {items.length > 0 && (
         <div className="px-5 pb-3">
-          <p className="text-[10px] text-gray-400 truncate">{items.map((i: any) => i.name || i.productName || "Item").join(", ")}</p>
+          <p className="text-[10px] text-gray-400 truncate">{items.map(getOrderItemSummary).join(", ")}</p>
         </div>
       )}
     </div>
@@ -1160,13 +1179,18 @@ function OrderCard({ order, index }: { order: any; index: number }) {
             {items.map((item: any, i: number) => {
               const name = item.name ?? item.productName ?? item.title ?? `Item ${i + 1}`;
               const qty = Number(item.quantity ?? 1);
+              const unit = formatOrderUnit(item.unit);
+              const partNote = String(item.partNote ?? item.partName ?? "").trim();
               const rate = Number(item.price ?? item.rate ?? item.unitPrice ?? 0);
               const amount = Number(item.total ?? item.amount ?? (rate * qty));
               return (
                 <div key={i} className="flex items-start text-sm">
-                  <span className="flex-1 text-[#162B4D] font-medium pr-2">{name}</span>
-                  <span className="w-10 text-center text-gray-600">{qty}</span>
-                  <span className="w-20 text-right text-gray-600">{formatRupees(rate)}</span>
+                  <span className="flex-1 text-[#162B4D] font-medium pr-2">
+                    {name}
+                    {partNote && <span className="block mt-0.5 text-xs font-normal text-black/70">Note: {partNote}</span>}
+                  </span>
+                  <span className="w-16 text-center text-gray-600">{formatOrderQuantity(item)}</span>
+                  <span className="w-20 text-right text-gray-600">{formatRupees(rate)}{unit ? `/${unit}` : ""}</span>
                   <span className="w-20 text-right font-medium text-[#162B4D]">{formatRupees(amount)}</span>
                 </div>
               );
