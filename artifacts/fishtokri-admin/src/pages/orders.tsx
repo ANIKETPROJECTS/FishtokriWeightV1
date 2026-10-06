@@ -943,6 +943,8 @@ export default function Orders() {
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [editStatus, setEditStatus] = useState("");
   const [savingStatus, setSavingStatus] = useState(false);
+  const [preorderStatusDrafts, setPreorderStatusDrafts] = useState<Record<string, string>>({});
+  const [savingPreorderStatusId, setSavingPreorderStatusId] = useState<string | null>(null);
 
   // Payment-on-deliver dialog
   const [deliverPayOpen, setDeliverPayOpen] = useState(false);
@@ -2895,6 +2897,11 @@ export default function Orders() {
       });
       toast({ title: "Order cancelled", description: "Order has been cancelled." });
       setOrders((prev) => prev.map((o) => String(o._id) === orderId ? { ...o, status: "cancelled", cancellationReason: reason } : o));
+      setPreorderStatusDrafts((prev) => {
+        const next = { ...prev };
+        delete next[orderId];
+        return next;
+      });
       // Keep the detail panel in sync if this order is currently open.
       setSelectedOrder((o: any) => o && String(o._id) === orderId ? { ...o, status: "cancelled", cancellationReason: reason } : o);
       setEditStatus("cancelled");
@@ -2906,6 +2913,55 @@ export default function Orders() {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     } finally {
       setConfirmingReject(false);
+    }
+  };
+
+  const updatePreorderStatus = async (order: any) => {
+    const orderId = String(order?._id ?? "");
+    const nextStatus = preorderStatusDrafts[orderId] ?? getStatusActionValue(order);
+    if (!orderId || nextStatus === getStatusActionValue(order)) return;
+
+    if (nextStatus === "cancelled") {
+      setRejectingOrder(order);
+      setRejectReason("");
+      return;
+    }
+
+    setSavingPreorderStatusId(orderId);
+    try {
+      const result = await apiFetch(`/api/orders/${orderId}`, {
+        method: "PUT",
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      const savedOrder = result?.order ?? { status: nextStatus };
+      setOrders((prev) => prev.map((o) =>
+        String(o._id) === orderId ? { ...o, ...savedOrder, status: savedOrder.status ?? nextStatus } : o
+      ));
+      setSelectedOrder((current: any) =>
+        current && String(current._id) === orderId
+          ? { ...current, ...savedOrder, status: savedOrder.status ?? nextStatus }
+          : current
+      );
+      setPreorderStatusDrafts((prev) => {
+        const next = { ...prev };
+        delete next[orderId];
+        return next;
+      });
+      toast({
+        title: "Preorder status updated",
+        description: nextStatus === "handed_over" ? "Preorder marked as handed over." : undefined,
+      });
+      load();
+      loadStats();
+    } catch (err: any) {
+      setPreorderStatusDrafts((prev) => {
+        const next = { ...prev };
+        delete next[orderId];
+        return next;
+      });
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setSavingPreorderStatusId(null);
     }
   };
 
@@ -3605,7 +3661,40 @@ export default function Orders() {
                           </div>
                         )}
                       </td>
-                       <td className="px-3 py-4 align-top"><SolidStatusBadge status={o.status} deliveryType={o.deliveryType} orderType={o.orderType} /></td>
+                        <td className="px-3 py-4 align-top">
+                          <SolidStatusBadge status={o.status} deliveryType={o.deliveryType} orderType={o.orderType} />
+                          {activeTab === "preorder" && String(o.orderType ?? "").toLowerCase() === "preorder" && (
+                            <div className="mt-2 max-w-[150px] space-y-1.5">
+                              <select
+                                aria-label={`Preorder status for ${o.customerName || "customer"}`}
+                                data-testid={`select-preorder-status-${String(o._id)}`}
+                                value={preorderStatusDrafts[String(o._id)] ?? getStatusActionValue(o)}
+                                disabled={savingPreorderStatusId === String(o._id)}
+                                onChange={(event) => setPreorderStatusDrafts((prev) => ({
+                                  ...prev,
+                                  [String(o._id)]: event.target.value,
+                                }))}
+                                className="w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-[11px] font-medium text-gray-700 disabled:opacity-60"
+                              >
+                                <option value="created">Created</option>
+                                <option value="handed_over">Handed Over</option>
+                                <option value="cancelled">Cancelled</option>
+                              </select>
+                              <button
+                                type="button"
+                                data-testid={`button-update-preorder-status-${String(o._id)}`}
+                                disabled={
+                                  savingPreorderStatusId === String(o._id) ||
+                                  (preorderStatusDrafts[String(o._id)] ?? getStatusActionValue(o)) === getStatusActionValue(o)
+                                }
+                                onClick={() => updatePreorderStatus(o)}
+                                className="w-full rounded-md bg-[#364F9F] px-2 py-1.5 text-[11px] font-semibold text-white hover:bg-[#2C418A] disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {savingPreorderStatusId === String(o._id) ? "Saving..." : "Update"}
+                              </button>
+                            </div>
+                          )}
+                        </td>
                        <td className="px-3 py-4 align-top text-center">
                         <div className="inline-flex items-center gap-1.5">
                           <button
@@ -3904,7 +3993,18 @@ export default function Orders() {
       </Dialog>
 
       {/* Reject Order Dialog — captures cancellation reason */}
-      <Dialog open={!!rejectingOrder} onOpenChange={(o) => { if (!o && !confirmingReject) { setRejectingOrder(null); setRejectReason(""); } }}>
+      <Dialog open={!!rejectingOrder} onOpenChange={(o) => { if (!o && !confirmingReject) {
+        const orderId = rejectingOrder ? String(rejectingOrder._id) : "";
+        if (orderId) {
+          setPreorderStatusDrafts((prev) => {
+            const next = { ...prev };
+            delete next[orderId];
+            return next;
+          });
+        }
+        setRejectingOrder(null);
+        setRejectReason("");
+      } }}>
         <DialogContent className="sm:max-w-[440px]">
           {rejectingOrder && (
             <>
@@ -3933,7 +4033,25 @@ export default function Orders() {
                 </div>
               </div>
               <DialogFooter className="gap-2">
-                <Button variant="outline" onClick={() => { setRejectingOrder(null); setRejectReason(""); }} disabled={confirmingReject} className="h-9">Cancel</Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    const orderId = rejectingOrder ? String(rejectingOrder._id) : "";
+                    if (orderId) {
+                      setPreorderStatusDrafts((prev) => {
+                        const next = { ...prev };
+                        delete next[orderId];
+                        return next;
+                      });
+                    }
+                    setRejectingOrder(null);
+                    setRejectReason("");
+                  }}
+                  disabled={confirmingReject}
+                  className="h-9"
+                >
+                  Cancel
+                </Button>
                 <Button
                   onClick={submitReject}
                   disabled={confirmingReject || !rejectReason.trim()}
