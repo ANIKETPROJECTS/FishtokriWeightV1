@@ -380,13 +380,34 @@ function OrdersReport({ from, to, onDownload, downloadRef }: { from: string; to:
       list = list.filter(o => {
         const invoiceRaw = String(o.invoiceNo || o.orderId || "").toLowerCase();
         const invoiceNoHash = invoiceRaw.startsWith("#") ? invoiceRaw.slice(1) : invoiceRaw;
+        const items: any[] = Array.isArray(o.items) ? o.items : [];
+        const placedDate = o.createdAt
+          ? new Date(o.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
+          : "";
+        const deliveryDate = o.deliveryDate ? formatDate(o.deliveryDate) : "";
+        const total = Number(o.total) || 0;
+        const due = orderDueAmount(o);
+        const orderStatus = String(o.status || "").replace(/_/g, " ");
         const haystack = [
           o.customerName || "",
           o.phone || "",
           invoiceRaw,
           invoiceNoHash,
-          o.deliveryPerson || "",
-          o.itemsSummary || "",
+          o.createdAt || "",
+          placedDate,
+          o.deliveryDate || "",
+          deliveryDate,
+          items.map((item) => item.name || "").join(" "),
+          items.map(orderLineQuantity).join(" "),
+          String(total),
+          formatRupees(total),
+          String(due),
+          formatRupees(due),
+          o.paymentMode || "",
+          o.upiVariant || "",
+          o.paymentStatus || "",
+          o.status || "",
+          orderStatus,
         ].join(" ").toLowerCase();
         return words.every(word => haystack.includes(word));
       });
@@ -726,7 +747,7 @@ function OrdersReport({ from, to, onDownload, downloadRef }: { from: string; to:
             <Search style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", width: 13, height: 13, color: "#aaa", pointerEvents: "none" }} />
             <input
               type="text"
-              placeholder="Search customer, phone, invoice…"
+              placeholder="Search invoice, customer, item, qty…"
               value={ordSearch}
               onChange={e => setOrdSearch(e.target.value)}
               style={{ paddingLeft: 28, paddingRight: 10, height: 32, border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12, fontFamily: "Poppins, sans-serif", color: "#000", background: "#fff", width: 230, outline: "none" }}
