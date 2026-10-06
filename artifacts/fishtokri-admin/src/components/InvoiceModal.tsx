@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { printHtmlWithQZ } from "@/lib/qz-print";
+import { normalizeOrderReference } from "@/lib/order-reference";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -96,8 +97,7 @@ export function InvoiceModal({ order, onClose }: { order: any; onClose: () => vo
     return w ? Number(w.amount) || 0 : 0;
   })();
 
-  const invoiceNo =
-    order.orderId || order.invoiceNo || "INV-" + String(order._id || order.id || "").slice(-6).toUpperCase();
+  const invoiceNo = normalizeOrderReference(order.orderId || order.invoiceNo, order);
 
   const d = new Date(order.createdAt ?? Date.now());
   const orderDateStr = [

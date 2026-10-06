@@ -26,6 +26,19 @@ function scopeOrderFilter(req: ScopedRequest): Record<string, any> | null {
   return { subHubId: { $in: scope.subHubIds } };
 }
 
+function normalizeReportInvoiceNo(orderId: unknown, order: any): string {
+  const raw = String(orderId ?? "").trim();
+  const malformedLegacy = raw.replace(/^#/, "").match(/^FTSundefinedundefined(\d{8})(\d+)$/i);
+  if (malformedLegacy) {
+    const [, yyyymmdd, sequence] = malformedLegacy;
+    const dayMonthYear = `${yyyymmdd.slice(6, 8)}${yyyymmdd.slice(4, 6)}${yyyymmdd.slice(0, 4)}`;
+    return `#FTS${dayMonthYear}${sequence.padStart(2, "0")}`;
+  }
+  if (raw && !/undefined|null|NaN/i.test(raw)) return raw;
+  const id = String(order?._id ?? "").trim();
+  return id ? `INV-${id.slice(-6).toUpperCase()}` : "Invoice";
+}
+
 function istDayStart(date: string): Date {
   return new Date(`${date}T00:00:00+05:30`);
 }
@@ -139,7 +152,7 @@ router.get("/day-end/orders", async (req: ScopedRequest, res) => {
       return {
         _id: String(o._id),
         orderId: o.orderId || null,
-        invoiceNo: o.orderId || `#${String(o._id).slice(-6).toUpperCase()}`,
+        invoiceNo: normalizeReportInvoiceNo(o.orderId, o),
         customerName: o.customerName || "—",
         phone: o.phone || o.customerPhone || "—",
         address: [o.address, o.deliveryArea, o.deliveryAddressDetail]

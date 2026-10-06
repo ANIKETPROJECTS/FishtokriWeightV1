@@ -45,6 +45,7 @@ import { playOrderAlertOnce } from "@/hooks/use-order-alert";
 import { printHtmlWithQZ } from "@/lib/qz-print";
 import { useLocation } from "wouter";
 import { getCurrentAdminScope } from "@/lib/api";
+import { normalizeOrderReference } from "@/lib/order-reference";
 import { DayPicker, type Matcher } from "react-day-picker";
 import { format } from "date-fns";
 import "react-day-picker/style.css";
@@ -528,12 +529,7 @@ function formatOrderId(o: any, dailySeq?: number): string {
 
 function displayOrderId(rawOrderId: unknown, order: any, dailySeq?: number): string {
   const raw = String(rawOrderId ?? "").trim();
-  const legacy = raw.replace(/^#/, "").match(/^FTS(\d{8})(\d+)$/i);
-  if (legacy) {
-    const [, yyyymmdd, sequence] = legacy;
-    const dayMonthYear = `${yyyymmdd.slice(6, 8)}${yyyymmdd.slice(4, 6)}${yyyymmdd.slice(0, 4)}`;
-    return `#FTS${dayMonthYear}${sequence.padStart(2, "0")}`;
-  }
+  if (raw) return normalizeOrderReference(raw, order);
   return raw || formatOrderId(order, dailySeq);
 }
 
@@ -3451,7 +3447,7 @@ export default function Orders() {
                 <tbody className="divide-y divide-gray-50">
                   {orders.filter(o => o.status !== "cancelled").map((o, idx) => {
                     const tot = effectiveOrderTotal(o);
-                    const invNo = o.orderId || ("INV-" + String(o._id).slice(-6).toUpperCase());
+                    const invNo = displayOrderId(o.orderId, o, dailySeqMap.get(String(o._id)));
                     return (
                       <tr key={String(o._id)} className="hover:bg-violet-50/30 transition-colors">
                         <td className="px-4 py-3">
