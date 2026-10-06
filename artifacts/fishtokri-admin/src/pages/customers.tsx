@@ -2,12 +2,12 @@ import { useState, useCallback, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import {
-  Plus, Search, Edit2, Trash2, Mail, Phone, Calendar,
+  Plus, Search, Edit2, Trash2, Phone, Calendar,
   ArrowUpDown, SlidersHorizontal, X, LayoutGrid, LayoutList,
   MapPin, ShoppingBag, ChevronLeft, ChevronRight, Users,
   Home, Clock, CheckCircle2, ClipboardList, Package,
-  CreditCard, Truck, UserRound, ChevronDown, ChevronUp, Tag, Wallet, RefreshCw,
-  TrendingUp, TrendingDown, History,
+  CreditCard, Truck, UserRound, ChevronDown, ChevronUp, Tag, RefreshCw,
+  History,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -59,11 +59,8 @@ const ACTIVE_ORDER_STATUSES = new Set(["pending", "confirmed", "out_for_delivery
 interface Customer {
   id: string;
   name: string;
-  email: string;
   phone: string;
   dateOfBirth: string;
-  walletBalance?: number;
-  addresses: any[];
   orders: any[];
   usedCoupons?: any[];
   activeCoupons?: any[];
@@ -146,18 +143,6 @@ async function deleteCustomer(id: string): Promise<void> {
   }
 }
 
-async function adjustCustomerWallet(id: string, delta: number, reason?: string): Promise<{ walletBalance: number }> {
-  const base = getBase();
-  const res = await fetch(`${base}/api/customers/${id}/wallet`, {
-    method: "PATCH",
-    headers: { Authorization: `Bearer ${getToken()}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ delta, reason }),
-  });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json.message || "Failed to adjust wallet");
-  return json;
-}
-
 const AVATAR_COLORS = [
   "bg-blue-100 text-blue-700",
   "bg-purple-100 text-purple-700",
@@ -202,26 +187,6 @@ function formatRupees(value: any) {
 
 function normalize(value: any) {
   return String(value ?? "").trim().toLowerCase();
-}
-
-function getCustomerLocation(customer: Customer) {
-  const addr = customer.addresses?.[0];
-  if (!addr) return null;
-  const houseNo = addr.houseNo || addr.flatNo || addr.house || addr.apartment || "";
-  const building = addr.building || addr.buildingName || addr.society || "";
-  const street = addr.street || addr.streetName || addr.road || addr.addressLine1 || "";
-  const area = addr.area || addr.locality || addr.neighbourhood || "";
-  const landmark = addr.landmark || "";
-  const city = addr.city || "";
-  const state = addr.state || "";
-  const pincode = addr.pincode || addr.zipCode || addr.zip || "";
-  const lines = [
-    [houseNo, building].filter(Boolean).join(", "),
-    [street, area].filter(Boolean).join(", "),
-    landmark,
-    [city, state, pincode].filter(Boolean).join(", "),
-  ].filter(Boolean);
-  return lines.length ? lines : null;
 }
 
 function getCustomerTotalSpend(customer: Customer) {
@@ -296,19 +261,6 @@ function stringifyValue(value: any) {
   return String(value);
 }
 
-function addressText(address: any) {
-  if (!address) return "—";
-  if (typeof address === "string") return address;
-  const parts = [
-    address.name, address.label, address.type,
-    address.houseNo, address.house, address.flatNo, address.apartment,
-    address.building, address.street, address.addressLine1, address.addressLine2,
-    address.area, address.landmark, address.city, address.state,
-    address.pincode, address.zipCode,
-  ].filter(Boolean);
-  return parts.length ? parts.join(", ") : JSON.stringify(address, null, 2);
-}
-
 function statusLabel(status: any) {
   return String(status || "unknown").replace(/_/g, " ");
 }
@@ -325,9 +277,6 @@ export default function Customers() {
   const [deleteCustomerId, setDeleteCustomerId] = useState<string | null>(null);
 
   const [filterOrders, setFilterOrders] = useState<"all" | "has" | "none">("all");
-  const [filterEmail, setFilterEmail] = useState<"all" | "yes" | "no">("all");
-  const [filterAddr, setFilterAddr] = useState<"all" | "yes" | "no">("all");
-  const [filterWallet, setFilterWallet] = useState<"all" | "has" | "none">("all");
   const [filterJoinedFrom, setFilterJoinedFrom] = useState("");
   const [filterJoinedTo, setFilterJoinedTo] = useState("");
   const [showDateFilters, setShowDateFilters] = useState(false);
@@ -364,19 +313,10 @@ export default function Customers() {
     let result = customers;
     if (filterOrders === "has") result = result.filter((c) => splitOrders(c).all.length > 0);
     if (filterOrders === "none") result = result.filter((c) => splitOrders(c).all.length === 0);
-    if (filterEmail === "yes") result = result.filter((c) => !!c.email?.trim());
-    if (filterEmail === "no") result = result.filter((c) => !c.email?.trim());
-    if (filterAddr === "yes") result = result.filter((c) => (c.addresses?.length ?? 0) > 0);
-    if (filterAddr === "no") result = result.filter((c) => (c.addresses?.length ?? 0) === 0);
-    if (filterWallet === "has") result = result.filter((c) => (Number(c.walletBalance) || 0) > 0);
-    if (filterWallet === "none") result = result.filter((c) => (Number(c.walletBalance) || 0) === 0);
     if (filterJoinedFrom) result = result.filter((c) => new Date(c.createdAt) >= new Date(filterJoinedFrom));
     if (filterJoinedTo) result = result.filter((c) => new Date(c.createdAt) <= new Date(filterJoinedTo + "T23:59:59"));
-    // Client-side wallet sort (the API also sorts server-side for cross-page correctness)
-    if (sort === "wallet_desc") result = [...result].sort((a, b) => (Number(b.walletBalance) || 0) - (Number(a.walletBalance) || 0));
-    if (sort === "wallet_asc") result = [...result].sort((a, b) => (Number(a.walletBalance) || 0) - (Number(b.walletBalance) || 0));
     return result;
-  }, [customers, filterOrders, filterEmail, filterAddr, filterWallet, filterJoinedFrom, filterJoinedTo, sort]);
+  }, [customers, filterOrders, filterJoinedFrom, filterJoinedTo]);
 
   const deleteMutation = useMutation({
     mutationFn: deleteCustomer,
@@ -392,14 +332,12 @@ export default function Customers() {
 
   const hasFilters = !!(
     debouncedSearch || sort !== "createdAt_desc" ||
-    filterOrders !== "all" || filterEmail !== "all" ||
-    filterAddr !== "all" || filterWallet !== "all" || filterJoinedFrom || filterJoinedTo
+    filterOrders !== "all" || filterJoinedFrom || filterJoinedTo
   );
 
   const clearFilters = () => {
     setSearch(""); setDebouncedSearch(""); setSort("createdAt_desc");
-    setFilterOrders("all"); setFilterEmail("all"); setFilterAddr("all");
-    setFilterWallet("all"); setFilterJoinedFrom(""); setFilterJoinedTo(""); setPage(1);
+    setFilterOrders("all"); setFilterJoinedFrom(""); setFilterJoinedTo(""); setPage(1);
   };
 
   const openEdit = (customer: Customer) => {
@@ -427,7 +365,7 @@ export default function Customers() {
           <div className="min-w-0">
             <h1 className="text-sm font-bold text-white leading-tight">Customers</h1>
             <p className="text-xs text-white/75 leading-tight hidden sm:block">
-              Manage all registered customers with saved addresses, current orders and order history.
+              Manage registered customers, orders and order history.
             </p>
           </div>
           <span className="text-3xl font-bold text-white flex-shrink-0 ml-4">{total}</span>
@@ -450,7 +388,7 @@ export default function Customers() {
         <div className="relative flex-1 min-w-[200px] max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <Input
-            placeholder="Search by name, email or phone..."
+            placeholder="Search by name or phone..."
             value={search}
             onChange={(e) => handleSearchChange(e.target.value)}
             className="pl-9 bg-white border-gray-200 h-9 text-sm text-black"
@@ -472,10 +410,6 @@ export default function Customers() {
             <SelectItem value="createdAt_asc">Oldest first</SelectItem>
             <SelectItem value="name_asc">Name (A → Z)</SelectItem>
             <SelectItem value="name_desc">Name (Z → A)</SelectItem>
-            <SelectItem value="email_asc">Email (A → Z)</SelectItem>
-            <SelectItem value="email_desc">Email (Z → A)</SelectItem>
-            <SelectItem value="wallet_desc">Wallet (High → Low)</SelectItem>
-            <SelectItem value="wallet_asc">Wallet (Low → High)</SelectItem>
           </SelectContent>
         </Select>
 
@@ -488,42 +422,6 @@ export default function Customers() {
             <SelectItem value="all">All customers</SelectItem>
             <SelectItem value="has">Has orders</SelectItem>
             <SelectItem value="none">No orders yet</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <Select value={filterEmail} onValueChange={(v: any) => { setFilterEmail(v); setPage(1); }}>
-          <SelectTrigger className="h-9 w-32 text-sm border-gray-200 bg-white text-black">
-            <Mail className="w-3.5 h-3.5 text-gray-500 mr-1.5 flex-shrink-0" />
-            <SelectValue placeholder="Email" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Any email</SelectItem>
-            <SelectItem value="yes">Has email</SelectItem>
-            <SelectItem value="no">No email</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <Select value={filterAddr} onValueChange={(v: any) => { setFilterAddr(v); setPage(1); }}>
-          <SelectTrigger className="h-9 w-36 text-sm border-gray-200 bg-white text-black">
-            <MapPin className="w-3.5 h-3.5 text-gray-500 mr-1.5 flex-shrink-0" />
-            <SelectValue placeholder="Address" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Any address</SelectItem>
-            <SelectItem value="yes">Has address</SelectItem>
-            <SelectItem value="no">No address</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <Select value={filterWallet} onValueChange={(v: any) => { setFilterWallet(v); setPage(1); }}>
-          <SelectTrigger className="h-9 w-36 text-sm border-gray-200 bg-white text-black">
-            <Wallet className="w-3.5 h-3.5 text-gray-500 mr-1.5 flex-shrink-0" />
-            <SelectValue placeholder="Wallet" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Any wallet</SelectItem>
-            <SelectItem value="has">Has balance</SelectItem>
-            <SelectItem value="none">No balance</SelectItem>
           </SelectContent>
         </Select>
 
@@ -619,7 +517,6 @@ export default function Customers() {
                       </td>
                       <td className="px-3 py-4">
                         <p className="text-sm font-medium text-black">{c.phone || "N.A"}</p>
-                        <p className="text-xs text-black mt-0.5">{c.email || "N.A"}</p>
                       </td>
                       <td className="px-3 py-4 text-right">
                         <span className="text-sm font-medium text-black">{formatRupees(totalSpend)}</span>
@@ -732,7 +629,6 @@ function CustomerCard({ customer: c, onView, onEdit, onDelete }: { customer: Cus
       </div>
       <div className="space-y-1">
         <div className="text-sm font-medium text-black">{c.phone || "N.A"}</div>
-        <div className="text-xs text-black">{c.email || "N.A"}</div>
       </div>
       <div className="grid grid-cols-1 gap-2">
         <MiniStat label="History" value={history.length} />
@@ -761,167 +657,6 @@ function MiniStat({ label, value }: { label: string; value: number }) {
   );
 }
 
-function WalletTopupModal({
-  customer,
-  open,
-  onClose,
-  onSuccess,
-}: {
-  customer: Customer;
-  open: boolean;
-  onClose: () => void;
-  onSuccess: (newBalance: number) => void;
-}) {
-  const [type, setType] = useState<"credit" | "debit">("credit");
-  const [amount, setAmount] = useState("");
-  const [reason, setReason] = useState("");
-  const [error, setError] = useState("");
-  const { toast } = useToast();
-
-  const mutation = useMutation({
-    mutationFn: ({ delta, reason }: { delta: number; reason: string }) =>
-      adjustCustomerWallet(customer.id, delta, reason || undefined),
-    onSuccess: (data) => {
-      toast({
-        title: type === "credit" ? "Wallet credited" : "Wallet debited",
-        description: `${type === "credit" ? "Added" : "Deducted"} ₹${Math.abs(Number(amount)).toLocaleString("en-IN")}. New balance: ₹${Number(data.walletBalance).toLocaleString("en-IN")}`,
-      });
-      onSuccess(data.walletBalance);
-      handleClose();
-    },
-    onError: (err: any) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
-    },
-  });
-
-  const handleClose = () => {
-    setAmount("");
-    setReason("");
-    setError("");
-    setType("credit");
-    onClose();
-  };
-
-  const handleSubmit = () => {
-    const num = Number(amount);
-    if (!amount || isNaN(num) || num <= 0) {
-      setError("Please enter a valid amount greater than 0.");
-      return;
-    }
-    if (type === "debit" && num > (Number(customer.walletBalance) || 0)) {
-      setError(`Cannot deduct more than the current balance (₹${Number(customer.walletBalance).toLocaleString("en-IN")}).`);
-      return;
-    }
-    setError("");
-    const delta = type === "credit" ? num : -num;
-    mutation.mutate({ delta, reason });
-  };
-
-  const currentBalance = Number(customer.walletBalance) || 0;
-  const numAmount = Number(amount) || 0;
-  const previewBalance = type === "credit" ? currentBalance + numAmount : Math.max(0, currentBalance - numAmount);
-
-  return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="text-black flex items-center gap-2">
-            <Wallet className="w-4 h-4 text-blue-500" />
-            Adjust Wallet — {customer.name || "Customer"}
-          </DialogTitle>
-          <DialogDescription>
-            Credit or debit the customer's wallet balance directly.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4 py-1">
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-blue-50 border border-blue-100">
-            <Wallet className="w-4 h-4 text-blue-500 flex-shrink-0" />
-            <div>
-              <p className="text-[11px] text-blue-600 font-medium">Current Wallet Balance</p>
-              <p className="text-lg font-bold text-blue-700">₹{currentBalance.toLocaleString("en-IN")}</p>
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-black">Transaction Type</Label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => { setType("credit"); setError(""); }}
-                className={`h-9 rounded-lg border text-xs font-semibold transition-colors ${
-                  type === "credit"
-                    ? "bg-emerald-500 border-emerald-500 text-white"
-                    : "bg-white border-gray-200 text-gray-600 hover:border-emerald-200 hover:text-emerald-600"
-                }`}
-              >
-                + Credit (Add)
-              </button>
-              <button
-                type="button"
-                onClick={() => { setType("debit"); setError(""); }}
-                className={`h-9 rounded-lg border text-xs font-semibold transition-colors ${
-                  type === "debit"
-                    ? "bg-red-500 border-red-500 text-white"
-                    : "bg-white border-gray-200 text-gray-600 hover:border-red-200 hover:text-red-600"
-                }`}
-              >
-                − Debit (Deduct)
-              </button>
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-black">Amount (₹) <span className="text-red-500">*</span></Label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-gray-500">₹</span>
-              <Input
-                type="number"
-                min="1"
-                step="1"
-                value={amount}
-                onChange={(e) => { setAmount(e.target.value); setError(""); }}
-                placeholder="0"
-                className={`pl-7 ${error ? "border-red-400" : ""}`}
-              />
-            </div>
-            {error && <p className="text-xs text-red-500">{error}</p>}
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-black">Reason / Note <span className="text-gray-400 font-normal">(optional)</span></Label>
-            <Input
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="e.g. Refund, Promotional credit, Adjustment…"
-            />
-          </div>
-
-          {numAmount > 0 && (
-            <div className="flex items-center justify-between p-3 rounded-lg bg-gray-50 border border-gray-100 text-xs">
-              <span className="text-gray-500">New balance after {type === "credit" ? "credit" : "debit"}</span>
-              <span className={`text-sm font-bold ${type === "credit" ? "text-emerald-600" : "text-red-600"}`}>
-                ₹{previewBalance.toLocaleString("en-IN")}
-              </span>
-            </div>
-          )}
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={handleClose} disabled={mutation.isPending}>Cancel</Button>
-          <Button
-            onClick={handleSubmit}
-            disabled={mutation.isPending || !amount}
-            className={type === "credit" ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "bg-red-600 hover:bg-red-700 text-white"}
-          >
-            {mutation.isPending ? "Processing…" : type === "credit" ? "Credit Wallet" : "Debit Wallet"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 function CustomerDetailPage({
   customerId, onBack, onEdit, onDelete,
 }: {
@@ -930,8 +665,6 @@ function CustomerDetailPage({
   onEdit: (customer: Customer) => void;
   onDelete: (customer: Customer) => void;
 }) {
-  const [walletModalOpen, setWalletModalOpen] = useState(false);
-  const queryClient = useQueryClient();
   const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ["customer", customerId],
     queryFn: () => fetchCustomer(customerId),
@@ -940,7 +673,7 @@ function CustomerDetailPage({
   });
 
   const fullCustomer = data ?? null;
-  const { history, all } = useMemo(
+  const { history, all } = useMemo<{ history: any[]; all: any[] }>(
     () => (fullCustomer ? splitOrders(fullCustomer) : { history: [], all: [] }),
     [fullCustomer]
   );
@@ -949,17 +682,6 @@ function CustomerDetailPage({
 
   return (
     <div style={{ fontFamily: "'Poppins', sans-serif" }}>
-      {fullCustomer && walletModalOpen && (
-        <WalletTopupModal
-          customer={fullCustomer}
-          open={walletModalOpen}
-          onClose={() => setWalletModalOpen(false)}
-          onSuccess={() => {
-            queryClient.invalidateQueries({ queryKey: ["customer", customerId] });
-            setWalletModalOpen(false);
-          }}
-        />
-      )}
       <div className="flex items-center justify-between mb-5">
         <button
           onClick={onBack}
@@ -971,13 +693,6 @@ function CustomerDetailPage({
         <div className="flex items-center gap-2">
           {fullCustomer && (
             <>
-              <button
-                onClick={() => setWalletModalOpen(true)}
-                className="inline-flex items-center gap-1.5 h-8 px-3 text-xs font-medium rounded-md border border-gray-200 bg-white text-emerald-600 hover:bg-emerald-50 hover:border-emerald-200 transition-colors"
-              >
-                <Wallet className="w-[14px] h-[14px]" />
-                Wallet
-              </button>
               <button
                 onClick={() => onEdit(fullCustomer)}
                 className="inline-flex items-center gap-1.5 h-8 px-3 text-xs font-medium rounded-md border border-gray-200 bg-white text-black hover:bg-blue-50 hover:border-blue-200 hover:text-[#1A56DB] transition-colors"
@@ -1031,18 +746,16 @@ function CustomerDetailPage({
                 </div>
                 <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1.5 text-sm text-gray-600">
                   <span className="inline-flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-[#F05B4E]" />{fullCustomer.phone || "N.A"}</span>
-                  <span className="inline-flex items-center gap-1.5"><Mail className="w-3.5 h-3.5 text-gray-400" />{fullCustomer.email || "N.A"}</span>
                 </div>
                 <p className="mt-1 text-xs text-gray-400">Customer since {formatDate(fullCustomer.createdAt)}</p>
               </div>
             </div>
             {/* Stats strip — no card backgrounds, just dividers */}
-            <div className="border-t border-gray-100 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 divide-x divide-gray-100">
+            <div className="border-t border-gray-100 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 divide-x divide-gray-100">
               <SummaryCard label="Order History" value={history.length} icon={CheckCircle2} color="text-emerald-500" />
               <SummaryCard label="All Orders" value={all.length} icon={ClipboardList} color="text-amber-500" />
               <SummaryCard label="Total Spend" value={formatRupees(totalSpend)} icon={CreditCard} color="text-[#F05B4E]" />
               <SummaryCard label="Due Amount" value={formatRupees(totalDue)} icon={Tag} color={totalDue > 0 ? "text-red-500" : "text-emerald-500"} />
-              <SummaryCard label="Wallet Balance" value={formatRupees(Number(fullCustomer.walletBalance) || 0)} icon={Wallet} color="text-blue-500" />
             </div>
           </div>
 
@@ -1051,7 +764,6 @@ function CustomerDetailPage({
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               <InfoRow label="Name" value={fullCustomer.name} />
               <InfoRow label="Phone" value={fullCustomer.phone} />
-              <InfoRow label="Email" value={fullCustomer.email} />
               <InfoRow label="Created" value={formatDateTime(fullCustomer.createdAt)} />
               <InfoRow label="Updated" value={formatDateTime(fullCustomer.updatedAt)} />
             </div>
@@ -1246,177 +958,6 @@ function EmptyPanel({ text }: { text: string }) {
   return <div className="rounded-xl border border-dashed border-gray-200 bg-white py-8 text-center text-sm text-black">{text}</div>;
 }
 
-function AddressCard({ address, index }: { address: any; index: number }) {
-  if (!address) return null;
-  if (typeof address === "string") {
-    return (
-      <div className="rounded-xl border border-gray-100 bg-white p-4 flex items-start gap-3">
-        <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0"><MapPin className="w-4 h-4 text-blue-600" /></div>
-        <p className="text-sm text-black">{address}</p>
-      </div>
-    );
-  }
-  const label = address.label || address.type || `Address ${index + 1}`;
-  const contactName = address.name || address.contactName || "";
-  const phone = address.phone || address.contactPhone || address.mobile || "";
-  const houseNo = address.houseNo || address.flatNo || address.house || address.apartment || "";
-  const building = address.building || address.buildingName || address.society || "";
-  const street = address.street || address.streetName || address.road || address.addressLine1 || "";
-  const area = address.area || address.locality || address.neighbourhood || "";
-  const landmark = address.landmark || "";
-  const city = address.city || "";
-  const state = address.state || "";
-  const pincode = address.pincode || address.zipCode || address.zip || "";
-  const instructions = address.instructions || address.deliveryInstructions || "";
-  const addressLines = [
-    [houseNo, building].filter(Boolean).join(", "),
-    [street, area].filter(Boolean).join(", "),
-    landmark ? `Near ${landmark}` : "",
-    [city, state, pincode].filter(Boolean).join(", "),
-  ].filter(Boolean);
-
-  return (
-    <div className="rounded-xl border border-gray-100 bg-white p-4">
-      <div className="flex items-start gap-3">
-        <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0 mt-0.5"><MapPin className="w-4 h-4 text-blue-600" /></div>
-        <div className="min-w-0 flex-1">
-          <span className="inline-block bg-blue-50 text-blue-700 text-xs font-semibold px-2 py-0.5 rounded-full mb-2 capitalize">{label}</span>
-          {contactName && <p className="text-sm font-semibold text-black">{contactName}</p>}
-          {phone && <p className="text-xs text-black mt-0.5">{phone}</p>}
-          <div className="mt-2 space-y-0.5">{addressLines.map((line, i) => <p key={i} className="text-sm text-black">{line}</p>)}</div>
-          {instructions && <p className="mt-2 text-xs text-amber-700 bg-amber-50 rounded px-2 py-1 border border-amber-100">Delivery note: {instructions}</p>}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Wallet Tracker Section
-// ---------------------------------------------------------------------------
-function WalletTrackerSection({ transactions, currentBalance }: {
-  transactions: any[];
-  currentBalance: number;
-}) {
-  const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState<"all" | "credit" | "debit">("all");
-  const [sort, setSort] = useState<"newest" | "oldest">("newest");
-
-  const filtered = useMemo(() => {
-    let result = [...transactions];
-    if (typeFilter !== "all") result = result.filter(t => t.type === typeFilter);
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      result = result.filter(t =>
-        (t.reason || "").toLowerCase().includes(q) ||
-        (t.orderId || "").toLowerCase().includes(q)
-      );
-    }
-    result.sort((a, b) => {
-      const ta = new Date(a.createdAt || 0).getTime();
-      const tb = new Date(b.createdAt || 0).getTime();
-      return sort === "newest" ? tb - ta : ta - tb;
-    });
-    return result;
-  }, [transactions, typeFilter, search, sort]);
-
-  const totalCredit = transactions.filter(t => t.type === "credit").reduce((s, t) => s + Math.abs(Number(t.amount || 0)), 0);
-  const totalDebit  = transactions.filter(t => t.type === "debit").reduce((s, t) => s + Math.abs(Number(t.amount || 0)), 0);
-
-  if (!transactions.length) {
-    return (
-      <div className="rounded-xl border border-dashed border-gray-200 bg-white py-8 text-center text-sm text-gray-400">
-        No wallet transactions yet. Transactions will appear here when wallet balance is added, deducted, or adjusted.
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-3">
-      {/* Summary strip */}
-      <div className="grid grid-cols-3 divide-x divide-gray-100 rounded-xl border border-gray-100 bg-gray-50 overflow-hidden">
-        <div className="px-4 py-3 text-center">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-0.5">Current Balance</p>
-          <p className="text-base font-bold text-[#1A56DB]">₹{Number(currentBalance).toLocaleString("en-IN")}</p>
-        </div>
-        <div className="px-4 py-3 text-center">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-0.5">Total Credited</p>
-          <p className="text-base font-bold text-emerald-600">₹{totalCredit.toLocaleString("en-IN")}</p>
-        </div>
-        <div className="px-4 py-3 text-center">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-0.5">Total Deducted</p>
-          <p className="text-base font-bold text-red-500">₹{totalDebit.toLocaleString("en-IN")}</p>
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative flex-1 min-w-[150px]">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-          <input
-            type="text" value={search} onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search reason or order ID…"
-            className="w-full pl-8 pr-8 py-1.5 text-xs border border-gray-200 rounded-lg bg-white outline-none focus:ring-1 focus:ring-[#1A56DB] text-black"
-          />
-          {search && <button onClick={() => setSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"><X className="w-3 h-3" /></button>}
-        </div>
-        <div className="flex rounded-lg border border-gray-200 bg-white overflow-hidden text-xs">
-          {(["all", "credit", "debit"] as const).map(t => (
-            <button key={t} onClick={() => setTypeFilter(t)}
-              className={`px-3 h-7 font-medium capitalize transition-colors ${typeFilter === t ? "bg-[#162B4D] text-white" : "text-black hover:bg-gray-50"}`}>
-              {t === "all" ? "All" : t === "credit" ? "Credits" : "Debits"}
-            </button>
-          ))}
-        </div>
-        <select value={sort} onChange={(e) => setSort(e.target.value as any)}
-          className="h-7 px-2 text-xs border border-gray-200 rounded-lg bg-white text-black outline-none focus:ring-1 focus:ring-[#1A56DB]">
-          <option value="newest">Newest first</option>
-          <option value="oldest">Oldest first</option>
-        </select>
-      </div>
-
-      {/* Transaction list */}
-      {filtered.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-gray-200 py-6 text-center text-xs text-gray-400">No transactions match your filter.</div>
-      ) : (
-        <div className="space-y-2">
-          {filtered.map((tx: any, i: number) => {
-            const isCredit = tx.type === "credit";
-            const amt = Math.abs(Number(tx.amount || 0));
-            const when = tx.createdAt ? new Date(tx.createdAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) : "";
-            return (
-              <div key={i} className="flex items-start gap-3 rounded-xl border border-gray-100 bg-white p-3.5">
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${isCredit ? "bg-emerald-50" : "bg-red-50"}`}>
-                  {isCredit
-                    ? <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
-                    : <TrendingDown className="w-3.5 h-3.5 text-red-500" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-medium text-[#162B4D] leading-tight">{tx.reason || (isCredit ? "Wallet credited" : "Wallet deducted")}</p>
-                    <span className={`text-sm font-bold flex-shrink-0 ${isCredit ? "text-emerald-600" : "text-red-500"}`}>
-                      {isCredit ? "+" : "−"}₹{amt.toLocaleString("en-IN")}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1 text-[11px] text-gray-400">
-                    {when && <span>{when}</span>}
-                    {tx.orderId && (
-                      <span className="font-mono text-[#364F9F]">#{String(tx.orderId).replace(/^#+/, "")}</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-      {filtered.length < transactions.length && (
-        <p className="text-xs text-gray-400 text-center">Showing {filtered.length} of {transactions.length} transactions</p>
-      )}
-    </div>
-  );
-}
-
 const ORDER_SORT_OPTIONS = [
   { value: "date_desc", label: "Newest first" },
   { value: "date_asc", label: "Oldest first" },
@@ -1444,8 +985,7 @@ function OrderList({ orders, empty }: { orders: any[]; empty: string }) {
       result = result.filter((o) => {
         const ref = shortOrderRef(o, 0).toLowerCase();
         const items = (Array.isArray(o.items) ? o.items : []).map((i: any) => (i.name || i.productName || "").toLowerCase()).join(" ");
-        const addr = addressText(o.deliveryAddress || o.address || "").toLowerCase();
-        return ref.includes(q) || items.includes(q) || addr.includes(q) || normalize(o.status).includes(q);
+        return ref.includes(q) || items.includes(q) || normalize(o.status).includes(q);
       });
     }
     if (statusFilter !== "all") result = result.filter((o) => normalize(o.status) === statusFilter);
@@ -1505,20 +1045,6 @@ function shortOrderRef(order: any, index: number) {
   const id = getOrderId(order);
   if (id && id.length >= 8) return `#${id.slice(-8).toUpperCase()}`;
   return `Order ${index + 1}`;
-}
-
-function getOrderBillAddress(order: any): string {
-  const addr = order.deliveryAddress || order.address;
-  if (!addr) return "";
-  if (typeof addr === "string") return addr;
-  const parts = [
-    addr.houseNo || addr.flatNo || addr.house || addr.building,
-    addr.street || addr.addressLine1 || addr.area || addr.locality,
-    addr.landmark ? `Near ${addr.landmark}` : "",
-    addr.city,
-    addr.pincode || addr.zipCode,
-  ].filter(Boolean);
-  return parts.join(", ");
 }
 
 function OrderCardCompact({ order, index }: { order: any; index: number }) {
@@ -1583,7 +1109,6 @@ function OrderCard({ order, index }: { order: any; index: number }) {
   const notes = order.notes ?? order.orderNotes ?? "";
   const billName = order.customerName ?? order.name ?? "";
   const billPhone = order.phone ?? order.customerPhone ?? order.mobile ?? "";
-  const billAddr = getOrderBillAddress(order);
   const paymentStatus = order.paymentStatus ?? "";
   const totalAmt = Number(grandTotal ?? getOrderTotal(order));
   const paidAmount = totalAmt === 0 ? 0 : Number(order.paidAmount ?? order.paid ?? 0);
@@ -1591,13 +1116,6 @@ function OrderCard({ order, index }: { order: any; index: number }) {
   const subHubName = order.subHubName ?? order.subHub ?? order.location ?? "";
   const isPaid = paymentStatus && normalize(paymentStatus) === "paid";
   const isUnpaid = paymentStatus && ["unpaid", "pending", "due"].includes(normalize(paymentStatus));
-
-  // Wallet applied — prefer payments[] array entry, fall back to walletUsed field
-  const paymentsArr: any[] = Array.isArray(order.payments) ? order.payments : [];
-  const walletEntry = paymentsArr.find((p: any) => String(p?.mode ?? "").toLowerCase() === "wallet");
-  const walletApplied = walletEntry ? Number(walletEntry.amount) || 0 : Number(order.walletUsed) || 0;
-  // Non-wallet payment lines
-  const nonWalletPayments = paymentsArr.filter((p: any) => String(p?.mode ?? "").toLowerCase() !== "wallet");
 
   const computedSubtotal = subtotal != null
     ? Number(subtotal)
@@ -1621,12 +1139,11 @@ function OrderCard({ order, index }: { order: any; index: number }) {
       </div>
 
       {/* ── Bill To ── */}
-      {(billName || billPhone || billAddr) && (
+      {(billName || billPhone) && (
         <div className="px-5 py-4 border-b border-gray-100">
           <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5">Bill To</p>
           {billName && <p className="text-sm font-bold text-[#162B4D]">{billName}</p>}
           {billPhone && <p className="text-xs text-gray-500 mt-0.5">{billPhone}</p>}
-          {billAddr && <p className="text-xs text-gray-500 mt-0.5">{billAddr}</p>}
         </div>
       )}
 
@@ -1713,22 +1230,10 @@ function OrderCard({ order, index }: { order: any; index: number }) {
           <span>Grand Total</span>
           <span className="text-[#F05B4E]">{formatRupees(totalAmt)}</span>
         </div>
-        {walletApplied > 0 && (
-          <div className="flex justify-between text-[#1A56DB] font-medium">
-            <span>Wallet applied</span>
-            <span>− {formatRupees(walletApplied)}</span>
-          </div>
-        )}
-        {walletApplied > 0 && (
-          <div className="flex justify-between font-semibold text-[#162B4D]">
-            <span>Amount due (cash/UPI)</span>
-            <span>{formatRupees(Math.max(0, totalAmt - walletApplied))}</span>
-          </div>
-        )}
       </div>
 
       {/* ── Payment ── */}
-      {(paymentsArr.length > 0 || paymentStatus || paidAmount > 0) && (
+      {(paymentStatus || paidAmount > 0 || dueAmount > 0) && (
         <div className="px-5 py-4 border-b border-gray-100">
           <div className="flex items-center justify-between mb-3">
             <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Payment</p>
@@ -1736,21 +1241,6 @@ function OrderCard({ order, index }: { order: any; index: number }) {
               <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${isPaid ? "bg-emerald-50 text-emerald-700 border-emerald-200" : isUnpaid ? "bg-red-50 text-red-600 border-red-200" : "bg-amber-50 text-amber-700 border-amber-200"}`}>{paymentStatus}</span>
             )}
           </div>
-          {/* Per-mode payment lines */}
-          {paymentsArr.length > 0 && (
-            <div className="space-y-1 mb-3">
-              {paymentsArr.map((p: any, i: number) => {
-                const mode = String(p?.mode ?? "").toLowerCase();
-                const amt = Number(p?.amount) || 0;
-                return (
-                  <div key={i} className="flex justify-between text-sm text-gray-600 capitalize">
-                    <span>{mode === "cod" ? "Cash on Delivery" : mode || "Payment"}</span>
-                    <span className="font-medium text-[#162B4D]">{formatRupees(amt)}</span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
               <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Paid</p>
@@ -1788,12 +1278,11 @@ function CustomerModal({ isOpen, onClose, customer, onSuccess }: {
   const isEditing = !!customer;
   const { toast } = useToast();
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const reset = useCallback(() => {
-    setName(customer?.name ?? ""); setEmail(customer?.email ?? "");
+    setName(customer?.name ?? "");
     setPhone(customer?.phone ?? "");
     setErrors({});
   }, [customer]);
@@ -1817,7 +1306,6 @@ function CustomerModal({ isOpen, onClose, customer, onSuccess }: {
     if (!name.trim()) e.name = "Name is required";
     if (!phone.trim()) e.phone = "Phone is required";
     else if (!/^\d{10}$/.test(phone.trim())) e.phone = "Phone must be exactly 10 digits";
-    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) e.email = "Invalid email format";
     return e;
   };
 
@@ -1825,7 +1313,7 @@ function CustomerModal({ isOpen, onClose, customer, onSuccess }: {
     const e = validate();
     setErrors(e);
     if (Object.keys(e).length > 0) { toast({ title: "Please fix the highlighted errors", variant: "destructive" }); return; }
-    const payload: any = { name: name.trim(), email: email.trim(), phone: phone.trim() };
+    const payload: any = { name: name.trim(), phone: phone.trim() };
     if (isEditing) {
       updateMutation.mutate(payload);
     } else {
@@ -1855,9 +1343,6 @@ function CustomerModal({ isOpen, onClose, customer, onSuccess }: {
               </Field>
               <Field label="Phone" required error={errors.phone}>
                 <Input value={phone} onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))} placeholder="10-digit number" className={errors.phone ? "border-red-400" : ""} />
-              </Field>
-              <Field label="Email" error={errors.email}>
-                <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@example.com" className={errors.email ? "border-red-400" : ""} />
               </Field>
             </div>
           </section>

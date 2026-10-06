@@ -300,7 +300,7 @@ router.get("/", async (req: ScopedRequest, res) => {
     const filter: Record<string, any> = {};
     if (search) {
       const regex = new RegExp(search, "i");
-      filter.$or = [{ name: regex }, { email: regex }, { phone: regex }];
+      filter.$or = [{ name: regex }, { phone: regex }];
     }
 
     // Apply hub scope: non-master users only see customers who placed at
@@ -331,12 +331,8 @@ router.get("/", async (req: ScopedRequest, res) => {
     let sortObj: Record<string, 1 | -1> = { createdAt: -1 };
     if (sort === "name_asc") sortObj = { name: 1 };
     else if (sort === "name_desc") sortObj = { name: -1 };
-    else if (sort === "email_asc") sortObj = { email: 1 };
-    else if (sort === "email_desc") sortObj = { email: -1 };
     else if (sort === "createdAt_asc") sortObj = { createdAt: 1 };
     else if (sort === "createdAt_desc") sortObj = { createdAt: -1 };
-    else if (sort === "wallet_desc") sortObj = { walletBalance: -1 };
-    else if (sort === "wallet_asc") sortObj = { walletBalance: 1 };
 
     const pageNum = Math.max(1, parseInt(page, 10));
     const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10)));
