@@ -81,14 +81,13 @@ function orderLineAmount(item: any) {
   return basis.isWeightBased ? price * quantity * (1000 / basis.basisGrams) : price * (quantity || 1);
 }
 
-function orderLineSummary(item: any) {
+function orderLineQuantity(item: any) {
   const basis = getWeightPricing(item?.unit);
-  const price = Number(item?.price) || 0;
   const quantity = Number(item?.quantity) || 0;
-  if (basis.isWeightBased) {
-    return `${formatOrderWeight(quantity)} @ ${formatRupees(price * (1000 / basis.basisGrams))}/kg`;
-  }
-  return `${quantity || 1} × ${formatRupees(price)}`;
+  if (basis.isWeightBased) return formatOrderWeight(quantity);
+  const count = quantity || 1;
+  const unit = String(item?.unit || "").trim();
+  return `${count.toLocaleString("en-IN", { maximumFractionDigits: 3 })}${unit ? ` ${unit}` : ""}`;
 }
 
 function orderItemsTotal(items: any[]) {
@@ -478,18 +477,17 @@ function OrdersReport({ from, to, onDownload, downloadRef }: { from: string; to:
 
   const handleDownload = useCallback(() => {
     if (!filteredOrders.length) return;
-    const rows: any[] = [["Invoice No","Order Placed","Delivery Date","Customer","Phone","Items & Qty","Total (₹)","Wallet Used (₹)","Bal. Due Cash/UPI (₹)","Due Amount (₹)","Delivery Partner","Payment Mode","Payment Status","Order Status"]];
+    const rows: any[] = [["Invoice No","Order Placed","Delivery Date","Customer","Phone","Items","Qty","Total (₹)","Due Amount (₹)","Payment Mode","Payment Status","Order Status"]];
     for (const o of filteredOrders) {
-      const itemsQty = (o.items || []).map((it: any) => `${it.name} · ${orderLineSummary(it)}`).join(", ");
+      const items = (o.items || []).map((it: any) => it.name).join(", ");
+      const quantities = (o.items || []).map((it: any) => orderLineQuantity(it)).join(", ");
       const placedDate = o.createdAt ? new Date(o.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
       const delivDate = o.deliveryDate ? formatDate(o.deliveryDate) : "—";
       const due = orderDueAmount(o);
-      const walletUsed = orderWalletUsed(o);
-      const balDueCashUpi = (Number(o.total) || 0) - walletUsed;
-      rows.push([o.invoiceNo, placedDate, delivDate, o.customerName, o.phone, itemsQty, o.total, walletUsed > 0 ? walletUsed : "—", walletUsed > 0 ? balDueCashUpi : "—", due > 0 ? due : "—", o.deliveryPerson || "—", o.paymentMode, o.paymentStatus, String(o.status || "").replace(/_/g, " ")]);
+      rows.push([o.invoiceNo, placedDate, delivDate, o.customerName, o.phone, items, quantities, o.total, due > 0 ? due : "—", o.paymentMode, o.paymentStatus, String(o.status || "").replace(/_/g, " ")]);
     }
     rows.push([]);
-    rows.push(["SUMMARY", "", "", "", "", "", "", "", "", "", "", "", "", ""]);
+    rows.push(["SUMMARY", ...Array(11).fill("")]);
     rows.push(["Showing orders (filtered)", filteredOrders.length, "of", orders.length, "orders"]);
     rows.push(["Cash Revenue", stats.cash]);
     rows.push(["UPI Revenue", stats.upi]);
@@ -498,7 +496,7 @@ function OrdersReport({ from, to, onDownload, downloadRef }: { from: string; to:
     rows.push(["Unpaid Dues", stats.unpaid]);
     rows.push(["Today's Sales (Cash+UPI+Card+Wallet Used+Unpaid)", stats.todaySales]);
     const ws = XLSX.utils.aoa_to_sheet(rows);
-    ws["!cols"] = [{wch:20},{wch:22},{wch:14},{wch:48},{wch:14},{wch:22},{wch:14},{wch:14},{wch:20},{wch:14},{wch:16},{wch:16},{wch:16},{wch:18}];
+    ws["!cols"] = [{wch:20},{wch:22},{wch:14},{wch:32},{wch:14},{wch:30},{wch:18},{wch:14},{wch:14},{wch:16},{wch:16},{wch:18}];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Orders Report");
     XLSX.writeFile(wb, `orders-report-${from}-to-${to}.xlsx`);
@@ -816,10 +814,10 @@ function OrdersReport({ from, to, onDownload, downloadRef }: { from: string; to:
             ref={tableScrollRef}
             style={{ overflowX: "auto", overflowY: "visible", marginLeft: -28, marginRight: -28, paddingLeft: 28, paddingRight: 28, paddingBottom: 4 }}
           >
-          <table style={{ width: "max-content", minWidth: 1600, borderCollapse: "collapse", fontSize: 13 }}>
+          <table style={{ width: "max-content", minWidth: 1450, borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
               <tr style={{ background: "#f9fafb", borderBottom: "1px solid #e5e7eb" }}>
-                {["Invoice No","Order Placed","Delivery Date","Customer","Phone","Items & Qty","Total","Wallet Used","Total - Wallet Used","Due Amount","Delivery Partner","Payment Mode","Payment Status","Order Status","Receipt"].map(h => (
+                {["Invoice No","Order Placed","Delivery Date","Customer","Phone","Items","Qty","Total","Due Amount","Payment Mode","Payment Status","Order Status","Receipt"].map(h => (
                   <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, fontWeight: 600, color: "#555", whiteSpace: "nowrap", textTransform: "uppercase", letterSpacing: "0.04em" }}>{h}</th>
                 ))}
               </tr>
@@ -840,33 +838,20 @@ function OrdersReport({ from, to, onDownload, downloadRef }: { from: string; to:
                   </td>
                   <td style={{ padding: "10px 14px", fontWeight: 600, color: "#000", whiteSpace: "nowrap" }}>{o.customerName}</td>
                   <td style={{ padding: "10px 14px", color: "#444", whiteSpace: "nowrap" }}>{o.phone}</td>
-                  <td style={{ padding: "10px 14px", minWidth: 140 }}>
+                  <td style={{ padding: "10px 14px", minWidth: 160 }}>
                     {(o.items || []).map((it: any, j: number) => (
-                      <div key={j} style={{ fontSize: 12, color: "#222" }}>
-                        <span style={{ fontWeight: 600 }}>{it.name}</span>
-                        <span style={{ color: "#888" }}> · {orderLineSummary(it)}</span>
-                      </div>
+                      <div key={j} style={{ fontSize: 12, color: "#222", fontWeight: 600 }}>{it.name}</div>
+                    ))}
+                  </td>
+                  <td style={{ padding: "10px 14px", minWidth: 100, whiteSpace: "nowrap" }}>
+                    {(o.items || []).map((it: any, j: number) => (
+                      <div key={j} style={{ fontSize: 12, color: "#222" }}>{orderLineQuantity(it)}</div>
                     ))}
                   </td>
                   <td style={{ padding: "10px 14px", fontWeight: 700, color: "#000", whiteSpace: "nowrap", textAlign: "right" }}>{formatRupees(o.total)}</td>
-                  {(() => {
-                    const walletUsed = orderWalletUsed(o);
-                    const balDue = (Number(o.total) || 0) - walletUsed;
-                    return (
-                      <>
-                        <td style={{ padding: "10px 14px", fontWeight: 600, whiteSpace: "nowrap", textAlign: "right", color: walletUsed > 0 ? "#7c3aed" : "#bbb" }}>
-                          {walletUsed > 0 ? formatRupees(walletUsed) : "—"}
-                        </td>
-                        <td style={{ padding: "10px 14px", fontWeight: 700, whiteSpace: "nowrap", textAlign: "right", color: walletUsed > 0 ? "#0369a1" : "#bbb" }}>
-                          {walletUsed > 0 ? formatRupees(balDue) : "—"}
-                        </td>
-                      </>
-                    );
-                  })()}
                   <td style={{ padding: "10px 14px", fontWeight: 700, whiteSpace: "nowrap", textAlign: "right", color: orderDueAmount(o) > 0 ? "#dc2626" : "#16a34a" }}>
                     {orderDueAmount(o) > 0 ? formatRupees(orderDueAmount(o)) : "—"}
                   </td>
-                  <td style={{ padding: "10px 14px", color: "#444", whiteSpace: "nowrap" }}>{o.deliveryPerson}</td>
                   <td style={{ padding: "10px 14px", fontWeight: 500, color: "#000", whiteSpace: "nowrap" }}>{(String(o.paymentMode || "").toLowerCase() === "upi" && o.upiVariant) ? o.upiVariant : o.paymentMode}</td>
                   <td style={{ padding: "10px 14px", whiteSpace: "nowrap" }}>
                     <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 20, ...paymentBadgeStyle(o.paymentStatus) }}>
@@ -891,12 +876,6 @@ function OrdersReport({ from, to, onDownload, downloadRef }: { from: string; to:
               ))}
               {(() => {
                 const gtTotal    = filteredOrders.reduce((s, o) => s + (Number(o.total) || 0), 0);
-                const gtWallet   = filteredOrders.reduce((s, o) => s + orderWalletUsed(o), 0);
-                // True grand total of "Total − Wallet Used" across ALL filtered rows (not just the
-                // ones with a non-zero wallet contribution) — this is the actual cash/UPI/card amount
-                // physically collected, and should reconcile with the Cash/UPI/Card stat cards above
-                // when a Pay Mode filter is applied.
-                const gtNetCol   = filteredOrders.reduce((s, o) => s + Math.max(0, (Number(o.total) || 0) - orderWalletUsed(o)), 0);
                 const gtDue      = filteredOrders.reduce((s, o) => s + orderDueAmount(o), 0);
                 const cellBase   = { padding: "10px 14px", fontWeight: 700, whiteSpace: "nowrap" as const, fontSize: 13 };
                 const numCell    = { ...cellBase, textAlign: "right" as const };
@@ -909,11 +888,9 @@ function OrdersReport({ from, to, onDownload, downloadRef }: { from: string; to:
                     <td style={{ ...cellBase, ...bg }}></td>
                     <td style={{ ...cellBase, ...bg }}></td>
                     <td style={{ ...cellBase, ...bg }}></td>
-                    <td style={{ ...numCell, ...bg, color: "#111" }}>{formatRupees(gtTotal)}</td>
-                    <td style={{ ...numCell, ...bg, color: gtWallet > 0 ? "#7c3aed" : "#bbb" }}>{gtWallet > 0 ? formatRupees(gtWallet) : "—"}</td>
-                    <td style={{ ...numCell, ...bg, color: gtNetCol > 0 ? "#0369a1" : "#bbb" }}>{gtNetCol > 0 ? formatRupees(gtNetCol) : "—"}</td>
-                    <td style={{ ...numCell, ...bg, color: gtDue > 0 ? "#dc2626" : "#16a34a" }}>{gtDue > 0 ? formatRupees(gtDue) : "—"}</td>
                     <td style={{ ...cellBase, ...bg }}></td>
+                    <td style={{ ...numCell, ...bg, color: "#111" }}>{formatRupees(gtTotal)}</td>
+                    <td style={{ ...numCell, ...bg, color: gtDue > 0 ? "#dc2626" : "#16a34a" }}>{gtDue > 0 ? formatRupees(gtDue) : "—"}</td>
                     <td style={{ ...cellBase, ...bg }}></td>
                     <td style={{ ...cellBase, ...bg }}></td>
                     <td style={{ ...cellBase, ...bg }}></td>
