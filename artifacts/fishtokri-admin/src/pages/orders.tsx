@@ -6,7 +6,7 @@ import {
   Phone, User, UserPlus, SlidersHorizontal, ArrowUpDown, UserCheck,
   ShoppingBag, Building2, AlertCircle, ChevronDown, Check,
   Pencil, Trash2, Plus, Store, Home, Trash, Mail, Calendar, Tag, Ticket, Zap, RotateCcw,
-  Wallet, CreditCard, Banknote, Smartphone, Landmark, FileText, Printer, MoreVertical, Scale,
+  Wallet, CreditCard, Banknote, Smartphone, Landmark, FileText, Printer, MoreVertical,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { InvoiceModal } from "@/components/InvoiceModal";
@@ -28,6 +28,7 @@ import iconUser from "@/assets/icon-user.png";
 import iconPhoneCall from "@/assets/icon-phone-call.png";
 import iconPin from "@/assets/icon-pin.png";
 import iconGrocery from "@/assets/icon-grocery.png";
+import foodScaleIcon from "@/assets/food-scale.png";
 import iconWallet from "@/assets/icon-wallet.png";
 import iconMotorbike from "@/assets/icon-motorbike.png";
 import iconGroup from "@/assets/icon-group.png";
@@ -4350,7 +4351,7 @@ export default function Orders() {
            </aside>
 
            {/* ── PRODUCTS WORKSPACE ── */}
-          <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-gray-50">
+           <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden bg-gray-50">
             {/* Search bar */}
             <div className="px-4 py-3 border-b border-gray-200 bg-white flex-shrink-0 flex items-center gap-3">
               <div className="relative flex-1">
@@ -4374,7 +4375,7 @@ export default function Orders() {
             </div>
 
             {/* Product grid */}
-            <div className="flex-1 overflow-y-auto p-4">
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">
               {!selectedSubHubId ? (
                 <div className="flex flex-col items-center justify-center h-full text-center">
                   <div className="w-16 h-16 rounded-2xl bg-[#162B4D]/10 flex items-center justify-center mb-4">
@@ -4433,7 +4434,7 @@ export default function Orders() {
                           if (weightBased) {
                             const existingFishLine = selectedProducts.find((item) => item.productId === pid);
                             setScaleEntries((current) => current.some((entry) => entry.productId === pid)
-                              ? current
+                              ? current.filter((entry) => entry.productId !== pid)
                               : [...current, {
                                 productId: pid,
                                 kg: "",
@@ -4521,25 +4522,20 @@ export default function Orders() {
             {selectedSubHubId && (
               <section className="mx-4 mb-4 shrink-0 rounded-xl border border-dashed border-[#F1A59D] bg-[#FFF8F6] p-3" data-testid="section-test-weighing-scale">
                 <div className="flex items-start gap-2">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#FDE5E1] text-[#D94A3D]">
-                    <Scale className="h-4 w-4" />
+                  <div className="flex h-10 w-12 shrink-0 items-center justify-center rounded-md border-2 border-black bg-white p-1">
+                    <img src={foodScaleIcon} alt="" className="h-full w-full object-contain" />
                   </div>
                   <div className="min-w-0">
-                    <h3 className="text-sm font-bold text-[#162B4D]">Weigh products</h3>
-                    <p className="text-[11px] text-[#8D3D36]">Select one or more products above, enter each weight, then add them to the order together.</p>
-                    {orderDeliveryType === "takeaway" && posProductMode === "normal" && (
-                      <p className="text-[10px] leading-4 text-[#8D3D36]">
-                        For any product sold by weight, you can add up to 1 kg above available stock when stock remains. The full scale weight is billed; the extra is logged separately and is not deducted from stock.
-                      </p>
-                    )}
+                    <h3 className="text-base font-bold leading-5 text-[#162B4D]">Weigh products</h3>
+                    <p className="text-xs leading-4 text-[#64748B]">Select products above, enter each weight, then add them to the order together.</p>
                   </div>
                 </div>
                 {scaleEntries.length === 0 ? (
-                  <div className="mt-3 rounded-lg border border-[#F2D4D0] bg-white/80 px-3 py-2.5 text-xs text-[#7E8998]">
+                  <div className="mt-3 rounded-lg border border-[#F2D4D0] bg-white/80 px-3 py-2 text-sm text-[#7E8998]">
                     Choose weight-based products from the grid. Each one will appear here with its own weight fields.
                   </div>
                 ) : (
-                  <div className="mt-3 max-h-40 space-y-2 overflow-y-auto pr-1">
+                  <div className="mt-3 space-y-2">
                     {scaleEntries.map((entry) => {
                       const product = productsForMode.find((candidate) => String(candidate._id) === entry.productId);
                       if (!product) return null;
@@ -4547,19 +4543,18 @@ export default function Orders() {
                       const amount = orderProductAmount(product, weightKg);
                       return (
                         <div key={entry.productId} className="rounded-lg border border-[#F2D4D0] bg-white p-2">
-                          <div className={`grid items-end gap-2 ${product.isDemoBigFishSelector
+                          <div className={`grid items-center gap-2 ${product.isDemoBigFishSelector
                             ? "grid-cols-[minmax(96px,1fr)_92px_58px_58px_28px]"
                             : "grid-cols-[minmax(96px,1fr)_58px_58px_28px]"}`}>
-                            <div className="min-w-0 self-center">
-                              <p className="truncate text-xs font-bold text-[#162B4D]">{product.displayName ?? product.name}</p>
-                              <p className="truncate text-[10px] text-[#718096]">
-                                ₹{Number(product.price || 0).toLocaleString("en-IN")}/kg · {formatOrderWeight(Math.max(0, Number(product.quantity) || 0))} available
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-bold leading-5 text-[#162B4D]">{product.displayName ?? product.name}</p>
+                              <p className="truncate text-xs leading-4 text-[#718096]">
+                                ₹{Number(product.price || 0).toLocaleString("en-IN")}/kg · {formatOrderWeight(Math.max(0, Number(product.quantity) || 0))} left · {formatRupees(amount)}
                               </p>
-                              <p className="text-[10px] font-semibold text-[#1A56DB]">Amount: {formatRupees(amount)}</p>
                             </div>
                             {product.isDemoBigFishSelector && (
                               <label className="block min-w-0">
-                                <span className="mb-1 block text-[10px] font-semibold text-[#51617A]">Part note</span>
+                                <span className="mb-1 block text-xs font-semibold text-[#51617A]">Part note</span>
                                 <input
                                   type="text"
                                   list={`weigh-part-notes-${entry.productId}`}
@@ -4571,7 +4566,7 @@ export default function Orders() {
                                     ));
                                   }}
                                   placeholder="Optional"
-                                  className="h-8 w-full rounded-md border border-[#E9B8B1] bg-white px-1.5 text-[11px] text-[#162B4D] outline-none focus:border-[#F05B4E]"
+                                  className="h-9 w-full rounded-md border border-[#E9B8B1] bg-white px-2 text-xs text-[#162B4D] outline-none focus:border-[#F05B4E]"
                                   aria-label={`${product.name} part note`}
                                   data-testid={`input-scale-part-note-${entry.productId}`}
                                 />
@@ -4581,7 +4576,7 @@ export default function Orders() {
                               </label>
                             )}
                             <label className="block">
-                              <span className="mb-1 block text-[10px] font-semibold text-[#51617A]">Kg</span>
+                              <span className="mb-1 block text-xs font-semibold text-[#51617A]">Kg</span>
                               <input
                                 type="number"
                                 min="0"
@@ -4591,13 +4586,13 @@ export default function Orders() {
                                   candidate.productId === entry.productId ? { ...candidate, kg: event.target.value } : candidate
                                 ))}
                                 placeholder="0"
-                                className="h-8 w-full rounded-md border border-[#E9B8B1] bg-white px-1.5 text-xs font-bold text-[#162B4D] outline-none focus:border-[#F05B4E]"
+                                className="h-9 w-full rounded-md border border-[#E9B8B1] bg-white px-2 text-sm font-bold text-[#162B4D] outline-none focus:border-[#F05B4E]"
                                 aria-label={`${product.name} kilograms`}
                                 data-testid={`input-test-scale-kg-${entry.productId}`}
                               />
                             </label>
                             <label className="block">
-                              <span className="mb-1 block text-[10px] font-semibold text-[#51617A]">Grams</span>
+                              <span className="mb-1 block text-xs font-semibold text-[#51617A]">Grams</span>
                               <input
                                 type="number"
                                 min="0"
@@ -4608,7 +4603,7 @@ export default function Orders() {
                                   candidate.productId === entry.productId ? { ...candidate, grams: event.target.value } : candidate
                                 ))}
                                 placeholder="0"
-                                className="h-8 w-full rounded-md border border-[#E9B8B1] bg-white px-1.5 text-xs font-bold text-[#162B4D] outline-none focus:border-[#F05B4E]"
+                                className="h-9 w-full rounded-md border border-[#E9B8B1] bg-white px-2 text-sm font-bold text-[#162B4D] outline-none focus:border-[#F05B4E]"
                                 aria-label={`${product.name} grams`}
                                 data-testid={`input-test-scale-grams-${entry.productId}`}
                               />
@@ -4616,7 +4611,7 @@ export default function Orders() {
                             <button
                               type="button"
                               onClick={() => setScaleEntries((current) => current.filter((candidate) => candidate.productId !== entry.productId))}
-                              className="mb-0.5 flex h-7 w-7 items-center justify-center rounded-md text-[#8D3D36] hover:bg-[#FDE5E1]"
+                              className="flex h-8 w-8 items-center justify-center rounded-md text-[#8D3D36] hover:bg-[#FDE5E1]"
                               aria-label={`Remove ${product.name} from weighing list`}
                               title="Remove from weighing list"
                             >
@@ -4630,7 +4625,7 @@ export default function Orders() {
                 )}
                 {scaleEntries.length > 0 && (
                   <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                    <div className="text-[11px] text-[#7E8998]">
+                    <div className="text-xs text-[#7E8998]">
                       {scaleEntries.length} item{scaleEntries.length === 1 ? "" : "s"} · {formatOrderWeight(scaleQueueTotals.weightKg)} · Total {formatRupees(scaleQueueTotals.amount)}
                     </div>
                     <button
