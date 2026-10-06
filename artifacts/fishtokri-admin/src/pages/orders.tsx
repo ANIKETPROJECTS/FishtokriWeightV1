@@ -5531,21 +5531,21 @@ export default function Orders() {
                 <div className="flex items-center gap-2 mb-2">
                   <button type="button"
                     onClick={() => { setMainPaymentMode("upi"); setTakeawayUnpaid(false); }}
-                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border-2 text-sm font-semibold transition-all ${mainPaymentMode === "upi" && !takeawayUnpaid ? "border-[#1A56DB] bg-[#1A56DB] text-white shadow-sm" : "border-gray-200 text-gray-500 hover:bg-blue-50 hover:border-blue-300"}`}
+                    className={`flex-1 flex h-10 items-center justify-center gap-1.5 rounded-none border-2 py-2 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111827] focus-visible:ring-offset-1 ${mainPaymentMode === "upi" && !takeawayUnpaid ? "border-[#1A56DB] bg-[#1A56DB] text-white shadow-sm" : "border-black bg-white text-black hover:bg-gray-50"}`}
                   >
                     <Smartphone className="w-4 h-4" />
                     UPI
                   </button>
                   <button type="button"
                     onClick={() => { setMainPaymentMode("cash"); setTakeawayUnpaid(false); }}
-                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border-2 text-sm font-semibold transition-all ${mainPaymentMode === "cash" && !takeawayUnpaid ? "border-amber-400 bg-amber-50 text-amber-700 shadow-sm" : "border-gray-200 text-gray-500 hover:bg-amber-50 hover:border-amber-300"}`}
+                    className={`flex-1 flex h-10 items-center justify-center gap-1.5 rounded-none border-2 py-2 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111827] focus-visible:ring-offset-1 ${mainPaymentMode === "cash" && !takeawayUnpaid ? "border-[#15803D] bg-[#15803D] text-white shadow-sm" : "border-black bg-white text-black hover:bg-gray-50"}`}
                   >
                     <Banknote className="w-4 h-4" />
                     Cash
                   </button>
                   <button type="button"
                     onClick={() => { setMainPaymentMode("card"); setTakeawayUnpaid(false); }}
-                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border-2 text-sm font-semibold transition-all ${mainPaymentMode === "card" && !takeawayUnpaid ? "border-[#364F9F] bg-[#364F9F] text-white shadow-sm" : "border-gray-200 text-gray-500 hover:bg-blue-50 hover:border-blue-300"}`}
+                    className={`flex-1 flex h-10 items-center justify-center gap-1.5 rounded-none border-2 py-2 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111827] focus-visible:ring-offset-1 ${mainPaymentMode === "card" && !takeawayUnpaid ? "border-[#334155] bg-[#334155] text-white shadow-sm" : "border-black bg-white text-black hover:bg-gray-50"}`}
                   >
                     <CreditCard className="w-4 h-4" />
                     Card
@@ -5560,7 +5560,7 @@ export default function Orders() {
                         disabled={walletFullyCovers}
                         onClick={() => setTakeawayUnpaid(true)}
                         title={walletFullyCovers ? "Wallet balance covers the full order — this order is fully paid" : undefined}
-                        className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border-2 text-sm font-semibold transition-all ${walletFullyCovers ? "border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed" : takeawayUnpaid ? "border-red-400 bg-red-50 text-red-700 shadow-sm" : "border-gray-200 text-gray-500 hover:bg-red-50 hover:border-red-300"}`}
+                        className={`flex-1 flex h-10 items-center justify-center gap-1.5 rounded-none border-2 py-2 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111827] focus-visible:ring-offset-1 ${takeawayUnpaid && !walletFullyCovers ? "border-[#B42318] bg-[#B42318] text-white shadow-sm" : "border-black bg-white text-black hover:bg-gray-50"} ${walletFullyCovers ? "cursor-not-allowed opacity-50" : ""}`}
                       >
                         <Tag className="w-4 h-4" />
                         Unpaid
