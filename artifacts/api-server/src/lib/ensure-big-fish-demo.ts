@@ -3,15 +3,15 @@ import mongoose from "mongoose";
 export const BIG_FISH_DEMO_KEY = "big-fish-parts";
 
 const BIG_FISH_PARTS = [
-  { partName: "Head", price: 400, unit: "per kg" },
-  { partName: "Body", price: 900, unit: "per kg" },
-  { partName: "Tail", price: 500, unit: "per kg" },
+  { partName: "Head", unit: "per kg" },
+  { partName: "Body", unit: "per kg" },
+  { partName: "Tail", unit: "per kg" },
 ];
 
 /**
- * Creates the single catalog fixture used by the admin POS part-picker.
- * It is deliberately zero-stock: the POS sells the selected parts as named
- * lines, while the parent product remains a real catalog/inventory record.
+ * Creates the legacy catalog fixture used as a fallback for the admin POS
+ * part-picker. Parts are labels only; they share the parent product's price
+ * and pooled stock.
  */
 export async function ensureBigFishDemoCatalog(db: any) {
   const categories = db.collection("categories");
@@ -47,7 +47,8 @@ export async function ensureBigFishDemoCatalog(db: any) {
       || (defaultPart.partName === "Body" && String(part?.partName) === "Middle"),
     );
     return {
-      ...(configuredPart ?? defaultPart),
+      ...(configuredPart ?? {}),
+      ...defaultPart,
       partName: defaultPart.partName,
     };
   });

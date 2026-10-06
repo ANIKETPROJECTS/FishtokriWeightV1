@@ -825,59 +825,32 @@ function comboAvailableQuantity(combo: any, products: any[]): number {
   })));
 }
 
-const DEMO_BIG_FISH_ID = "__demo_big_fish__";
 const DEMO_BIG_FISH_PARTS = [
   {
     _id: "__demo_big_fish_head__",
     productId: "__demo_big_fish_head__",
-    name: "Surmai - Head",
     partName: "Head",
-    price: 400,
-    unit: "per kg",
-    quantity: 50,
-    category: "Fish",
-    isDemoBigFishPart: true,
-    parentProductId: DEMO_BIG_FISH_ID,
-    isCombo: false,
   },
   {
     _id: "__demo_big_fish_body__",
     productId: "__demo_big_fish_body__",
-    name: "Surmai - Body",
     partName: "Body",
-    price: 900,
-    unit: "per kg",
-    quantity: 50,
-    category: "Fish",
-    isDemoBigFishPart: true,
-    parentProductId: DEMO_BIG_FISH_ID,
-    isCombo: false,
   },
   {
     _id: "__demo_big_fish_tail__",
     productId: "__demo_big_fish_tail__",
-    name: "Surmai - Tail",
     partName: "Tail",
-    price: 500,
-    unit: "per kg",
-    quantity: 50,
-    category: "Fish",
-    isDemoBigFishPart: true,
-    parentProductId: DEMO_BIG_FISH_ID,
-    isCombo: false,
   },
 ];
-const DEMO_BIG_FISH_SELECTOR = {
-  _id: DEMO_BIG_FISH_ID,
-   name: "Surmai",
-  category: "Fish",
-   description: "Choose Surmai Head, Body, or Tail",
-  quantity: 1,
-  unit: "",
-  demoParts: DEMO_BIG_FISH_PARTS.map((part) => ({ partName: part.partName, price: part.price, unit: part.unit, isWeightBased: true })),
-  isDemoBigFishSelector: true,
-  isCombo: false,
-};
+
+function isBigFishSelectorProduct(product: any): boolean {
+  const normalizedName = String(product?.name ?? "").trim().toLowerCase();
+  return product?.demoKey === "big-fish-parts"
+    || product?.isDemoBigFishSelector === true
+    || normalizedName === "surmai"
+    || normalizedName === "big fish"
+    || normalizedName === "big fish (demo)";
+}
 
 // ─── MAIN PAGE ─────────────────────────────────────────────────────────────────
 export default function Orders() {
@@ -1565,7 +1538,7 @@ export default function Orders() {
     const products = subHubProducts.filter((p) => posProductMode === "preorder"
       ? isPreorderOnlyProduct(p) && isProductAvailableForPreorder(p, orderDate)
       : !isPreorderOnlyProduct(p));
-    if (posProductMode === "preorder") return products;
+    if (posProductMode === "preorder") return products.filter((product) => !isBigFishSelectorProduct(product));
     const combos = subHubCombos
       .filter((combo) => combo.isActive !== false)
       .map((combo) => ({
@@ -1578,26 +1551,22 @@ export default function Orders() {
         quantity: comboAvailableQuantity(combo, subHubProducts),
         isCombo: true,
       }));
-    const savedBigFish = subHubProducts.find((product) =>
-      product.isDemoBigFishSelector === true || product.demoKey === "big-fish-parts"
-    );
-    const partWeights = savedBigFish?.partWeights ?? {};
-    const configuredParts = Array.isArray(savedBigFish?.demoParts) ? savedBigFish.demoParts : [];
-    const bigFishParts = DEMO_BIG_FISH_PARTS.map((part) => {
-      const configured = configuredParts.find((item: any) => item?.partName === part.partName);
-      return {
-        ...part,
-        displayName: part.partName,
-        parentProductId: String(savedBigFish?._id ?? savedBigFish?.productId ?? DEMO_BIG_FISH_ID),
-        category: "Surmai",
-        price: Number(configured?.price) >= 0 ? Number(configured.price) : part.price,
-        quantity: Math.max(0, Number(partWeights[part.partName]) || 0),
-      };
-    });
+    const fishCandidates = products.filter(isBigFishSelectorProduct);
+    // Prefer the real catalog SKU when present. The old demo SKU remains a
+    // fallback for projects that have not yet got a regular Surmai product.
+    const savedBigFish = fishCandidates.find((product) => product.demoKey !== "big-fish-parts")
+      ?? fishCandidates[0];
+    const selector = savedBigFish
+      ? {
+        ...savedBigFish,
+        unit: savedBigFish.unit || "per kg",
+        isDemoBigFishSelector: true,
+      }
+      : null;
     return [
-      ...products.filter((product) => !product.isDemoBigFishSelector && product.demoKey !== "big-fish-parts"),
+      ...products.filter((product) => !isBigFishSelectorProduct(product)),
       ...combos,
-      ...bigFishParts,
+      ...(selector ? [selector] : []),
     ];
   }, [subHubProducts, subHubCombos, posProductMode, orderDate]);
 
@@ -1689,11 +1658,24 @@ export default function Orders() {
   }, [productsForMode, productSearch, pickerCategory]);
 
   const bigFishPartOptions = useMemo(() => {
-    return productsForMode.filter((product) => product.isDemoBigFishPart);
+    const parent = productsForMode.find((product) => product.isDemoBigFishSelector);
+    if (!parent) return [];
+    return DEMO_BIG_FISH_PARTS.map((part) => ({
+      ...part,
+      name: `${parent.name} - ${part.partName}`,
+      displayName: part.partName,
+      category: parent.category || "Fish",
+      price: Number(parent.price) || 0,
+      unit: parent.unit || "per kg",
+      quantity: Math.max(0, Number(parent.quantity) || 0),
+      isDemoBigFishPart: true,
+      parentProductId: String(parent._id ?? parent.productId),
+      isCombo: false,
+    }));
   }, [productsForMode]);
 
   const scaleProducts = useMemo(() => {
-    return productsForMode;
+    return [...productsForMode, ...bigFishPartOptions];
   }, [productsForMode, bigFishPartOptions]);
   const selectedScaleProduct = scaleProducts.find((product) => String(product._id) === scaleProductId) || null;
   const scaleWeightKg = Math.round((
@@ -1736,21 +1718,18 @@ export default function Orders() {
       return;
     }
     if (canUsePosBuffer && selectedScaleProduct.isDemoBigFishPart) {
-      const otherPartOverage = selectedProducts
+      const otherPartQuantity = selectedProducts
         .filter((item) =>
           item.isDemoBigFishPart &&
           item.parentProductId === selectedScaleProduct.parentProductId &&
           item.productId !== String(selectedScaleProduct._id)
         )
-        .reduce((total, item) => {
-          const part = bigFishPartOptions.find((option) => option.productId === item.productId);
-          const partAvailable = Math.max(0, Number(part?.quantity) || 0);
-          return total + Math.max(0, Number(item.quantity) - partAvailable);
-        }, 0);
-      if (otherPartOverage + overageKg > POS_WEIGHT_OVERAGE_LIMIT_KG + 1e-9) {
+        .reduce((total, item) => total + Math.max(0, Number(item.quantity) || 0), 0);
+      const sharedPartOverage = Math.max(0, otherPartQuantity + scaleWeightKg - available);
+      if (sharedPartOverage > POS_WEIGHT_OVERAGE_LIMIT_KG + 1e-9) {
         toast({
           title: "Surmai weight allowance reached",
-          description: "The 1 kg allowance is shared across Head, Body, and Tail.",
+          description: `Head, Body, and Tail share ${formatOrderWeight(available)} of stock. The maximum total with the allowance is ${formatOrderWeight(available + POS_WEIGHT_OVERAGE_LIMIT_KG)}.`,
           variant: "destructive",
         });
         return;
@@ -4431,21 +4410,16 @@ export default function Orders() {
                     const cartItem = selectedProducts.find((sp) => sp.productId === pid);
                     const scaleSelected = scaleProductId === pid;
                     const isBigFishSelector = Boolean(p.isDemoBigFishSelector);
-                     const isBigFishPart = Boolean(p.isDemoBigFishPart);
                     const demoPartItems = isBigFishSelector
                       ? selectedProducts.filter((sp) => String(sp.parentProductId) === pid)
                       : [];
-                    const bigFishPartSummary = isBigFishSelector
-                      ? bigFishPartOptions
-                        .map((part) => `${part.partName} ${formatOrderWeight(Number(part.quantity) || 0)}`)
-                        .join(" · ")
-                      : "";
+                     const bigFishPartSummary = isBigFishSelector ? "Head · Body · Tail — same price" : "";
                     const selectedForCard = Boolean(cartItem) || scaleSelected || demoPartItems.length > 0;
                     const weightBased = isWeightBasedProduct(p);
                     const stock = Number(p.quantity) || 0;
                      const rawUnit = String(p.unit || "kg").trim() || "kg";
                      const stockUnit = /kg/i.test(rawUnit) ? "kg" : rawUnit;
-                    const outOfStock = !isBigFishSelector && stock <= 0;
+                     const outOfStock = stock <= 0;
                     const lowStock = stock > 0 && stock <= 5;
                     const atMax = cartItem ? cartItem.quantity >= stock : false;
                     return (
@@ -4526,8 +4500,8 @@ export default function Orders() {
                             <div className="min-w-0 flex-1">
                                {isBigFishSelector ? (
                                  <>
-                                   <p className="text-sm font-semibold text-[#1A56DB]">Choose a part</p>
-                                     <p className="text-[10px] font-medium leading-none text-[#364F9F]">{bigFishPartSummary}</p>
+                                    <p className="text-sm font-semibold text-[#1A56DB]">₹{Number(p.price).toLocaleString("en-IN")}/{stockUnit}</p>
+                                    <p className="text-[10px] font-medium leading-none text-[#364F9F]">{bigFishPartSummary}</p>
                                    <p className={`mt-1 text-[10px] font-semibold leading-none ${stock > 0 ? "text-[#364F9F]" : "text-red-500"}`}>
                                      {stock.toLocaleString("en-IN", { maximumFractionDigits: 2 })} {stockUnit} left
                                    </p>
@@ -5552,10 +5526,12 @@ export default function Orders() {
       <Dialog open={bigFishPartPickerOpen} onOpenChange={setBigFishPartPickerOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Surmai — Choose a part</DialogTitle>
+            <DialogTitle>
+              {String(bigFishPartOptions[0]?.name ?? "Surmai").replace(/ - (Head|Body|Tail)$/, "")} — Choose a part
+            </DialogTitle>
           </DialogHeader>
           <p className="text-sm text-gray-500">
-            Choose the part to weigh. The selected part will be added to the order after you enter its weight.
+            Choose a part label to put on the order. Head, Body, and Tail all use the same price per kg and share the fish’s total cleaned stock.
           </p>
           <div className="grid grid-cols-3 gap-3 pt-2">
             {bigFishPartOptions.map((part) => {
@@ -5565,6 +5541,7 @@ export default function Orders() {
                 <button
                   key={part.productId}
                   type="button"
+                  disabled={availableWeight <= 0}
                   onClick={() => {
                     setScaleProductId(part.productId);
                     setScaleKg("");
@@ -5576,7 +5553,9 @@ export default function Orders() {
                   <span className="block text-sm font-bold text-[#162B4D]">{part.partName}</span>
                   <span className="mt-1 block text-xs font-semibold text-[#1A56DB]">{formatRupees(part.price)}/kg</span>
                   <span className="mt-2 block text-[10px] text-gray-500">
-                    {selectedPart ? formatOrderWeight(selectedPart.quantity) : `${formatOrderWeight(availableWeight)} available`}
+                    {selectedPart
+                      ? `${formatOrderWeight(selectedPart.quantity)} in order`
+                      : `Shared stock: ${formatOrderWeight(availableWeight)}`}
                   </span>
                 </button>
               );

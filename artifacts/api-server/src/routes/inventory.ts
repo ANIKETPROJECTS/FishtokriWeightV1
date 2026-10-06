@@ -91,27 +91,14 @@ type Batch = {
 };
 
 const BIG_FISH_PART_NAMES = ["Head", "Body", "Tail"] as const;
-const BIG_FISH_DEFAULT_PART_PRICES = { Head: 400, Body: 900, Tail: 500 };
 
-function normalizeBigFishPartPrices(existing: any, raw: any) {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
-  const existingParts = Array.isArray(existing?.demoParts) ? existing.demoParts : [];
-  return BIG_FISH_PART_NAMES.map((partName) => {
-    const oldPart = existingParts.find((part: any) =>
-      String(part?.partName) === partName
-      || (partName === "Body" && String(part?.partName) === "Middle"),
-    );
-    const value = Number(raw[partName] ?? (partName === "Body" ? raw.Middle : undefined));
-    return {
-      ...(oldPart ?? {}),
-      partName,
-      price: Number.isFinite(value) && value >= 0
-        ? value
-        : Number(oldPart?.price) || BIG_FISH_DEFAULT_PART_PRICES[partName],
-      unit: "per kg",
-      isWeightBased: true,
-    };
-  });
+function isSurmaiProduct(product: any): boolean {
+  const normalizedName = String(product?.name ?? "").trim().toLowerCase();
+  return product?.demoKey === "big-fish-parts"
+    || product?.isDemoBigFishSelector === true
+    || normalizedName === "surmai"
+    || normalizedName === "big fish"
+    || normalizedName === "big fish (demo)";
 }
 
 function toDate(v: any): Date | null {
@@ -153,53 +140,6 @@ function normalizeBatch(b: any): Batch {
 function batchesTotal(batches: Batch[] | undefined | null): number {
   if (!Array.isArray(batches)) return 0;
   return batches.reduce((s, b) => s + (Number(b?.quantity) || 0), 0);
-}
-
-/**
- * Keep Big Fish part stock aligned with the parent batch quantity.
- * Older Big Fish batches may have no part weights, or may have part weights
- * recorded before the parent quantity was reduced. When some part data exists,
- * use its current proportions to backfill missing legacy batches and scale
- * stale totals to the real batch quantity.
- */
-function normalizeBigFishPartBatches(batches: Batch[]): Batch[] {
-  const working = batches.map((batch) => ({
-    ...batch,
-    partWeights: batch.partWeights ? { ...batch.partWeights } : null,
-  }));
-  const knownParts = { Head: 0, Body: 0, Tail: 0 };
-  const missing: Batch[] = [];
-
-  for (const batch of working) {
-    const partTotal = batch.partWeights
-      ? BIG_FISH_PART_NAMES.reduce((sum, part) => sum + Math.max(0, Number(batch.partWeights?.[part]) || 0), 0)
-      : 0;
-    const quantity = Math.max(0, Number(batch.quantity) || 0);
-    if (partTotal > 0 && quantity > 0) {
-      const scale = quantity / partTotal;
-      batch.partWeights = {
-        Head: Math.max(0, Number(batch.partWeights?.Head) || 0) * scale,
-        Body: Math.max(0, Number(batch.partWeights?.Body) || 0) * scale,
-        Tail: Math.max(0, Number(batch.partWeights?.Tail) || 0) * scale,
-      };
-      for (const part of BIG_FISH_PART_NAMES) knownParts[part] += batch.partWeights[part];
-    } else if (quantity > 0) {
-      missing.push(batch);
-    }
-  }
-
-  const knownTotal = knownParts.Head + knownParts.Body + knownParts.Tail;
-  if (knownTotal > 0 && missing.length > 0) {
-    for (const batch of missing) {
-      const quantity = Math.max(0, Number(batch.quantity) || 0);
-      batch.partWeights = {
-        Head: quantity * knownParts.Head / knownTotal,
-        Body: quantity * knownParts.Body / knownTotal,
-        Tail: quantity * knownParts.Tail / knownTotal,
-      };
-    }
-  }
-  return working;
 }
 
 function reduceBatchQuantity(batch: Batch, newQuantity: number) {
@@ -266,65 +206,6 @@ type BigFishPartName = "Head" | "Body" | "Tail";
 
 function isBigFishPartName(value: unknown): value is BigFishPartName {
   return BIG_FISH_PART_NAMES.includes(String(value) as BigFishPartName);
-}
-
-function bigFishPartQuantity(batches: Batch[], partName: BigFishPartName, now = new Date()): number {
-  const nowMs = now.getTime();
-  return batches
-    .filter((batch) => !batch.expiryDate || new Date(batch.expiryDate).getTime() >= nowMs)
-    .reduce((sum, batch) => sum + Math.max(0, Number(batch.partWeights?.[partName]) || 0), 0);
-}
-
-function adjustBigFishPartStock(
-  batches: Batch[],
-  partName: BigFishPartName,
-  quantity: number,
-  direction: "deduct" | "restore",
-  now = new Date(),
-): { batches: Batch[]; remaining: number; batchNumbers: string[] } {
-  const nowMs = now.getTime();
-  const working = batches.map((batch) => ({
-    ...batch,
-    partWeights: batch.partWeights ? { ...batch.partWeights } : null,
-  }));
-  const active = working.filter((batch) => !batch.expiryDate || new Date(batch.expiryDate).getTime() >= nowMs);
-  const batchNumbers: string[] = [];
-
-  if (direction === "restore") {
-    const target = [...active].sort((a, b) => {
-      const at = a.receivedDate ? new Date(a.receivedDate).getTime() : 0;
-      const bt = b.receivedDate ? new Date(b.receivedDate).getTime() : 0;
-      return bt - at;
-    })[0];
-    if (target) {
-      target.partWeights = target.partWeights ?? { Head: 0, Body: 0, Tail: 0 };
-      target.partWeights[partName] = Math.max(0, Number(target.partWeights[partName]) || 0) + quantity;
-      target.quantity = Math.max(0, Number(target.quantity) || 0) + quantity;
-      if (target.batchNumber) batchNumbers.push(target.batchNumber);
-      return { batches: working, remaining: 0, batchNumbers };
-    }
-    const newBatch = normalizeBatch({
-      quantity,
-      partWeights: { Head: 0, Body: 0, Tail: 0, [partName]: quantity },
-      receivedDate: now,
-      createdAt: now,
-    });
-    return { batches: [...working, newBatch], remaining: 0, batchNumbers };
-  }
-
-  let remaining = Math.max(0, quantity);
-  for (const batch of sortBatchesFIFO(active)) {
-    if (remaining <= 0) break;
-    const available = Math.max(0, Number(batch.partWeights?.[partName]) || 0);
-    const take = Math.min(available, remaining);
-    if (take <= 0) continue;
-    batch.partWeights = batch.partWeights ?? { Head: 0, Body: 0, Tail: 0 };
-    batch.partWeights[partName] = available - take;
-    batch.quantity = Math.max(0, (Number(batch.quantity) || 0) - take);
-    remaining -= take;
-    if (batch.batchNumber) batchNumbers.push(batch.batchNumber);
-  }
-  return { batches: [...working.filter((batch) => batch.expiryDate && new Date(batch.expiryDate).getTime() < nowMs), ...sortBatchesFIFO(active)], remaining, batchNumbers };
 }
 
 /**
@@ -740,16 +621,12 @@ router.post("/adjustments", async (req, res) => {
       const existing = await products.findOne({ _id: pid });
       if (!existing) continue;
 
-      let currentBatches: Batch[] = Array.isArray(existing.batches) ? existing.batches.map((b: any) => normalizeBatch(b)) : [];
-      if (existing.demoKey === "big-fish-parts") {
-        currentBatches = normalizeBigFishPartBatches(currentBatches);
-      }
+      const isBigFish = isSurmaiProduct(existing);
+      const currentBatches: Batch[] = Array.isArray(existing.batches) ? existing.batches.map((b: any) => normalizeBatch(b)) : [];
       const before = batchesTotal(currentBatches) || (Number(existing.quantity) || 0);
 
       const mode = String(it.mode || (it.addQuantity != null ? "add" : it.removeQuantity != null ? "remove" : "set"));
-      const demoParts = existing.demoKey === "big-fish-parts"
-        ? normalizeBigFishPartPrices(existing, it.partPrices)
-        : null;
+      let sharedPricePerKg: number | undefined;
 
       let newBatches = [...currentBatches];
       let delta = 0;
@@ -758,15 +635,20 @@ router.post("/adjustments", async (req, res) => {
       if (mode === "add") {
         const addQty = Math.max(0, Number(it.addQuantity) || 0);
         if (addQty <= 0) continue;
-        if (existing.demoKey === "big-fish-parts") {
+        if (isBigFish) {
           const cleanedWeight = Number(it.cleanedWeight);
-          const partWeights = it.partWeights ?? {};
-          const partTotal = ["Head", "Body", "Tail"]
-            .reduce((sum, part) => sum + Math.max(0, Number(partWeights[part] ?? (part === "Body" ? partWeights.Middle : 0)) || 0), 0);
-          if (!Number.isFinite(cleanedWeight) || Math.abs(partTotal - cleanedWeight) > 0.01) {
+          sharedPricePerKg = Number(it.price ?? existing.price);
+          if (!Number.isFinite(cleanedWeight) || cleanedWeight <= 0 || Math.abs(addQty - cleanedWeight) > 0.01) {
             res.status(400).json({
               error: "ValidationError",
-              message: "Surmai Head, Body, and Tail weights must equal the cleaned weight.",
+              message: "Surmai batch quantity must match its total cleaned weight.",
+            });
+            return;
+          }
+          if (!Number.isFinite(sharedPricePerKg) || sharedPricePerKg <= 0) {
+            res.status(400).json({
+              error: "ValidationError",
+              message: "Enter one positive selling price per kg for Surmai.",
             });
             return;
           }
@@ -774,11 +656,10 @@ router.post("/adjustments", async (req, res) => {
         const batch = normalizeBatch({
           batchNumber: it.batchNumber,
           quantity: addQty,
-          price: it.price,
+          price: isBigFish ? sharedPricePerKg : it.price,
           rawWeight: it.rawWeight,
           cleanedWeight: it.cleanedWeight,
           yieldPercentage: it.yieldPercentage,
-          partWeights: it.partWeights,
           shelfLifeDays: it.shelfLifeDays,
           expiryDate: it.expiryDate,
           receivedDate: it.receivedDate ?? now,
@@ -879,7 +760,7 @@ router.post("/adjustments", async (req, res) => {
          products,
          pid,
          newBatches,
-         demoParts ? { demoParts } : {},
+         isBigFish && mode === "add" ? { price: sharedPricePerKg } : {},
          ctx.conn.db.collection("combos"),
        );
 
@@ -897,7 +778,6 @@ router.post("/adjustments", async (req, res) => {
            rawWeight: appliedBatch.rawWeight,
            cleanedWeight: appliedBatch.cleanedWeight,
            yieldPercentage: appliedBatch.yieldPercentage,
-            partWeights: appliedBatch.partWeights,
           shelfLifeDays: appliedBatch.shelfLifeDays,
           expiryDate: appliedBatch.expiryDate,
         } : undefined,
@@ -916,7 +796,6 @@ router.post("/adjustments", async (req, res) => {
         rawWeight: appliedBatch?.rawWeight ?? undefined,
         cleanedWeight: appliedBatch?.cleanedWeight ?? undefined,
         yieldPercentage: appliedBatch?.yieldPercentage ?? undefined,
-          partWeights: appliedBatch?.partWeights ?? undefined,
         expiryDate: appliedBatch?.expiryDate || undefined,
         receivedDate: appliedBatch?.receivedDate || undefined,
         createdAt: now,
@@ -1124,8 +1003,8 @@ async function expandOrderItems(
 
     let resolved = false;
 
-    // Big Fish part lines point at the parent product but must retain their
-    // part name so inventory can deduct only Head, Body, or Tail stock.
+    // Part labels remain on the order line for receipts and audit history;
+    // Head, Body, and Tail all consume the same parent product stock.
     const requestedPart = isBigFishPartName(it.partName) ? it.partName : undefined;
     const requestedParentId = it.parentProductId ?? it.productId;
     if (requestedPart && requestedParentId) {
@@ -1133,9 +1012,9 @@ async function expandOrderItems(
       if (parentId) {
         const parent = await productsCol.findOne(
           { _id: parentId },
-          { projection: { _id: 1, name: 1, unit: 1, demoKey: 1 } },
+          { projection: { _id: 1, name: 1, unit: 1, demoKey: 1, isDemoBigFishSelector: 1 } },
         );
-        if (parent?.demoKey === "big-fish-parts") {
+        if (isSurmaiProduct(parent)) {
           const key = `${String(parentId)}:${requestedPart}`;
           const entry = aggregated.get(key);
           if (entry) entry.quantity += qty;
@@ -1151,6 +1030,7 @@ async function expandOrderItems(
         }
       }
     }
+    if (resolved) continue;
 
     // ── Path A: productId-based lookup (also accepts `id` field used by some customer apps) ──
     const rawId = (it as any).productId ?? (it as any).id ?? null;
@@ -1268,10 +1148,12 @@ async function applyDelta(
   // the lock only after the first has already deducted — it then sees available=0
   // and throws InsufficientStockError before any mutation occurs.
   if (direction === "deduct") {
-    const overageGroups = new Map<string, {
+    const stockGroups = new Map<string, {
       productName: string;
       available: number;
-      overageKg: number;
+      requestedQuantity: number;
+      canUsePosBuffer: boolean;
+      items: typeof items;
     }>();
 
     for (const it of items) {
@@ -1282,55 +1164,62 @@ async function applyDelta(
       const currentBatches: Batch[] = Array.isArray(product.batches)
         ? product.batches.map((b: any) => normalizeBatch(b))
         : [];
-      // Available stock: use batch totals if batches exist, otherwise the raw quantity field
-      const available = it.partName && product.demoKey === "big-fish-parts"
-        ? bigFishPartQuantity(currentBatches, it.partName)
-        : currentBatches.length > 0
-          ? batchesTotal(currentBatches)
-          : Math.max(0, Number(product.quantity) || 0);
+      // Legacy fish part weights are ignored: every part draws from the same
+      // active cleaned-weight batches on its parent product.
+      const activeBatches = isSurmaiProduct(product)
+        ? currentBatches.filter((batch) => !batch.expiryDate || new Date(batch.expiryDate).getTime() >= now.getTime())
+        : currentBatches;
+      const available = currentBatches.length > 0
+        ? batchesTotal(activeBatches)
+        : Math.max(0, Number(product.quantity) || 0);
       const requestedQuantity = Math.max(0, Number(it.quantity) || 0);
-      const overageKg = Math.max(0, requestedQuantity - available);
       const isKgProduct = /kg/i.test(String(it.unit || product.unit || ""));
       const canUsePosBuffer = Boolean(order.posWeightBuffer) && isKgProduct;
-      if (overageKg > 0 && (!canUsePosBuffer || available <= 0 || overageKg > POS_WEIGHT_OVERAGE_LIMIT_KG + 1e-9)) {
-        logger.warn(
-          { orderId, productId: String(pid), productName: product.name, available, requested: requestedQuantity },
-          "applyDelta: pre-flight stock check FAILED — insufficient stock, rejecting order"
-        );
-        throw new InsufficientStockError(product.name ?? it.name ?? "Unknown product", available, requestedQuantity);
-      }
-
-      const key = itemKey(it);
-      deductionPlan.set(key, {
-        quantity: Math.min(requestedQuantity, available),
-        requestedQuantity,
-        overageKg,
-      });
-
-      if (canUsePosBuffer && (overageKg > 0 || it.parentProductId)) {
-        // Big-fish parts share one 1 kg allowance across Head, Body, and Tail.
-        // Other products each have their own single-SKU allowance.
-        const groupKey = it.parentProductId
-          ? `big-fish:${it.parentProductId}`
-          : `product:${pid}`;
-        const group = overageGroups.get(groupKey) ?? {
-          productName: it.parentProductId ? `${product.name ?? "Big fish"} parts` : (product.name ?? it.name ?? "Unknown product"),
-          available: 0,
-          overageKg: 0,
-        };
-        group.available += available;
-        group.overageKg += overageKg;
-        overageGroups.set(groupKey, group);
-      }
+      const groupKey = String(pid);
+      const group = stockGroups.get(groupKey) ?? {
+        productName: product.name ?? it.name ?? "Unknown product",
+        available,
+        requestedQuantity: 0,
+        canUsePosBuffer,
+        items: [],
+      };
+      group.requestedQuantity += requestedQuantity;
+      group.canUsePosBuffer = group.canUsePosBuffer && canUsePosBuffer;
+      group.items.push(it);
+      stockGroups.set(groupKey, group);
     }
 
-    for (const group of overageGroups.values()) {
-      if (group.overageKg > POS_WEIGHT_OVERAGE_LIMIT_KG + 1e-9) {
+    for (const [productId, group] of stockGroups) {
+      const overageKg = Math.max(0, group.requestedQuantity - group.available);
+      if (overageKg > 0 && (
+        !group.canUsePosBuffer ||
+        group.available <= 0 ||
+        overageKg > POS_WEIGHT_OVERAGE_LIMIT_KG + 1e-9
+      )) {
+        logger.warn(
+          { orderId, productId, productName: group.productName, available: group.available, requested: group.requestedQuantity },
+          "applyDelta: pre-flight stock check FAILED — insufficient stock, rejecting order"
+        );
         throw new InsufficientStockError(
           group.productName,
           group.available,
-          group.available + group.overageKg,
+          group.requestedQuantity,
         );
+      }
+
+      // Allocate the actual on-hand stock across all cart lines for this SKU.
+      // This prevents Head, Body, and Tail from each consuming the full shared
+      // stock independently while keeping their separate order-line labels.
+      let remainingAvailable = group.available;
+      for (const it of group.items) {
+        const requestedQuantity = Math.max(0, Number(it.quantity) || 0);
+        const quantity = Math.min(requestedQuantity, remainingAvailable);
+        remainingAvailable = Math.max(0, remainingAvailable - quantity);
+        deductionPlan.set(itemKey(it), {
+          quantity,
+          requestedQuantity,
+          overageKg: Math.max(0, requestedQuantity - quantity),
+        });
       }
     }
 
@@ -1371,7 +1260,35 @@ async function applyDelta(
     const qty = plan?.quantity ?? it.quantity;
     const requestedQuantity = plan?.requestedQuantity ?? qty;
     const weightOverageKg = plan?.overageKg ?? 0;
-    if (qty <= 0) continue;
+    if (qty <= 0) {
+      // Keep a zero-deduction marker for a line whose billed weight was fully
+      // covered by the POS allowance. Cancellation uses it to avoid restoring
+      // weight that was never removed from stock.
+      if (direction === "deduct" && requestedQuantity > 0 && weightOverageKg > 0) {
+        const existing = await products.findOne({ _id: pid });
+        if (existing) {
+          const currentBatches: Batch[] = Array.isArray(existing.batches)
+            ? existing.batches.map((b: any) => normalizeBatch(b))
+            : [];
+          await movements.insertOne({
+            type: "order_deduct",
+            productId: String(pid),
+            productName: existing.name ?? it.name ?? "",
+            unit: existing.unit ?? it.unit ?? "",
+            change: 0,
+            balance: currentBatches.length > 0 ? batchesTotal(currentBatches) : Math.max(0, Number(existing.quantity) || 0),
+            orderId,
+            orderRef,
+            ...(subReason ? { subReason } : {}),
+            requestedQuantity,
+            weightOverageKg,
+            ...(it.partName ? { partName: it.partName } : {}),
+            createdAt: now,
+          });
+        }
+      }
+      continue;
+    }
 
     const existing = await products.findOne({ _id: pid });
     if (!existing) {
@@ -1384,14 +1301,7 @@ async function applyDelta(
     let newBatches = currentBatches;
     let appliedExpiry: Date | null = null;
     let appliedBatchNumbers: string | undefined;
-    if (direction === "deduct" && it.partName && existing.demoKey === "big-fish-parts") {
-      const adjusted = adjustBigFishPartStock(currentBatches, it.partName, qty, "deduct", now);
-      if (adjusted.remaining > 0) {
-        throw new InsufficientStockError(`${existing.name ?? "Surmai"} - ${it.partName}`, qty - adjusted.remaining, qty);
-      }
-      newBatches = adjusted.batches;
-      appliedBatchNumbers = adjusted.batchNumbers.join(", ") || undefined;
-    } else if (direction === "deduct") {
+    if (direction === "deduct") {
       if (currentBatches.length > 0) {
         const now2 = new Date();
         const nowMs2 = now2.getTime();
@@ -1434,10 +1344,6 @@ async function applyDelta(
         deductedCount++;
         continue;
       }
-    } else if (it.partName && existing.demoKey === "big-fish-parts") {
-      const adjusted = adjustBigFishPartStock(currentBatches, it.partName, qty, "restore", now);
-      newBatches = adjusted.batches;
-      appliedBatchNumbers = adjusted.batchNumbers.join(", ") || undefined;
     } else {
       // restore: add quantity back into the most recently received active (non-expired) batch
       // to avoid creating extra batches on every cancellation/delete.

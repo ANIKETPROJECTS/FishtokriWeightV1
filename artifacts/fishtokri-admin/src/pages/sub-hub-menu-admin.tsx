@@ -1498,16 +1498,10 @@ function ProductsTab({ subHubId, onSetExcel }: { subHubId: string; onSetExcel: (
                     <p className="text-sm font-semibold text-black">{p.category || "—"}</p>
                   </td>
                   <td className="px-5 py-4">
-                     {p.demoKey === "big-fish-parts" && Array.isArray(p.demoParts) ? (
-                       <div className="space-y-0.5">
-                         <p className="text-xs font-bold text-[#162B4D]">Part prices</p>
-                         <p className="text-[10px] text-gray-600 whitespace-nowrap">
-                           {p.demoParts.map((part: any) => `${part.partName} ₹${Number(part.price || 0).toLocaleString("en-IN")}`).join(" · ")}
-                         </p>
-                       </div>
-                     ) : (
-                       <p className="font-bold text-black text-base">₹{p.price}</p>
-                     )}
+                      <p className="font-bold text-black text-base">₹{p.price}</p>
+                      {p.demoKey === "big-fish-parts" && (
+                        <p className="text-[10px] text-gray-600">Same per-kg rate for Head, Body, and Tail</p>
+                      )}
                      {p.demoKey !== "big-fish-parts" && p.originalPrice > p.price && (
                       <p className="text-sm text-black">
                         <span className="line-through">₹{p.originalPrice}</span>

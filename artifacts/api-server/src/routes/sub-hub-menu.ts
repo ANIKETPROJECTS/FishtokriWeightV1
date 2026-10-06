@@ -150,23 +150,7 @@ router.get("/products", async (req, res) => {
       const batches: any[] = Array.isArray(p.batches) ? p.batches : [];
       const activeBatches = batches.filter((b: any) => !b?.expiryDate || new Date(b.expiryDate).getTime() >= nowMs);
       const total = activeBatches.reduce((s: number, b: any) => s + (Math.max(0, Number(b?.quantity) || 0)), 0);
-      if (p.demoKey !== "big-fish-parts") return { ...p, quantity: total };
-      const partWeights = activeBatches.reduce((parts: Record<string, number>, batch: any) => {
-        for (const part of ["Head", "Body", "Tail"]) {
-          const legacyBodyWeight = part === "Body" ? batch?.partWeights?.Middle : undefined;
-          parts[part] += Math.max(0, Number(batch?.partWeights?.[part] ?? legacyBodyWeight) || 0);
-        }
-        return parts;
-      }, { Head: 0, Body: 0, Tail: 0 });
-      // Keep legacy part totals aligned with the real parent Big Fish stock.
-      // Older batches may contain stale part weights or may have been reduced
-      // before part weights were recorded.
-      const partTotal = partWeights.Head + partWeights.Body + partWeights.Tail;
-      if (total > 0 && partTotal > 0 && Math.abs(partTotal - total) > 0.01) {
-        const scale = total / partTotal;
-        for (const part of ["Head", "Body", "Tail"]) partWeights[part] *= scale;
-      }
-      return { ...p, quantity: total, partWeights };
+      return { ...p, quantity: total };
     });
     res.json({ products: productsWithQty, total: productsWithQty.length });
   } catch (err) {

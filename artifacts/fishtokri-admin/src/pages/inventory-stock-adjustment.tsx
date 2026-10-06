@@ -63,6 +63,7 @@ type Product = {
   shortCode?: string;
   category: string;
   unit: string;
+  price?: number;
   quantity: number;
   batches?: Batch[];
   demoKey?: string;
@@ -78,8 +79,6 @@ type FormRow = {
   quantityBefore: number;
   mode: FormMode;
   addQuantity: string;
-  partWeights: { Head: string; Body: string; Tail: string };
-  partPrices: { Head: string; Body: string; Tail: string };
   batchPrice: string;
   rawWeight: string;
   cleanedWeight: string;
@@ -172,7 +171,7 @@ function generateNextBatchNumber(productName: string, productBatches: Batch[], s
 function emptyRow(): FormRow {
   return {
     productId: "", productName: "", category: "", unit: "", quantityBefore: 0,
-    mode: "add", addQuantity: "", partWeights: { Head: "", Body: "", Tail: "" }, partPrices: { Head: "400", Body: "900", Tail: "500" }, batchPrice: "", rawWeight: "", cleanedWeight: "", shelfLifeDays: "", expiryDate: "", expiryTime: getCurrentTime12h(), batchNumber: "",
+    mode: "add", addQuantity: "", batchPrice: "", rawWeight: "", cleanedWeight: "", shelfLifeDays: "", expiryDate: "", expiryTime: getCurrentTime12h(), batchNumber: "",
     batchNotes: "",
     removeQuantity: "", selectedBatchId: "", search: "",
   };
@@ -183,35 +182,6 @@ function isBigFishRow(row: FormRow): boolean {
   return name === "surmai"
     || name === "big fish"
     || name === "big fish (demo)";
-}
-
-function initialBigFishPartPrices(product: Product): { Head: string; Body: string; Tail: string } {
-  const configured = product.demoParts ?? [];
-  const priceFor = (partName: string, fallback: number) => {
-    const price = Number(configured.find((part) => part.partName === partName)?.price);
-    return String(Number.isFinite(price) && price >= 0 ? price : fallback);
-  };
-  return {
-    Head: priceFor("Head", 400),
-    Body: priceFor("Body", Number(configured.find((part) => part.partName === "Middle")?.price) || 900),
-    Tail: priceFor("Tail", 500),
-  };
-}
-
-function calculateBigFishTotalPrice(
-  partWeights: { Head: string; Body: string; Tail: string },
-  partPrices: { Head: string; Body: string; Tail: string },
-): number {
-  const totalWeight = calculateBigFishPartWeightTotal(partWeights);
-  if (totalWeight <= 0) return 0;
-  const totalValue = (["Head", "Body", "Tail"] as const)
-    .reduce((sum, part) => sum + Math.max(0, Number(partWeights[part]) || 0) * Math.max(0, Number(partPrices[part]) || 0), 0);
-  return Math.round(totalValue * 100) / 100;
-}
-
-function calculateBigFishPartWeightTotal(partWeights: { Head: string; Body: string; Tail: string }): number {
-  return (["Head", "Body", "Tail"] as const)
-    .reduce((sum, part) => sum + Math.max(0, Number(partWeights[part]) || 0), 0);
 }
 
 function addDaysISO(days: number): string {
@@ -1082,8 +1052,7 @@ export default function InventoryStockAdjustment() {
       ...r,
       productId: p.id, productName: p.name, category: p.category || "",
       unit: p.unit, quantityBefore: p.quantity, search: p.name,
-      addQuantity: "", partWeights: { Head: "", Body: "", Tail: "" }, partPrices: initialBigFishPartPrices(p),
-      batchPrice: p.demoKey === "big-fish-parts" || ["surmai", "big fish", "big fish (demo)"].includes(p.name.trim().toLowerCase()) ? "" : String(p.price ?? ""),
+      addQuantity: "", batchPrice: String(p.price ?? ""),
       rawWeight: "", cleanedWeight: "", removeQuantity: "",
       batchNumber: r.mode === "add" ? autoNum : "",
       batchNotes: "",
@@ -1094,7 +1063,7 @@ export default function InventoryStockAdjustment() {
   function clearProduct(i: number) {
     updateRow(i, {
       productId: "", productName: "", category: "", unit: "", quantityBefore: 0, search: "",
-      addQuantity: "", partWeights: { Head: "", Body: "", Tail: "" }, partPrices: { Head: "400", Body: "900", Tail: "500" }, batchPrice: "", rawWeight: "", cleanedWeight: "", removeQuantity: "",
+      addQuantity: "", batchPrice: "", rawWeight: "", cleanedWeight: "", removeQuantity: "",
       batchNumber: "", selectedBatchId: "",
     });
   }
@@ -1102,7 +1071,7 @@ export default function InventoryStockAdjustment() {
   function onSearchChange(i: number, val: string) {
     updateRow(i, {
       search: val, productId: "", productName: "", category: "", unit: "", quantityBefore: 0,
-      addQuantity: "", partWeights: { Head: "", Body: "", Tail: "" }, partPrices: { Head: "400", Body: "900", Tail: "500" }, batchPrice: "", rawWeight: "", cleanedWeight: "", removeQuantity: "",
+      addQuantity: "", batchPrice: "", rawWeight: "", cleanedWeight: "", removeQuantity: "",
       batchNumber: "", selectedBatchId: "",
     });
   }
@@ -1144,19 +1113,6 @@ export default function InventoryStockAdjustment() {
   }
 
   function setWeight(i: number, field: "rawWeight" | "cleanedWeight", value: string) {
-    const row = formRows[i];
-    if (field === "cleanedWeight" && isBigFishRow(row) && value !== "") {
-      const cleaned = Number(value);
-      const partsTotal = calculateBigFishPartWeightTotal(row.partWeights);
-      if (Number.isFinite(cleaned) && partsTotal > cleaned + 0.01) {
-        toast({
-          title: "Cleaned weight is too low",
-          description: `Reduce the Head, Body, or Tail weight first. Current parts total is ${partsTotal.toLocaleString("en-IN", { maximumFractionDigits: 2 })} kg.`,
-          variant: "destructive",
-        });
-        return;
-      }
-    }
     const patch: Partial<FormRow> = { [field]: value };
     if (field === "cleanedWeight" && value !== "") {
       patch.addQuantity = value;
@@ -1164,39 +1120,6 @@ export default function InventoryStockAdjustment() {
       patch.addQuantity = "";
     }
     updateRow(i, patch);
-  }
-
-  function setBigFishPartWeight(i: number, part: "Head" | "Body" | "Tail", value: string) {
-    const row = formRows[i];
-    const partWeights = { ...row.partWeights, [part]: value };
-    const total = Object.values(partWeights).reduce((sum, weight) => sum + Math.max(0, Number(weight) || 0), 0);
-    const totalValue = total > 0 ? String(total) : "";
-    const hasCleanedWeight = row.cleanedWeight !== "" && Number.isFinite(Number(row.cleanedWeight));
-    if (hasCleanedWeight && total > Number(row.cleanedWeight) + 0.01) {
-      toast({
-        title: "Part weight exceeds cleaned weight",
-        description: `Head + Body + Tail cannot exceed ${Number(row.cleanedWeight).toLocaleString("en-IN", { maximumFractionDigits: 2 })} kg.`,
-        variant: "destructive",
-      });
-      return;
-    }
-    const batchPrice = calculateBigFishTotalPrice(partWeights, row.partPrices);
-    updateRow(i, {
-      partWeights,
-      cleanedWeight: hasCleanedWeight ? row.cleanedWeight : totalValue,
-      addQuantity: hasCleanedWeight ? row.cleanedWeight : totalValue,
-      batchPrice: batchPrice > 0 ? String(batchPrice) : "",
-    });
-  }
-
-  function setBigFishPartPrice(i: number, part: "Head" | "Body" | "Tail", value: string) {
-    const row = formRows[i];
-    const partPrices = { ...row.partPrices, [part]: value };
-    const batchPrice = calculateBigFishTotalPrice(row.partWeights, partPrices);
-    updateRow(i, {
-      partPrices,
-      batchPrice: batchPrice > 0 ? String(batchPrice) : "",
-    });
   }
 
   function resetForm() {
@@ -1240,17 +1163,15 @@ export default function InventoryStockAdjustment() {
       });
       return;
     }
-    const invalidBigFishParts = validRows.find((r) => {
-      if (r.mode !== "add" || !isBigFishRow(r)) return false;
-      const cleaned = Number(r.cleanedWeight);
-      const partsTotal = calculateBigFishPartWeightTotal(r.partWeights);
-      return !Number.isFinite(cleaned) || Math.abs(partsTotal - cleaned) > 0.01;
-    });
-    if (invalidBigFishParts) {
-      const partsTotal = calculateBigFishPartWeightTotal(invalidBigFishParts.partWeights);
+    const missingBigFishPrice = validRows.find((r) =>
+      r.mode === "add" &&
+      isBigFishRow(r) &&
+      (!Number.isFinite(Number(r.batchPrice)) || Number(r.batchPrice) <= 0)
+    );
+    if (missingBigFishPrice) {
       toast({
-        title: "Surmai weights do not match",
-        description: `For ${invalidBigFishParts.productName}, Head + Body + Tail must equal the cleaned weight. Current parts total: ${partsTotal.toLocaleString("en-IN", { maximumFractionDigits: 2 })} kg.`,
+        title: "Enter a price per kg",
+        description: `Set one positive per-kg price for ${missingBigFishPrice.productName}. The same rate is used for Head, Body, and Tail.`,
         variant: "destructive",
       });
       return;
@@ -1272,20 +1193,6 @@ export default function InventoryStockAdjustment() {
                rawWeight: Number(r.rawWeight),
                cleanedWeight: Number(r.cleanedWeight),
                yieldPercentage: Number(r.cleanedWeight) / Number(r.rawWeight) * 100,
-               partWeights: isBigFishRow(r)
-                 ? {
-                   Head: Math.max(0, Number(r.partWeights.Head) || 0),
-                   Body: Math.max(0, Number(r.partWeights.Body) || 0),
-                   Tail: Math.max(0, Number(r.partWeights.Tail) || 0),
-                 }
-                 : undefined,
-               partPrices: isBigFishRow(r)
-                 ? {
-                   Head: Math.max(0, Number(r.partPrices.Head) || 0),
-                   Body: Math.max(0, Number(r.partPrices.Body) || 0),
-                   Tail: Math.max(0, Number(r.partPrices.Tail) || 0),
-                 }
-                 : undefined,
               shelfLifeDays: r.shelfLifeDays !== "" ? Number(r.shelfLifeDays) : undefined,
               expiryDate: r.expiryDate
                 ? (r.expiryTime ? `${r.expiryDate}T${to24hTime(r.expiryTime)}:00+05:30` : r.expiryDate)
@@ -1378,10 +1285,6 @@ export default function InventoryStockAdjustment() {
                 const isAddExisting = row.mode === "add_existing";
                 const isAddAny = isAdd || isAddExisting;
                 const isBigFish = isBigFishRow(row);
-                const bigFishPartTotal = calculateBigFishPartWeightTotal(row.partWeights);
-                const cleanedWeight = Number(row.cleanedWeight);
-                const bigFishPartsMismatch = isAdd && isBigFish && Number.isFinite(cleanedWeight) && cleanedWeight > 0
-                  && Math.abs(bigFishPartTotal - cleanedWeight) > 0.01;
                 const dLeft = isAdd ? daysUntil(row.expiryDate) : null;
                 const expTone = dLeft == null ? "text-gray-400"
                   : dLeft < 0 ? "text-red-600"
@@ -1492,20 +1395,19 @@ export default function InventoryStockAdjustment() {
                          {isAdd && (
                            <div className="col-span-6 md:col-span-2 space-y-1">
                               <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                                {isBigFish ? "Calculated Total Fish Price" : "Batch Price"}{isBigFish ? "" : ` / ${row.unit || "unit"}`}
+                                 {isBigFish ? "Price per kg" : "Batch Price"}{isBigFish ? "" : ` / ${row.unit || "unit"}`}
                               </label>
                              <input
                                type="number"
-                               min="0"
+                                min={isBigFish ? "0.01" : "0"}
                                step="0.01"
                                value={row.batchPrice}
-                                onChange={(e) => { if (!isBigFish) updateRow(idx, { batchPrice: e.target.value }); }}
-                                readOnly={isBigFish}
-                                placeholder={isBigFish ? "Set part prices and weights" : "Product price"}
-                                className={`w-full h-9 px-3 text-sm font-semibold text-[#162B4D] border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-[#364F9F]/20 focus:border-[#364F9F] ${isBigFish ? "bg-emerald-50/60 cursor-not-allowed" : "bg-white"}`}
+                                onChange={(e) => updateRow(idx, { batchPrice: e.target.value })}
+                                placeholder={isBigFish ? "One shared selling rate" : "Product price"}
+                                className="w-full h-9 px-3 text-sm font-semibold text-[#162B4D] border border-gray-200 rounded-lg bg-white outline-none focus:ring-2 focus:ring-[#364F9F]/20 focus:border-[#364F9F]"
                              />
                               {isBigFish && (
-                                <p className="text-[10px] text-gray-400">Total of Head, Body, and Tail values. POS sells each part separately.</p>
+                                 <p className="text-[10px] text-gray-400">One selling rate for Head, Body, and Tail.</p>
                               )}
                            </div>
                          )}
@@ -1574,62 +1476,14 @@ export default function InventoryStockAdjustment() {
                         ) : null}
                       </div>
 
-                       {isAdd && isBigFish && (
-                         <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50/40 p-3">
-                           <div className="flex items-center justify-between gap-3 mb-2">
-                             <div>
-                               <p className="text-[10px] font-bold text-[#364F9F] uppercase tracking-wider">Surmai part weights</p>
-                               <p className="text-[10px] text-gray-500">Enter the saleable weight for each part. Final weight is calculated automatically.</p>
-                             </div>
-                             <div className="text-right flex-shrink-0">
-                                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Total saleable / cleaned</p>
-                                <p className={`text-sm font-bold ${bigFishPartsMismatch ? "text-red-600" : "text-[#1A56DB]"}`}>
-                                  {bigFishPartTotal.toLocaleString("en-IN", { maximumFractionDigits: 2 })} / {Number.isFinite(cleanedWeight) && cleanedWeight > 0 ? cleanedWeight.toLocaleString("en-IN", { maximumFractionDigits: 2 }) : "—"} {row.unit || "kg"}
-                                </p>
-                             </div>
-                           </div>
-                            {bigFishPartsMismatch && (
-                              <p className="mb-2 rounded-md border border-red-200 bg-red-50 px-2 py-1 text-[10px] font-semibold text-red-700">
-                                Head + Body + Tail must equal the cleaned weight before saving this batch.
-                              </p>
-                            )}
-                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                             {(["Head", "Body", "Tail"] as const).map((part) => (
-                               <div key={part} className="space-y-1">
-                                 <label className="text-[10px] font-bold text-[#364F9F] uppercase tracking-wider">{part} ({row.unit || "kg"})</label>
-                                 <input
-                                   type="number"
-                                   min="0"
-                                   step="0.01"
-                                   value={row.partWeights[part]}
-                                   onChange={(e) => setBigFishPartWeight(idx, part, e.target.value)}
-                                   placeholder="e.g. 2.5"
-                                   className="w-full h-9 px-3 text-sm font-semibold text-[#162B4D] border border-blue-200 rounded-lg bg-white outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                                 />
-                               </div>
-                             ))}
-                           </div>
-                            <div className="mt-3 border-t border-blue-100 pt-3">
-                              <p className="text-[10px] font-bold text-[#364F9F] uppercase tracking-wider mb-2">Part sale prices (₹ / kg)</p>
-                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                {(["Head", "Body", "Tail"] as const).map((part) => (
-                                  <div key={part} className="space-y-1">
-                                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{part} price</label>
-                                    <input
-                                      type="number"
-                                      min="0"
-                                      step="1"
-                                      value={row.partPrices[part]}
-                                      onChange={(e) => setBigFishPartPrice(idx, part, e.target.value)}
-                                      placeholder="e.g. 400"
-                                      className="w-full h-9 px-3 text-sm font-semibold text-[#162B4D] border border-blue-200 rounded-lg bg-white outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                                    />
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                         </div>
-                       )}
+                        {isAdd && isBigFish && (
+                          <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50/40 p-3">
+                            <p className="text-xs font-bold text-[#364F9F]">One shared cleaned-weight stock</p>
+                            <p className="mt-1 text-[11px] text-gray-600">
+                              Enter the total weight after cleaning. Head, Body, and Tail are selected as sale labels in POS; all use the same price per kg and draw from this total.
+                            </p>
+                          </div>
+                        )}
 
                       {isAdd && (
                         <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-3 rounded-lg border border-emerald-100 bg-emerald-50/40 p-3">
