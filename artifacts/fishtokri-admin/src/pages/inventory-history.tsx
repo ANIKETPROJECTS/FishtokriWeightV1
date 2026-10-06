@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { PaginationBar } from "@/components/pagination-bar";
 import { usePaginated } from "@/hooks/use-paginated";
 import { getCurrentAdminScope } from "@/lib/api";
+import { normalizeOrderReference } from "@/lib/order-reference";
 
 function getToken() { return localStorage.getItem("fishtokri_token") ?? ""; }
 
@@ -252,7 +253,7 @@ export default function InventoryHistory() {
                               <div className="flex flex-col gap-1">
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <span className="font-mono text-xs font-bold text-[#364F9F] bg-blue-50 px-2 py-0.5 rounded-md">
-                                    {m.invoiceId ?? m.orderRef}
+                                    {normalizeOrderReference(m.invoiceId ?? m.orderRef, { _id: m.orderId })}
                                   </span>
                                   {reasonMeta && (
                                     <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold ${reasonMeta.tone}`}>

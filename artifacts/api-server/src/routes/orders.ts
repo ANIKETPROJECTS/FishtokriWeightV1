@@ -583,7 +583,9 @@ async function generateOrderId(db: any): Promise<string> {
     { upsert: true, returnDocument: "after" },
   );
   const seq: number = counter?.seq ?? 1;
-  const [year, month, day] = dateStr.split("-");
+  const year = dateStr.slice(0, 4);
+  const month = dateStr.slice(4, 6);
+  const day = dateStr.slice(6, 8);
   return `#FTS${day}${month}${year}${String(seq).padStart(2, "0")}`;
 }
 
