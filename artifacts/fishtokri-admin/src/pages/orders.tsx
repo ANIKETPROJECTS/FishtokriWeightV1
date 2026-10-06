@@ -1005,6 +1005,18 @@ export default function Orders() {
     grams: string;
     partNote: string;
   }[]>([]);
+  const [editingWeighedItem, setEditingWeighedItem] = useState<{
+    productId: string;
+    kg: string;
+    grams: string;
+    partNote: string;
+  } | null>(null);
+
+  useEffect(() => {
+    if (editingWeighedItem && !selectedProducts.some((item) => item.productId === editingWeighedItem.productId)) {
+      setEditingWeighedItem(null);
+    }
+  }, [editingWeighedItem, selectedProducts]);
 
   // Coupons / timeslots / scheduling
   const [coupons, setCoupons] = useState<any[]>([]);
@@ -1756,6 +1768,79 @@ export default function Orders() {
   const removeSelectedProduct = (productId: string) => {
     setSelectedProducts((current) => current.filter((item) => item.productId !== productId));
     setScaleEntries((current) => current.filter((entry) => entry.productId !== productId));
+    setEditingWeighedItem((current) => current?.productId === productId ? null : current);
+  };
+
+  const beginEditingWeighedItem = (item: (typeof selectedProducts)[number]) => {
+    const wholeKg = Math.floor(Math.max(0, Number(item.quantity) || 0));
+    const grams = Math.round((Math.max(0, Number(item.quantity) || 0) - wholeKg) * 1000);
+    setEditingWeighedItem({
+      productId: item.productId,
+      kg: String(wholeKg),
+      grams: String(grams),
+      partNote: item.partNote ?? "",
+    });
+  };
+
+  const saveWeighedItemEdit = () => {
+    if (!editingWeighedItem) return;
+    const kgValue = editingWeighedItem.kg.trim() === "" ? 0 : Number(editingWeighedItem.kg);
+    const gramsValue = editingWeighedItem.grams.trim() === "" ? 0 : Number(editingWeighedItem.grams);
+    if (
+      !Number.isInteger(kgValue) || kgValue < 0 ||
+      !Number.isInteger(gramsValue) || gramsValue < 0 || gramsValue > 999
+    ) {
+      toast({ title: "Enter a valid weight", description: "Kilograms must be a whole number and grams must be from 0 to 999.", variant: "destructive" });
+      return;
+    }
+
+    const nextWeight = Math.round((kgValue + gramsValue / 1000) * 1000) / 1000;
+    if (nextWeight <= 0) {
+      toast({ title: "Weight must be greater than zero", description: "Remove the item from the order if it should not be billed.", variant: "destructive" });
+      return;
+    }
+
+    const product = productsForMode.find((candidate) => String(candidate._id) === editingWeighedItem.productId);
+    if (!product) {
+      toast({ title: "Product unavailable", description: "This item is no longer available in the selected hub.", variant: "destructive" });
+      return;
+    }
+
+    const available = Math.max(0, Number(product.quantity) || 0);
+    const canUsePosBuffer =
+      orderDeliveryType === "takeaway" &&
+      posProductMode === "normal" &&
+      isWeightBasedProduct(product) &&
+      available > 0;
+    const currentLineWeight = selectedProducts.find((item) => item.productId === editingWeighedItem.productId)?.quantity ?? 0;
+    const maxAllowed = Math.max(
+      available + (canUsePosBuffer ? POS_WEIGHT_OVERAGE_LIMIT_KG : 0),
+      editingOrderId ? currentLineWeight : 0,
+    );
+    if (nextWeight > maxAllowed + 1e-9) {
+      toast({
+        title: "Weight exceeds the POS limit",
+        description: canUsePosBuffer
+          ? `${product.name}: the maximum total is ${formatOrderWeight(maxAllowed)}.`
+          : `${product.name}: only ${formatOrderWeight(available)} is available.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const updatedPartNote = editingWeighedItem.partNote.trim().slice(0, 100) || undefined;
+    setSelectedProducts((current) => current.map((item) => item.productId === editingWeighedItem.productId
+      ? {
+          ...item,
+          quantity: nextWeight,
+          ...(product.isDemoBigFishSelector ? { partNote: updatedPartNote } : {}),
+        }
+      : item));
+    setEditingWeighedItem(null);
+    toast({
+      title: "Weighed item updated",
+      description: `${product.name} · ${formatOrderWeight(nextWeight)} · ${formatRupees(orderProductAmount(product, nextWeight))}`,
+    });
   };
 
   const filteredCategories = useMemo(() => {
@@ -4526,12 +4611,12 @@ export default function Orders() {
                     <img src={foodScaleIcon} alt="" className="h-full w-full object-contain" />
                   </div>
                   <div className="min-w-0">
-                    <h3 className="text-base font-bold leading-5 text-[#162B4D]">Weigh products</h3>
-                    <p className="text-xs leading-4 text-[#64748B]">Select products above, enter each weight, then add them to the order together.</p>
+                    <h3 className="text-lg font-bold leading-6 text-black">Weigh products</h3>
+                    <p className="text-sm leading-5 text-black">Select products above, enter each weight, then add them to the order together.</p>
                   </div>
                 </div>
                 {scaleEntries.length === 0 ? (
-                  <div className="mt-3 rounded-lg border border-[#F2D4D0] bg-white/80 px-3 py-2 text-sm text-[#7E8998]">
+                  <div className="mt-3 rounded-lg border border-[#F2D4D0] bg-white/80 px-3 py-2 text-base text-black">
                     Choose weight-based products from the grid. Each one will appear here with its own weight fields.
                   </div>
                 ) : (
@@ -4547,36 +4632,53 @@ export default function Orders() {
                             ? "grid-cols-[minmax(96px,1fr)_92px_58px_58px_28px]"
                             : "grid-cols-[minmax(96px,1fr)_58px_58px_28px]"}`}>
                             <div className="min-w-0">
-                              <p className="truncate text-sm font-bold leading-5 text-[#162B4D]">{product.displayName ?? product.name}</p>
-                              <p className="truncate text-xs leading-4 text-[#718096]">
-                                ₹{Number(product.price || 0).toLocaleString("en-IN")}/kg · {formatOrderWeight(Math.max(0, Number(product.quantity) || 0))} left · {formatRupees(amount)}
+                              <p className="truncate text-base font-bold leading-5 text-black">{product.displayName ?? product.name}</p>
+                              <p className="flex flex-wrap gap-x-1 text-sm leading-5 text-black">
+                                <span>₹{Number(product.price || 0).toLocaleString("en-IN")}/kg</span>
+                                <span>· {formatOrderWeight(Math.max(0, Number(product.quantity) || 0))} left</span>
+                                <span>· {formatRupees(amount)}</span>
                               </p>
                             </div>
                             {product.isDemoBigFishSelector && (
                               <label className="block min-w-0">
-                                <span className="mb-1 block text-xs font-semibold text-[#51617A]">Part note</span>
-                                <input
-                                  type="text"
-                                  list={`weigh-part-notes-${entry.productId}`}
-                                  value={entry.partNote}
-                                  onChange={(event) => {
-                                    const partNote = event.target.value.slice(0, 100);
-                                    setScaleEntries((current) => current.map((candidate) =>
-                                      candidate.productId === entry.productId ? { ...candidate, partNote } : candidate
-                                    ));
-                                  }}
-                                  placeholder="Optional"
-                                  className="h-9 w-full rounded-md border border-[#E9B8B1] bg-white px-2 text-xs text-[#162B4D] outline-none focus:border-[#F05B4E]"
-                                  aria-label={`${product.name} part note`}
-                                  data-testid={`input-scale-part-note-${entry.productId}`}
-                                />
+                                <span className="mb-1 block text-sm font-semibold text-black">Part note</span>
+                                <div className="relative">
+                                  <input
+                                    type="text"
+                                    list={`weigh-part-notes-${entry.productId}`}
+                                    value={entry.partNote}
+                                    onChange={(event) => {
+                                      const partNote = event.target.value.slice(0, 100);
+                                      setScaleEntries((current) => current.map((candidate) =>
+                                        candidate.productId === entry.productId ? { ...candidate, partNote } : candidate
+                                      ));
+                                    }}
+                                    placeholder="Type or select"
+                                    className="h-9 w-full rounded-md border border-[#E9B8B1] bg-white px-2 pr-7 text-sm text-black placeholder:text-black outline-none focus:border-[#F05B4E]"
+                                    aria-label={`${product.name} part note`}
+                                    data-testid={`input-scale-part-note-${entry.productId}`}
+                                  />
+                                  {entry.partNote && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setScaleEntries((current) => current.map((candidate) =>
+                                        candidate.productId === entry.productId ? { ...candidate, partNote: "" } : candidate
+                                      ))}
+                                      className="absolute right-1 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded text-black hover:bg-red-50 hover:text-red-700"
+                                      aria-label={`Clear ${product.name} part note`}
+                                      title="Clear part note"
+                                    >
+                                      <X className="h-4 w-4" />
+                                    </button>
+                                  )}
+                                </div>
                                 <datalist id={`weigh-part-notes-${entry.productId}`}>
                                   {SURMAI_PART_NAMES.map((partName) => <option key={partName} value={partName} />)}
                                 </datalist>
                               </label>
                             )}
                             <label className="block">
-                              <span className="mb-1 block text-xs font-semibold text-[#51617A]">Kg</span>
+                              <span className="mb-1 block text-sm font-semibold text-black">Kg</span>
                               <input
                                 type="number"
                                 min="0"
@@ -4586,13 +4688,13 @@ export default function Orders() {
                                   candidate.productId === entry.productId ? { ...candidate, kg: event.target.value } : candidate
                                 ))}
                                 placeholder="0"
-                                className="h-9 w-full rounded-md border border-[#E9B8B1] bg-white px-2 text-sm font-bold text-[#162B4D] outline-none focus:border-[#F05B4E]"
+                                className="h-9 w-full appearance-none rounded-md border border-[#E9B8B1] bg-white px-2 text-base font-bold text-black placeholder:text-black [appearance:textfield] outline-none focus:border-[#F05B4E] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                                 aria-label={`${product.name} kilograms`}
                                 data-testid={`input-test-scale-kg-${entry.productId}`}
                               />
                             </label>
                             <label className="block">
-                              <span className="mb-1 block text-xs font-semibold text-[#51617A]">Grams</span>
+                              <span className="mb-1 block text-sm font-semibold text-black">Grams</span>
                               <input
                                 type="number"
                                 min="0"
@@ -4603,7 +4705,7 @@ export default function Orders() {
                                   candidate.productId === entry.productId ? { ...candidate, grams: event.target.value } : candidate
                                 ))}
                                 placeholder="0"
-                                className="h-9 w-full rounded-md border border-[#E9B8B1] bg-white px-2 text-sm font-bold text-[#162B4D] outline-none focus:border-[#F05B4E]"
+                                className="h-9 w-full appearance-none rounded-md border border-[#E9B8B1] bg-white px-2 text-base font-bold text-black placeholder:text-black [appearance:textfield] outline-none focus:border-[#F05B4E] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                                 aria-label={`${product.name} grams`}
                                 data-testid={`input-test-scale-grams-${entry.productId}`}
                               />
@@ -4625,7 +4727,7 @@ export default function Orders() {
                 )}
                 {scaleEntries.length > 0 && (
                   <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                    <div className="text-xs text-[#7E8998]">
+                    <div className="text-sm text-black">
                       {scaleEntries.length} item{scaleEntries.length === 1 ? "" : "s"} · {formatOrderWeight(scaleQueueTotals.weightKg)} · Total {formatRupees(scaleQueueTotals.amount)}
                     </div>
                     <button
@@ -4730,7 +4832,7 @@ export default function Orders() {
                             }
                             setCustomerSearch(val);
                           }}
-                            placeholder={orderDeliveryType === "takeaway" ? "Find customer (optional)…" : "Find existing customer…"}
+                            placeholder={orderDeliveryType === "takeaway" ? "Find customer…" : "Find existing customer…"}
                           className="pl-6 h-8 text-sm border-0 border-b border-gray-300 rounded-none bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
                         />
                         {customerSearch.length > 0 && (
@@ -4768,7 +4870,7 @@ export default function Orders() {
                             setNewCustomer((n) => ({ ...n, name: value }));
                             setNewAddress((a) => ({ ...a, name: value }));
                           }}
-                            placeholder={orderDeliveryType === "takeaway" ? "Customer name (optional)" : "Customer name *"}
+                            placeholder={orderDeliveryType === "takeaway" ? "Customer name" : "Customer name *"}
                           className="h-9 text-sm border-gray-200 rounded-lg bg-white shadow-none focus-visible:ring-1 focus-visible:ring-[#1A56DB]"
                         />
                         <Input
@@ -4778,7 +4880,7 @@ export default function Orders() {
                             setNewCustomer((n) => ({ ...n, phone: value }));
                             setNewAddress((a) => ({ ...a, phone: value }));
                           }}
-                            placeholder={orderDeliveryType === "takeaway" ? "Phone number (optional)" : "Phone number *"}
+                            placeholder={orderDeliveryType === "takeaway" ? "Phone number" : "Phone number *"}
                           inputMode="numeric"
                           className="h-9 text-sm border-gray-200 rounded-lg bg-white shadow-none focus-visible:ring-1 focus-visible:ring-[#1A56DB]"
                         />
@@ -4787,7 +4889,7 @@ export default function Orders() {
                         )}
                         {orderDeliveryType === "takeaway" && (
                           <p className="text-[10px] leading-4 text-gray-400">
-                            Name and phone are optional. Enter both to save a customer profile.
+                            Enter both to save a customer profile.
                           </p>
                         )}
                       </div>
@@ -5243,12 +5345,15 @@ export default function Orders() {
                     {selectedProducts.map((p) => {
                       const stock = stockOf(p.productId);
                       const weightBased = isWeightBasedProduct(p);
+                      const productDetails = productsForMode.find((candidate) => String(candidate._id) === p.productId);
                       const atMax = p.quantity >= stock;
                       const weightStep = POS_CART_WEIGHT_STEP_KG;
                       const weightBuffer = orderDeliveryType === "takeaway" && posProductMode === "normal" && weightBased && stock > 0
                         ? POS_WEIGHT_OVERAGE_LIMIT_KG
                         : 0;
                       const weightAtMax = p.quantity + weightStep > stock + weightBuffer + 1e-9;
+                      const editDraft = editingWeighedItem?.productId === p.productId ? editingWeighedItem : null;
+                      const editedWeight = editDraft ? weightForScaleEntry(editDraft) : p.quantity;
                       const adjustWeight = (direction: -1 | 1) => {
                         const nextQuantity = Math.max(0, Math.round((p.quantity + direction * weightStep) * 1000) / 1000);
                         if (direction > 0 && nextQuantity > stock + weightBuffer + 1e-9) return;
@@ -5259,13 +5364,27 @@ export default function Orders() {
                             : item));
                       };
                       return (
-                        <div key={`${p.productId}:${p.partNote ?? ""}`} className="flex items-center gap-1.5 py-2 border-b border-gray-100 last:border-0">
+                        <div key={`${p.productId}:${p.partNote ?? ""}`} className="flex flex-wrap items-center gap-1.5 py-2 border-b border-gray-100 last:border-0">
                           <div className="flex-1 min-w-0">
-                            <p className="text-xs font-semibold text-[#162B4D] leading-tight truncate">{p.name}</p>
+                            <div className="flex min-w-0 items-center gap-1">
+                              <p className="min-w-0 flex-1 truncate text-xs font-semibold leading-tight text-[#162B4D]">{p.name}</p>
+                              {weightBased && (
+                                <button
+                                  type="button"
+                                  aria-label={`Edit weight${p.partNote ? " and part note" : ""} for ${p.name}`}
+                                  title="Edit weight and part note"
+                                  onClick={() => beginEditingWeighedItem(p)}
+                                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-[#364F9F] hover:bg-blue-50"
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                            </div>
                             {p.partNote && <p className="text-[10px] text-gray-500 truncate">Note: {p.partNote}</p>}
                             <p className="text-[11px] text-gray-400">{formatRupees(Number(p.price))}{p.unit ? ` / ${p.unit}` : ""}</p>
                           </div>
                           {weightBased ? (
+                            <>
                             <div className="flex items-center gap-0.5 rounded-md bg-[#F8FAFD] px-1 py-1 flex-shrink-0" title="Adjust weight in 100 g steps">
                               <button
                                 type="button"
@@ -5284,6 +5403,7 @@ export default function Orders() {
                                 className="h-6 w-6 rounded text-gray-600 hover:bg-gray-200 font-bold disabled:opacity-30"
                               >+</button>
                             </div>
+                            </>
                           ) : (
                             <div className="flex items-center bg-white rounded-md border border-gray-200 overflow-hidden flex-shrink-0">
                               <button onClick={() => setSelectedProducts((arr) => p.quantity <= 1 ? arr.filter((x) => x.productId !== p.productId) : arr.map((x) => x.productId === p.productId ? { ...x, quantity: x.quantity - 1 } : x))} className="w-6 h-6 flex items-center justify-center text-gray-500 hover:bg-gray-100 font-bold">−</button>
@@ -5301,6 +5421,95 @@ export default function Orders() {
                           >
                             <X className="h-3.5 w-3.5" />
                           </button>
+                          {weightBased && editDraft && (
+                            <Dialog
+                              open
+                              onOpenChange={(open) => { if (!open) setEditingWeighedItem(null); }}
+                            >
+                              <DialogContent className="sm:max-w-[380px]">
+                                <DialogHeader>
+                                  <DialogTitle>Edit weighed item</DialogTitle>
+                                  <p className="text-sm text-black">{p.name} · ₹{Number(p.price || 0).toLocaleString("en-IN")}/kg</p>
+                                </DialogHeader>
+                                <div className="grid grid-cols-2 gap-3">
+                                  <label className="block">
+                                    <span className="mb-1 block text-sm font-semibold text-black">Kilograms</span>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="1"
+                                      value={editDraft.kg}
+                                      onChange={(event) => setEditingWeighedItem((current) =>
+                                        current ? { ...current, kg: event.target.value } : current
+                                      )}
+                                      className="h-10 w-full appearance-none rounded-md border border-gray-300 bg-white px-3 text-base font-semibold text-black placeholder:text-black [appearance:textfield] outline-none focus:border-[#1A56DB] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                      aria-label={`${p.name} kilograms in order`}
+                                    />
+                                  </label>
+                                  <label className="block">
+                                    <span className="mb-1 block text-sm font-semibold text-black">Grams</span>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max="999"
+                                      step="1"
+                                      value={editDraft.grams}
+                                      onChange={(event) => setEditingWeighedItem((current) =>
+                                        current ? { ...current, grams: event.target.value } : current
+                                      )}
+                                      className="h-10 w-full appearance-none rounded-md border border-gray-300 bg-white px-3 text-base font-semibold text-black placeholder:text-black [appearance:textfield] outline-none focus:border-[#1A56DB] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                      aria-label={`${p.name} grams in order`}
+                                    />
+                                  </label>
+                                  {productDetails?.isDemoBigFishSelector && (
+                                    <label className="col-span-2 block">
+                                      <span className="mb-1 block text-sm font-semibold text-black">Part note</span>
+                                      <div className="relative">
+                                        <input
+                                          type="text"
+                                          list={`cart-edit-part-notes-${p.productId}`}
+                                          value={editDraft.partNote}
+                                          onChange={(event) => setEditingWeighedItem((current) =>
+                                            current ? { ...current, partNote: event.target.value.slice(0, 100) } : current
+                                          )}
+                                          placeholder="Type or select"
+                                          className="h-10 w-full rounded-md border border-gray-300 bg-white px-3 pr-10 text-base text-black placeholder:text-black outline-none focus:border-[#1A56DB]"
+                                          aria-label={`${p.name} part note in order`}
+                                        />
+                                        {editDraft.partNote && (
+                                          <button
+                                            type="button"
+                                            onClick={() => setEditingWeighedItem((current) =>
+                                              current ? { ...current, partNote: "" } : current
+                                            )}
+                                            className="absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded text-black hover:bg-red-50 hover:text-red-700"
+                                            aria-label={`Clear ${p.name} part note`}
+                                            title="Clear part note"
+                                          >
+                                            <X className="h-4 w-4" />
+                                          </button>
+                                        )}
+                                      </div>
+                                      <datalist id={`cart-edit-part-notes-${p.productId}`}>
+                                        {SURMAI_PART_NAMES.map((partName) => <option key={partName} value={partName} />)}
+                                      </datalist>
+                                    </label>
+                                  )}
+                                </div>
+                                <p className="text-sm font-semibold text-black">
+                                  New line total: {formatRupees(orderProductAmount(p, editedWeight))}
+                                </p>
+                                <DialogFooter className="gap-2">
+                                  <Button type="button" variant="outline" onClick={() => setEditingWeighedItem(null)}>
+                                    Cancel
+                                  </Button>
+                                  <Button type="button" onClick={saveWeighedItemEdit}>
+                                    Save changes
+                                  </Button>
+                                </DialogFooter>
+                              </DialogContent>
+                            </Dialog>
+                          )}
                         </div>
                       );
                     })}
