@@ -4208,7 +4208,7 @@ export default function Orders() {
 
       {/* Create Order Page — Full-screen POS (portal bypasses layout header+sidebar) */}
       {isCreatePage && createPortal(
-       <div className="fixed top-0 right-0 bottom-0 left-[56px] z-30 flex flex-col bg-white overflow-hidden" style={{ fontFamily: "'Poppins', sans-serif" }}>
+       <div className="fixed inset-0 z-50 flex flex-col bg-white overflow-hidden" style={{ fontFamily: "'Poppins', sans-serif" }}>
 
         {/* ══ TOP HEADER ══ */}
         <div className="flex-shrink-0 bg-[#364F9F] flex items-center gap-3 px-4 h-14">
@@ -4277,6 +4277,53 @@ export default function Orders() {
          {/* ══ MAIN BODY — product workspace + order panel ══ */}
         <div className="flex flex-1 min-h-0 overflow-hidden">
 
+           {/* ── CATEGORY RAIL ── */}
+           <aside className="w-[118px] flex-shrink-0 bg-[#364F9F] text-white flex flex-col overflow-hidden">
+             <div className="px-3 pt-4 pb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-white/55">
+               Categories
+             </div>
+             <div className="flex-1 overflow-y-auto pb-2">
+               <button
+                 type="button"
+                 onClick={() => setPickerCategory(null)}
+                 className={`w-full min-h-9 px-2.5 flex items-center justify-between gap-1 border-l-[3px] text-left text-xs font-semibold transition-colors ${
+                   !pickerCategory
+                     ? "border-[#F05B4E] bg-[#F05B4E] text-white"
+                     : "border-transparent text-white/90 hover:bg-white/10"
+                 }`}
+               >
+                 <span className="truncate">All Items</span>
+                 <span className={`min-w-5 px-1 py-0.5 rounded-full text-center text-[10px] leading-none ${
+                   !pickerCategory ? "bg-white/20 text-white" : "bg-white/15 text-white"
+                 }`}>
+                   {productsForMode.length}
+                 </span>
+               </button>
+               {loadingProducts ? (
+                 <p className="px-3 py-3 text-[10px] text-white/60">Loading…</p>
+               ) : filteredCategories.map((cat) => (
+                 <button
+                   key={cat.name}
+                   type="button"
+                   onClick={() => setPickerCategory(cat.name)}
+                   className={`w-full min-h-9 px-2.5 flex items-center justify-between gap-1 border-l-[3px] text-left text-xs font-medium capitalize transition-colors ${
+                     pickerCategory === cat.name
+                       ? "border-[#F05B4E] bg-white/15 text-white"
+                       : "border-transparent text-white/85 hover:bg-white/10"
+                   }`}
+                 >
+                   <span className="truncate">{cat.name}</span>
+                   <span className="min-w-5 px-1 py-0.5 rounded-full bg-white/15 text-center text-[10px] leading-none text-white">
+                     {cat.count}
+                   </span>
+                 </button>
+               ))}
+               {!loadingProducts && productCategories.length === 0 && selectedSubHubId && (
+                 <p className="px-3 py-3 text-[10px] text-white/60">No categories</p>
+               )}
+             </div>
+           </aside>
+
            {/* ── PRODUCTS WORKSPACE ── */}
           <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-gray-50">
             {/* Search bar */}
@@ -4301,49 +4348,6 @@ export default function Orders() {
               </span>
             </div>
 
-             {/* Categories sit below search so the product workspace stays
-                 wide while category selection remains immediately visible. */}
-             <div className="flex-shrink-0 border-b border-gray-200 bg-white px-4 py-2">
-               <div className="flex items-center gap-2 overflow-x-auto scrollbar-none">
-                 <button
-                   type="button"
-                   onClick={() => setPickerCategory(null)}
-                   className={`flex-shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
-                     !pickerCategory
-                       ? "bg-[#F05B4E] text-white shadow-sm"
-                       : "bg-[#EEF1F9] text-[#364F9F] hover:bg-[#D6DDF0]"
-                   }`}
-                 >
-                   All Items
-                   <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${!pickerCategory ? "bg-white/20 text-white" : "bg-white text-[#364F9F]"}`}>
-                     {productsForMode.length}
-                   </span>
-                 </button>
-                 {loadingProducts ? (
-                   <span className="px-2 text-xs font-medium text-[#64748B]">Loading categories...</span>
-                 ) : filteredCategories.map((cat) => (
-                   <button
-                     key={cat.name}
-                     type="button"
-                     onClick={() => setPickerCategory(cat.name)}
-                     className={`flex-shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold capitalize transition-colors ${
-                       pickerCategory === cat.name
-                         ? "bg-[#F05B4E] text-white shadow-sm"
-                         : "bg-[#EEF1F9] text-[#364F9F] hover:bg-[#D6DDF0]"
-                     }`}
-                   >
-                     {cat.name}
-                     <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${pickerCategory === cat.name ? "bg-white/20 text-white" : "bg-white text-[#364F9F]"}`}>
-                       {cat.count}
-                     </span>
-                   </button>
-                 ))}
-                 {!loadingProducts && productCategories.length === 0 && selectedSubHubId && (
-                   <span className="px-2 text-xs font-medium text-[#64748B]">No categories available</span>
-                 )}
-               </div>
-             </div>
-
             {/* Product grid */}
             <div className="flex-1 overflow-y-auto p-4">
               {!selectedSubHubId ? (
@@ -4355,7 +4359,7 @@ export default function Orders() {
                   <p className="text-sm text-gray-400 mt-1">Use the hub dropdowns in the top bar</p>
                 </div>
               ) : loadingProducts ? (
-                 <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
+                 <div className="grid grid-cols-2 min-[640px]:grid-cols-3 min-[1000px]:grid-cols-4 min-[1440px]:grid-cols-5 gap-2">
                   {Array.from({ length: 8 }).map((_, i) => (
                     <Skeleton key={i} className="h-36 rounded-xl" />
                   ))}
@@ -4373,7 +4377,7 @@ export default function Orders() {
                   )}
                 </div>
               ) : (
-                 <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 min-[640px]:grid-cols-3 min-[1000px]:grid-cols-4 min-[1440px]:grid-cols-5 gap-2">
                   {filteredProducts.map((p) => {
                     const pid = String(p._id);
                     const cartItems = selectedProducts.filter((sp) => sp.productId === pid);
@@ -4573,10 +4577,10 @@ export default function Orders() {
           </div>
 
           {/* ── RIGHT: ORDER PANEL — split: customer/schedule | cart ── */}
-          <div className="w-[560px] flex-shrink-0 border-l border-gray-200 bg-white flex flex-row overflow-hidden">
+          <div className="w-[42vw] min-w-[380px] max-w-[560px] flex-shrink-0 border-l border-gray-200 bg-white flex flex-row overflow-hidden">
 
             {/* ── Left half: Customer + Address + Schedule ── */}
-            <div className="w-[250px] flex-shrink-0 border-r border-gray-200 flex flex-col overflow-hidden">
+            <div className="w-[45%] min-w-[190px] max-w-[250px] flex-shrink-0 border-r border-gray-200 flex flex-col overflow-hidden">
             <div className="flex-1 overflow-y-auto">
 
               {/* Customer — simple POS entry with optional existing-customer search */}
