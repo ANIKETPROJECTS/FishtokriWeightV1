@@ -148,6 +148,16 @@ function displayStatus(status: string, deliveryType?: string, orderType?: string
   return status;
 }
 
+function getStatusActionValue(order: any): string {
+  const status = String(order?.status ?? "");
+  if (String(order?.orderType ?? "").toLowerCase() === "preorder") {
+    if (status === "cancelled") return "cancelled";
+    if (status === "handed_over" || status === "takeaway") return "handed_over";
+    return "created";
+  }
+  return status === "cancelled" ? "cancelled" : "takeaway";
+}
+
 function StatusBadge({ status, deliveryType, orderType }: { status: string; deliveryType?: string; orderType?: string }) {
   const eff = displayStatus(status, deliveryType, orderType);
   const cfg = STATUS_CONFIG[eff] ?? { label: eff, color: "text-gray-600", bg: "bg-gray-50 border-gray-200", icon: Clock };
@@ -3178,7 +3188,10 @@ export default function Orders() {
   const totalActive = statsTotals.currentTotal ?? ACTIVE_STATUSES.reduce((s, k) => s + (statsData[k] ?? 0), 0);
   const totalHistory = statsTotals.historyTotal ?? (HISTORY_STATUSES.reduce((s, k) => s + (statsData[k] ?? 0), 0) + (statsData.takeaway ?? 0));
 
-  const invoiceCount = (statsData["delivered"] ?? 0) + (statsData["takeaway"] ?? 0);
+  const invoiceCount =
+    (statsData["delivered"] ?? 0) +
+    (statsData["takeaway"] ?? 0) +
+    (statsData["handed_over"] ?? 0);
   const totalToday = statsTotals.todayTotal ?? totalActive;
   const totalPreorder = statsTotals.preorderTotal ?? 0;
   const totalDeleted = statsTotals.deletedTotal ?? 0;
@@ -3602,7 +3615,7 @@ export default function Orders() {
                             title="View"
                             onClick={() => {
                               setSelectedOrder(o);
-                              setEditStatus(o.status === "cancelled" ? "cancelled" : "takeaway");
+                              setEditStatus(getStatusActionValue(o));
                               setSelectedDeliveryPersonId(o.assignedDeliveryPersonId ?? "");
                               setShowAllPersons(false);
                               setShowPorterFallback(false);
@@ -5396,7 +5409,11 @@ export default function Orders() {
                     <p className="text-sm font-medium text-black mt-2">Placed: {formatDate(selectedOrder.createdAt)}</p>
                   </div>
                   <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                    <SolidStatusBadge status={selectedOrder.status === "cancelled" ? "cancelled" : "takeaway"} />
+                    <SolidStatusBadge
+                      status={selectedOrder.status}
+                      deliveryType={selectedOrder.deliveryType}
+                      orderType={selectedOrder.orderType}
+                    />
                     <span className="text-xl font-extrabold text-[#F05B4E]">
                       {formatRupees((() => {
                         const _s = Number(selectedOrder.subtotal) > 0 ? Number(selectedOrder.subtotal) : orderTotal(selectedOrder.items);
@@ -5988,12 +6005,19 @@ export default function Orders() {
                       <MaskIcon src={iconClipboardCheck} color="#364F9F" className="w-[20px] h-[20px]" />
                       <span className="text-xs font-bold text-[#364F9F] uppercase tracking-widest">Update Status</span>
                     </div>
-                     <SolidStatusBadge status={selectedOrder.status === "cancelled" ? "cancelled" : "takeaway"} />
+                      <SolidStatusBadge
+                        status={selectedOrder.status}
+                        deliveryType={selectedOrder.deliveryType}
+                        orderType={selectedOrder.orderType}
+                      />
                   </div>
                   <div className="space-y-3">
                     {(() => {
-                       const statusOptions = ["takeaway", "cancelled"];
-                       const currentViewStatus = selectedOrder.status === "cancelled" ? "cancelled" : "takeaway";
+                       const isPreorder = String(selectedOrder.orderType ?? "").toLowerCase() === "preorder";
+                       const statusOptions = isPreorder
+                         ? ["created", "handed_over", "cancelled"]
+                         : ["takeaway", "cancelled"];
+                       const currentViewStatus = getStatusActionValue(selectedOrder);
                       return (
                         <>
                           <div className="flex gap-2">
@@ -6002,7 +6026,7 @@ export default function Orders() {
                               <SelectContent>
                                 {statusOptions.map((s) => {
                                   return (
-                                     <SelectItem key={s} value={s}>
+                                      <SelectItem key={s} value={s}>
                                       <span className="flex items-center gap-2 font-semibold">
                                         {STATUS_CONFIG[s].label}
                                       </span>
