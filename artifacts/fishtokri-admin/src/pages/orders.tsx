@@ -128,7 +128,6 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; 
 const ACTIVE_STATUSES = ["created", "pending", "confirmed", "out_for_delivery"];
 const HISTORY_STATUSES = ["delivered", "cancelled"];
 const ALL_STATUSES = Object.keys(STATUS_CONFIG);
-const VISIBLE_STATUS_FILTERS = ["takeaway", "cancelled"];
 const ORDER_STATUS_FILTERS = ["takeaway", "cancelled"];
 
 // Takeaway orders are treated as completed and shown in History.
@@ -3448,41 +3447,6 @@ export default function Orders() {
       {/* Full-width content area (no card wrapper) */}
       <div className="bg-white">
 
-        {/* Status pills */}
-        <div className="flex flex-col gap-2 py-2">
-          <div className="flex flex-wrap items-center gap-1.5">
-          {activeTab !== "invoices" ? (
-            <>
-              {VISIBLE_STATUS_FILTERS.map((s) => {
-                const cfg = STATUS_CONFIG[s];
-                const count = statsData[s] ?? 0;
-                const solidBg = SOLID_STATUS_BG[s] ?? "bg-gray-500";
-                return (
-                  <button
-                    key={s}
-                    onClick={() => { setStatusFilter(s === statusFilter ? "" : s); setActiveTab("all"); }}
-                    className={`flex-shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-sm font-semibold transition-all ${solidBg} text-white shadow-sm ${statusFilter === s ? "ring-2 ring-white ring-offset-1" : "opacity-80 hover:opacity-100"}`}
-                  >
-                    {cfg.label}
-                    <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-white/25 text-white">
-                      {count}
-                    </span>
-                  </button>
-                );
-              })}
-            </>
-          ) : (
-            <div className="w-full" />
-          )}
-          </div>
-          <button
-            onClick={() => { resetCreateForm(); setLocation("/orders/new"); }}
-            className="self-end flex-shrink-0 flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-semibold bg-[#1A56DB] hover:bg-[#1447B4] text-white shadow-sm transition-colors"
-          >
-            <Plus className="w-3.5 h-3.5" /> New Order
-          </button>
-        </div>
-
         {/* Payment mode sub-filter — shown when Paid pill is active */}
         {payFilter && (
           <div className="flex items-center gap-1.5 flex-wrap py-1.5">
@@ -3603,6 +3567,13 @@ export default function Orders() {
               <X className="w-3.5 h-3.5" /> Clear
             </button>
           )}
+
+          <button
+            onClick={() => { resetCreateForm(); setLocation("/orders/new"); }}
+            className="ml-auto flex-shrink-0 flex items-center gap-1.5 h-9 px-4 rounded-full text-sm font-semibold bg-[#1A56DB] hover:bg-[#1447B4] text-white shadow-sm transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" /> New Order
+          </button>
         </div>
 
         {/* Results Count */}
