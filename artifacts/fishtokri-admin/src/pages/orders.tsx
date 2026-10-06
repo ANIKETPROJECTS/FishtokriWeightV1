@@ -1073,7 +1073,6 @@ export default function Orders() {
     setScaleProductId("");
     setScaleKg("");
     setScaleGrams("");
-    setBigFishPartPickerOpen(false);
     setProductSearch(""); setProductPickerOpen(false);
     setPosProductMode("normal");
     setAppliedCouponIds([]); setCouponCode(""); setCouponError("");
@@ -4242,7 +4241,6 @@ export default function Orders() {
                 setScaleProductId("");
                 setScaleKg("");
                 setScaleGrams("");
-                setBigFishPartPickerOpen(false);
                 setPickerCategory(null);
                 setProductSearch("");
                 setSelectedTimeslotId("");
@@ -4261,7 +4259,6 @@ export default function Orders() {
                 setScaleProductId("");
                 setScaleKg("");
                 setScaleGrams("");
-                setBigFishPartPickerOpen(false);
                 setPickerCategory(null);
                 setProductSearch("");
                 setSelectedTimeslotId("");
