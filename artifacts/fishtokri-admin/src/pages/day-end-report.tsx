@@ -297,9 +297,9 @@ function DragScrollbar({ scrollRef }: { scrollRef: React.RefObject<HTMLDivElemen
 function OrdersReport({ from, to, onDownload, downloadRef }: { from: string; to: string; onDownload: (fn: () => void) => void; downloadRef: any }) {
   const [invoiceOrder, setInvoiceOrder] = useState<any | null>(null);
   const [ordSearch, setOrdSearch] = useState("");
-  const [ordPayFilter, setOrdPayFilter] = useState<Set<"paid" | "partial" | "unpaid">>(new Set());
-  const [ordPayModeFilter, setOrdPayModeFilter] = useState<Set<"cash" | "upi" | "card" | "wallet">>(new Set());
-  const [ordStatusFilter, setOrdStatusFilter] = useState<Set<"confirmed" | "out_for_delivery" | "delivered" | "takeaway" | "pending" | "cancelled">>(new Set());
+  const [ordPayFilter, setOrdPayFilter] = useState<Set<"paid" | "unpaid">>(new Set());
+  const [ordPayModeFilter, setOrdPayModeFilter] = useState<Set<"cash" | "upi" | "card">>(new Set());
+  const [ordStatusFilter, setOrdStatusFilter] = useState<Set<"takeaway" | "pending" | "cancelled">>(new Set());
   const [openInfoCard, setOpenInfoCard] = useState<string | null>(null);
 
   function toggleInSet<T>(set: Set<T>, setter: (s: Set<T>) => void, value: T) {
@@ -760,7 +760,6 @@ function OrdersReport({ from, to, onDownload, downloadRef }: { from: string; to:
             selected={ordPayFilter}
             options={[
               ["paid", "Paid"],
-              ["partial", "Partial"],
               ["unpaid", "Unpaid"],
             ]}
             onToggle={(v) => toggleInSet(ordPayFilter, setOrdPayFilter, v as any)}
@@ -775,7 +774,6 @@ function OrdersReport({ from, to, onDownload, downloadRef }: { from: string; to:
               ["cash", "Cash"],
               ["upi", "UPI"],
               ["card", "Card"],
-              ["wallet", "Wallet"],
             ]}
             onToggle={(v) => toggleInSet(ordPayModeFilter, setOrdPayModeFilter, v as any)}
             onClear={() => setOrdPayModeFilter(new Set())}
@@ -786,9 +784,6 @@ function OrdersReport({ from, to, onDownload, downloadRef }: { from: string; to:
             label="Order Status"
             selected={ordStatusFilter}
             options={[
-              ["confirmed", "Confirmed"],
-              ["out_for_delivery", "Out for Delivery"],
-              ["delivered", "Delivered"],
               ["takeaway", "Takeaway"],
               ["pending", "Pending"],
               ["cancelled", "Cancelled"],
