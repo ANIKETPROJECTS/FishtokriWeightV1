@@ -1968,14 +1968,13 @@ export default function Orders() {
     let email = "";
     let customerId: string | undefined;
 
-    const hasManualCustomer = !chosenCustomer && Boolean(newCustomer.name.trim() && newCustomer.phone.trim());
-    if (customerMode === "existing" && !isNewCustomerEntry && !hasManualCustomer) {
-      if (!chosenCustomer) {
-        toast({ title: "Select a customer", description: "Pick an existing customer or switch to 'New Customer'.", variant: "destructive" });
-        return;
-      }
+    const enteredName = newCustomer.name.trim();
+    const enteredPhone = newCustomer.phone.trim();
+    const hasValidPhone = /^\d{10}$/.test(enteredPhone);
+    const hasManualCustomer = !chosenCustomer && Boolean(enteredName && hasValidPhone);
+    if (chosenCustomer) {
       customerName = chosenCustomer.name?.trim() || "";
-      // If customer account has no name, fall back to the name on the selected address
+      // If customer account has no name, fall back to the name stored on its address.
       if (!customerName) {
         if (orderAddressMode === "saved" && selectedAddressIdx !== null) {
           const a = (chosenCustomer.addresses ?? [])[selectedAddressIdx] as any;
@@ -1987,24 +1986,40 @@ export default function Orders() {
       phone = chosenCustomer.phone;
       email = chosenCustomer.email;
       customerId = chosenCustomer.id;
+    } else if (orderDeliveryType === "takeaway") {
+      if (enteredPhone && !hasValidPhone) {
+        toast({ title: "Invalid phone", description: "If entered, the phone number must contain 10 digits.", variant: "destructive" });
+        return;
+      }
+      customerName = enteredName;
+      phone = enteredPhone;
+      email = newCustomer.email.trim();
+    } else if (customerMode === "existing" && !isNewCustomerEntry && !hasManualCustomer) {
+      if (!chosenCustomer) {
+        toast({ title: "Select a customer", description: "Pick an existing customer or switch to 'New Customer'.", variant: "destructive" });
+        return;
+      }
     } else {
-      if (!newCustomer.name.trim()) {
+      if (!enteredName) {
         toast({ title: "Customer name required", variant: "destructive" });
         return;
       }
-      const phoneTrim = newCustomer.phone.trim();
-      if (!phoneTrim) {
+      if (!enteredPhone) {
         toast({ title: "Phone number required", description: "Phone is required for new customers.", variant: "destructive" });
         return;
       }
-      if (!/^\d{10}$/.test(phoneTrim)) {
+      if (!hasValidPhone) {
         toast({ title: "Invalid phone", description: "Phone must be a 10-digit number.", variant: "destructive" });
         return;
       }
-      customerName = newCustomer.name.trim();
-      phone = phoneTrim;
+      customerName = enteredName;
+      phone = enteredPhone;
       email = newCustomer.email.trim();
     }
+    const createCustomerIfMissing =
+      !customerId &&
+      Boolean(customerName.trim() && hasValidPhone) &&
+      (customerMode === "new" || isNewCustomerEntry || hasManualCustomer);
 
     // Validate hub
     if (!selectedSuperHubId || !selectedSubHubId) {
@@ -2187,8 +2202,8 @@ export default function Orders() {
         // On edits, omit status entirely so the backend keeps the existing stage.
         // On new orders, set the initial POS status.
         ...(!editingOrderId && { status: isPreorderSale ? "created" : "takeaway" }),
-        createCustomerIfMissing: customerMode === "new" || isNewCustomerEntry || hasManualCustomer,
-        newCustomerExtras: (customerMode === "new" || isNewCustomerEntry || hasManualCustomer) ? {
+        createCustomerIfMissing,
+        newCustomerExtras: createCustomerIfMissing ? {
           dateOfBirth: newCustomer.dateOfBirth.trim(),
         } : undefined,
         // Pricing breakdown
@@ -4563,7 +4578,11 @@ export default function Orders() {
                     <img src="/icon-customer.png" className="w-4 h-4 object-contain" alt="" />
                     Customer
                   </p>
-                  {!chosenCustomer && <span className="text-[10px] font-semibold text-[#F05B4E] uppercase tracking-wide">Enter details</span>}
+                  {!chosenCustomer && (
+                    <span className={`text-[10px] font-semibold uppercase tracking-wide ${orderDeliveryType === "takeaway" ? "text-gray-400" : "text-[#F05B4E]"}`}>
+                      {orderDeliveryType === "takeaway" ? "Optional" : "Enter details"}
+                    </span>
+                  )}
                 </div>
 
                 {/* ── State A: customer already selected ── */}
@@ -4627,12 +4646,13 @@ export default function Orders() {
                             const isAllDigits = /^\d*$/.test(val);
                             if (isAllDigits) {
                               val = val.slice(0, 10);
-                              setNewCustomer((n) => ({ ...n, phone: val }));
-                              setNewAddress((a) => ({ ...a, phone: val }));
+                              const completePhone = val.length === 10 ? val : "";
+                              setNewCustomer((n) => ({ ...n, phone: completePhone }));
+                              setNewAddress((a) => ({ ...a, phone: completePhone }));
                             }
                             setCustomerSearch(val);
                           }}
-                           placeholder="Find existing customer…"
+                            placeholder={orderDeliveryType === "takeaway" ? "Find customer (optional)…" : "Find existing customer…"}
                           className="pl-6 h-8 text-sm border-0 border-b border-gray-300 rounded-none bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
                         />
                         {customerSearch.length > 0 && (
@@ -4670,7 +4690,7 @@ export default function Orders() {
                             setNewCustomer((n) => ({ ...n, name: value }));
                             setNewAddress((a) => ({ ...a, name: value }));
                           }}
-                          placeholder="Customer name *"
+                            placeholder={orderDeliveryType === "takeaway" ? "Customer name (optional)" : "Customer name *"}
                           className="h-9 text-sm border-gray-200 rounded-lg bg-white shadow-none focus-visible:ring-1 focus-visible:ring-[#1A56DB]"
                         />
                         <Input
@@ -4680,11 +4700,18 @@ export default function Orders() {
                             setNewCustomer((n) => ({ ...n, phone: value }));
                             setNewAddress((a) => ({ ...a, phone: value }));
                           }}
-                          placeholder="Phone number *"
+                            placeholder={orderDeliveryType === "takeaway" ? "Phone number (optional)" : "Phone number *"}
                           inputMode="numeric"
                           className="h-9 text-sm border-gray-200 rounded-lg bg-white shadow-none focus-visible:ring-1 focus-visible:ring-[#1A56DB]"
                         />
-                        {noMatch && <p className="text-[11px] text-[#1A56DB]">New customer will be created from these details.</p>}
+                        {noMatch && newCustomer.name.trim() && (
+                          <p className="text-[11px] text-[#1A56DB]">A customer profile will be created with this order.</p>
+                        )}
+                        {orderDeliveryType === "takeaway" && (
+                          <p className="text-[10px] leading-4 text-gray-400">
+                            Name and phone are optional. Enter both to save a customer profile.
+                          </p>
+                        )}
                       </div>
                     </>
                   );

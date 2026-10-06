@@ -1239,6 +1239,8 @@ router.post("/", async (req: ScopedRequest, res) => {
       orderType,
     } = req.body ?? {};
 
+    const dt = deliveryType === "takeaway" ? "takeaway" : "delivery";
+
     // Fall back to the name stored in the delivery address if the account has no name
     let effectiveCustomerName = customerName && String(customerName).trim() ? String(customerName).trim() : "";
     if (!effectiveCustomerName && deliveryAddressDetail && typeof deliveryAddressDetail === "object") {
@@ -1247,7 +1249,7 @@ router.post("/", async (req: ScopedRequest, res) => {
         effectiveCustomerName = String(addrName).trim();
       }
     }
-    if (!effectiveCustomerName) {
+    if (!effectiveCustomerName && dt !== "takeaway") {
       res.status(400).json({ error: "ValidationError", message: "Customer name is required" });
       return;
     }
@@ -1255,7 +1257,6 @@ router.post("/", async (req: ScopedRequest, res) => {
       res.status(400).json({ error: "ValidationError", message: "At least one item is required" });
       return;
     }
-    const dt = deliveryType === "takeaway" ? "takeaway" : "delivery";
     if (dt === "delivery" && !String(address ?? "").trim()) {
       res.status(400).json({ error: "ValidationError", message: "Delivery address is required" });
       return;
@@ -1317,7 +1318,7 @@ router.post("/", async (req: ScopedRequest, res) => {
     let resolvedCustomerId: string | undefined = customerId ? String(customerId) : undefined;
 
     // Optionally create customer if missing
-    if (!resolvedCustomerId && createCustomerIfMissing && (email || phone || effectiveCustomerName)) {
+    if (!resolvedCustomerId && createCustomerIfMissing && effectiveCustomerName && (email || phone)) {
       const cCol = await getCustomersCollection();
       const existing = email
         ? await cCol.findOne({ email: String(email).toLowerCase().trim() })
@@ -1368,7 +1369,7 @@ router.post("/", async (req: ScopedRequest, res) => {
 
     const orderDoc: any = {
       customerId: resolvedCustomerId ?? undefined,
-      customerName: effectiveCustomerName,
+      customerName: effectiveCustomerName || (dt === "takeaway" ? "Walk-in" : ""),
       phone: phone ? String(phone).trim() : "",
       email: email ? String(email).trim() : "",
       items: cleanItems,

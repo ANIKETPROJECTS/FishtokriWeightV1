@@ -12,5 +12,5 @@
 - [FTW inventory ownership](ftw-frontend-inventory.md) — FTW UPI starts in the storefront, but explicit admin edits/cancellations/deletes/restores use the normal admin inventory flow.
 - [Quiet runtime logging](quiet-runtime-logging.md) — production defaults to error-only output; request logs are disabled and PM2 stdout is discarded.
 - [Filtered pnpm startup installs](filtered-pnpm-startup-installs.md) — install each runtime’s dependency closure separately; broad or concurrent workspace installs fail on Replit.
-- [POS takeaway reporting](pos-takeaway-reporting.md) — takeaway sales have no delivery date; create their customer and include them by creation date in day-end reports.
+- [POS takeaway reporting](pos-takeaway-reporting.md) — walk-in sales may omit name/phone; preserve customer creation for complete details and count sales by creation date.
 - [Day-end preorder inclusion](day-end-report-preorders.md) — paid confirmed preorders count as sales before handover and must not be status-filtered out of the report.
