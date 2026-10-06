@@ -132,7 +132,10 @@ export function InvoiceModal({ order, onClose }: { order: any; onClose: () => vo
         const displayRate = basis.isWeightBased ? rate * (1000 / basis.basisGrams) : rate;
         const quantityLabel = basis.isWeightBased ? formatOrderWeight(qty) : String(qty);
         const rateLabel = basis.isWeightBased ? `${formatRupees(displayRate)}/kg` : rate.toFixed(2);
-        return `<tr><td style="padding:5px 4px;border:2px solid #444;font-weight:700;font-size:14px;word-break:break-word;">${it.name}</td><td style="padding:5px 4px;border:2px solid #444;text-align:right;font-size:14px;">${quantityLabel}</td><td style="padding:5px 4px;border:2px solid #444;text-align:right;font-size:14px;">${rateLabel}</td><td style="padding:5px 4px;border:2px solid #444;text-align:right;font-size:14px;">${invoiceLineAmount(it).toFixed(2)}</td></tr>`;
+        const partNote = ["Head", "Body", "Tail"].includes(it.partName)
+          ? `<br/><span style="font-size:11px;font-weight:400;">Part: ${it.partName}</span>`
+          : "";
+        return `<tr><td style="padding:5px 4px;border:2px solid #444;font-weight:700;font-size:14px;word-break:break-word;">${it.name}${partNote}</td><td style="padding:5px 4px;border:2px solid #444;text-align:right;font-size:14px;">${quantityLabel}</td><td style="padding:5px 4px;border:2px solid #444;text-align:right;font-size:14px;">${rateLabel}</td><td style="padding:5px 4px;border:2px solid #444;text-align:right;font-size:14px;">${invoiceLineAmount(it).toFixed(2)}</td></tr>`;
       })
       .join("");
     const discountRows = [
@@ -278,7 +281,12 @@ export function InvoiceModal({ order, onClose }: { order: any; onClose: () => vo
                     const displayRate = basis.isWeightBased ? rate * (1000 / basis.basisGrams) : rate;
                     return (
                       <tr key={i}>
-                        <td style={{ padding: "5px 4px", border: "1px solid #bbb", fontWeight: 600, wordBreak: "break-word", maxWidth: 150 }}>{it.name}</td>
+                        <td style={{ padding: "5px 4px", border: "1px solid #bbb", fontWeight: 600, wordBreak: "break-word", maxWidth: 150 }}>
+                          {it.name}
+                          {["Head", "Body", "Tail"].includes(it.partName) && (
+                            <span style={{ display: "block", fontSize: 11, fontWeight: 400, color: "#666" }}>Part: {it.partName}</span>
+                          )}
+                        </td>
                         <td style={{ padding: "5px 4px", border: "1px solid #bbb", textAlign: "right" }}>{basis.isWeightBased ? formatOrderWeight(qty) : qty}</td>
                         <td style={{ padding: "5px 4px", border: "1px solid #bbb", textAlign: "right" }}>{basis.isWeightBased ? `${formatRupees(displayRate)}/kg` : rate.toFixed(2)}</td>
                         <td style={{ padding: "5px 4px", border: "1px solid #bbb", textAlign: "right" }}>{invoiceLineAmount(it).toFixed(2)}</td>

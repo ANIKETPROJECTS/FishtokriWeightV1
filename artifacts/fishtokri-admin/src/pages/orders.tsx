@@ -825,24 +825,6 @@ function comboAvailableQuantity(combo: any, products: any[]): number {
   })));
 }
 
-const DEMO_BIG_FISH_PARTS = [
-  {
-    _id: "__demo_big_fish_head__",
-    productId: "__demo_big_fish_head__",
-    partName: "Head",
-  },
-  {
-    _id: "__demo_big_fish_body__",
-    productId: "__demo_big_fish_body__",
-    partName: "Body",
-  },
-  {
-    _id: "__demo_big_fish_tail__",
-    productId: "__demo_big_fish_tail__",
-    partName: "Tail",
-  },
-];
-
 function isBigFishSelectorProduct(product: any): boolean {
   const normalizedName = String(product?.name ?? "").trim().toLowerCase();
   return product?.demoKey === "big-fish-parts"
@@ -1006,14 +988,12 @@ export default function Orders() {
     unit: string;
     quantity: number;
     isCombo?: boolean;
-    isDemoBigFishPart?: boolean;
-    parentProductId?: string;
     partName?: "Head" | "Body" | "Tail";
   }[]>([]);
   const [scaleProductId, setScaleProductId] = useState("");
   const [scaleKg, setScaleKg] = useState("");
   const [scaleGrams, setScaleGrams] = useState("");
-  const [bigFishPartPickerOpen, setBigFishPartPickerOpen] = useState(false);
+  const [scalePartName, setScalePartName] = useState<"" | "Head" | "Body" | "Tail">("");
 
   // Coupons / timeslots / scheduling
   const [coupons, setCoupons] = useState<any[]>([]);
@@ -1657,27 +1637,7 @@ export default function Orders() {
     });
   }, [productsForMode, productSearch, pickerCategory]);
 
-  const bigFishPartOptions = useMemo(() => {
-    const parent = productsForMode.find((product) => product.isDemoBigFishSelector);
-    if (!parent) return [];
-    return DEMO_BIG_FISH_PARTS.map((part) => ({
-      ...part,
-      name: `${parent.name} - ${part.partName}`,
-      displayName: part.partName,
-      category: parent.category || "Fish",
-      price: Number(parent.price) || 0,
-      unit: parent.unit || "per kg",
-      quantity: Math.max(0, Number(parent.quantity) || 0),
-      isDemoBigFishPart: true,
-      parentProductId: String(parent._id ?? parent.productId),
-      isCombo: false,
-    }));
-  }, [productsForMode]);
-
-  const scaleProducts = useMemo(() => {
-    return [...productsForMode, ...bigFishPartOptions];
-  }, [productsForMode, bigFishPartOptions]);
-  const selectedScaleProduct = scaleProducts.find((product) => String(product._id) === scaleProductId) || null;
+  const selectedScaleProduct = productsForMode.find((product) => String(product._id) === scaleProductId) || null;
   const scaleWeightKg = Math.round((
     Math.max(0, Number(scaleKg) || 0) +
     Math.max(0, Number(scaleGrams) || 0) / 1000
@@ -1695,8 +1655,14 @@ export default function Orders() {
       toast({ title: "Enter a weight", description: "Enter a weight greater than 0.", variant: "destructive" });
       return;
     }
+    const productId = String(selectedScaleProduct._id);
+    const partName = selectedScaleProduct.isDemoBigFishSelector ? (scalePartName || undefined) : undefined;
     const available = Math.max(0, Number(selectedScaleProduct.quantity) || 0);
-    const overageKg = Math.max(0, scaleWeightKg - available);
+    const existingProductWeight = selectedProducts
+      .filter((item) => item.productId === productId)
+      .reduce((total, item) => total + Math.max(0, Number(item.quantity) || 0), 0);
+    const totalRequestedWeight = existingProductWeight + scaleWeightKg;
+    const overageKg = Math.max(0, totalRequestedWeight - available);
     const canUsePosBuffer =
       orderDeliveryType === "takeaway" &&
       posProductMode === "normal" &&
@@ -1711,54 +1677,38 @@ export default function Orders() {
       toast({
         title: "Weight exceeds the POS limit",
         description: canUsePosBuffer && available > 0
-          ? `Available stock is ${formatOrderWeight(available)}. The maximum with the 1 kg allowance is ${formatOrderWeight(allowed)}.`
+          ? `This product already has ${formatOrderWeight(existingProductWeight)} in the order. The maximum total is ${formatOrderWeight(allowed)}.`
           : `Only ${formatOrderWeight(available)} is available.`,
         variant: "destructive",
       });
       return;
     }
-    if (canUsePosBuffer && selectedScaleProduct.isDemoBigFishPart) {
-      const otherPartQuantity = selectedProducts
-        .filter((item) =>
-          item.isDemoBigFishPart &&
-          item.parentProductId === selectedScaleProduct.parentProductId &&
-          item.productId !== String(selectedScaleProduct._id)
-        )
-        .reduce((total, item) => total + Math.max(0, Number(item.quantity) || 0), 0);
-      const sharedPartOverage = Math.max(0, otherPartQuantity + scaleWeightKg - available);
-      if (sharedPartOverage > POS_WEIGHT_OVERAGE_LIMIT_KG + 1e-9) {
-        toast({
-          title: "Surmai weight allowance reached",
-          description: `Head, Body, and Tail share ${formatOrderWeight(available)} of stock. The maximum total with the allowance is ${formatOrderWeight(available + POS_WEIGHT_OVERAGE_LIMIT_KG)}.`,
-          variant: "destructive",
-        });
-        return;
-      }
-    }
     setSelectedProducts((current) => {
-      const existing = current.some((item) => item.productId === String(selectedScaleProduct._id));
-      if (existing) {
-        return current.map((item) => item.productId === String(selectedScaleProduct._id)
-          ? { ...item, quantity: scaleWeightKg }
+      const currentLine = current.some((item) => item.productId === productId);
+      if (currentLine) {
+        return current.map((item) =>
+          item.productId === productId
+          ? {
+            ...item,
+            quantity: item.quantity + scaleWeightKg,
+            partName: partName ?? item.partName,
+          }
           : item);
       }
       return [...current, {
-        productId: String(selectedScaleProduct._id),
+        productId,
         name: selectedScaleProduct.name,
         price: Number(selectedScaleProduct.price) || 0,
         unit: selectedScaleProduct.unit ?? "",
         quantity: scaleWeightKg,
         isCombo: false,
-        ...(selectedScaleProduct.isDemoBigFishPart
-          ? {
-            isDemoBigFishPart: true,
-            parentProductId: selectedScaleProduct.parentProductId,
-            partName: selectedScaleProduct.partName,
-          }
-          : {}),
+        ...(partName ? { partName } : {}),
       }];
     });
-    toast({ title: "Weight added", description: `${selectedScaleProduct.name} · ${formatOrderWeight(scaleWeightKg)}` });
+    toast({
+      title: "Weight added",
+      description: `${selectedScaleProduct.name}${partName ? ` · ${partName}` : ""} · ${formatOrderWeight(scaleWeightKg)}`,
+    });
   };
 
   const filteredCategories = useMemo(() => {
@@ -2051,13 +2001,8 @@ export default function Orders() {
     const productItems = selectedProducts
       .filter((p) => p.quantity > 0)
       .map((p) => ({
-        ...(p.isDemoBigFishPart
-          ? {
-            productId: p.parentProductId,
-            parentProductId: p.parentProductId,
-            partName: p.partName,
-          }
-          : { productId: p.productId }),
+        productId: p.productId,
+        ...(p.partName ? { partName: p.partName } : {}),
         name: p.name,
         price: orderProductPriceForApi(p),
         quantity: p.quantity,
@@ -3102,6 +3047,9 @@ export default function Orders() {
         price: Number(it.price) || 0,
         unit: it.unit ?? "",
         quantity: Number(it.quantity) || 0,
+        ...(it.partName === "Head" || it.partName === "Body" || it.partName === "Tail"
+          ? { partName: it.partName }
+          : {}),
       }));
     const customs = (o.items ?? [])
       .filter((it: any) => it && !it.productId)
@@ -3571,7 +3519,7 @@ export default function Orders() {
                         </td>
                         <td className="px-4 py-3">
                           <p className="text-[#162B4D] font-medium text-sm">{(o.items ?? []).length} item{(o.items ?? []).length !== 1 ? "s" : ""}</p>
-                           <p className="text-xs text-gray-400 truncate max-w-[180px]">{(o.items ?? []).map((i: any) => `${i.name} · ${orderLineSummary(i)}`).join(", ")}</p>
+                           <p className="text-xs text-gray-400 truncate max-w-[180px]">{(o.items ?? []).map((i: any) => `${i.name}${i.partName ? ` · Part: ${i.partName}` : ""} · ${orderLineSummary(i)}`).join(", ")}</p>
                         </td>
                         <td className="px-4 py-3">
                           <span className="font-bold text-[#162B4D]">{formatRupees(tot)}</span>
@@ -3658,7 +3606,8 @@ export default function Orders() {
                           <div className="space-y-0.5 max-w-[220px]">
                             {items.map((it: any, i: number) => (
                                <p key={i} className="text-sm text-black truncate">
-                                 <span className="font-medium">{it.name}</span>
+                                  <span className="font-medium">{it.name}</span>
+                                  {it.partName && <span className="text-xs text-gray-500"> · Part: {it.partName}</span>}
                                  <span> · {orderLineSummary(it)}</span>
                               </p>
                             ))}
@@ -4407,21 +4356,19 @@ export default function Orders() {
                  <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
                   {filteredProducts.map((p) => {
                     const pid = String(p._id);
-                    const cartItem = selectedProducts.find((sp) => sp.productId === pid);
+                    const cartItems = selectedProducts.filter((sp) => sp.productId === pid);
+                    const cartItem = cartItems[0];
+                    const cartWeight = cartItems.reduce((total, item) => total + Math.max(0, Number(item.quantity) || 0), 0);
                     const scaleSelected = scaleProductId === pid;
                     const isBigFishSelector = Boolean(p.isDemoBigFishSelector);
-                    const demoPartItems = isBigFishSelector
-                      ? selectedProducts.filter((sp) => String(sp.parentProductId) === pid)
-                      : [];
-                     const bigFishPartSummary = isBigFishSelector ? "Head · Body · Tail — same price" : "";
-                    const selectedForCard = Boolean(cartItem) || scaleSelected || demoPartItems.length > 0;
+                    const selectedForCard = cartItems.length > 0 || scaleSelected;
                     const weightBased = isWeightBasedProduct(p);
                     const stock = Number(p.quantity) || 0;
                      const rawUnit = String(p.unit || "kg").trim() || "kg";
                      const stockUnit = /kg/i.test(rawUnit) ? "kg" : rawUnit;
                      const outOfStock = stock <= 0;
                     const lowStock = stock > 0 && stock <= 5;
-                    const atMax = cartItem ? cartItem.quantity >= stock : false;
+                     const atMax = cartWeight >= stock;
                     return (
                       <div
                         key={pid}
@@ -4434,14 +4381,17 @@ export default function Orders() {
                         }`}
                         onClick={() => {
                           if (outOfStock) { toast({ title: "Out of stock", description: `${p.name} is unavailable.`, variant: "destructive" }); return; }
-                          if (isBigFishSelector) {
-                            setBigFishPartPickerOpen(true);
-                            return;
-                          }
                           if (weightBased) {
                             if (scaleProductId !== pid) {
                               setScaleKg("");
                               setScaleGrams("");
+                              const existingFishLine = selectedProducts.find((item) => item.productId === pid);
+                              setScalePartName(
+                                p.isDemoBigFishSelector &&
+                                  (existingFishLine?.partName === "Head" || existingFishLine?.partName === "Body" || existingFishLine?.partName === "Tail")
+                                  ? existingFishLine.partName
+                                  : ""
+                              );
                             }
                             setScaleProductId(pid);
                             // Selecting a weight product only chooses the product
@@ -4472,18 +4422,14 @@ export default function Orders() {
                             title="Remove from order"
                             onClick={(event) => {
                               event.stopPropagation();
-                              setSelectedProducts((prev) => isBigFishSelector
-                                 ? prev.filter((sp) => String(sp.parentProductId) !== pid)
-                                : prev.filter((sp) => sp.productId !== pid));
+                              setSelectedProducts((prev) => prev.filter((sp) => sp.productId !== pid));
                               if (scaleProductId === pid) {
                                 setScaleProductId("");
                                 setScaleKg("");
                                 setScaleGrams("");
-                              } else if (isBigFishSelector && scaleProductId.startsWith("__demo_big_fish_")) {
-                                setScaleProductId("");
-                                setScaleKg("");
-                                setScaleGrams("");
+                                setScalePartName("");
                               }
+                              if (isBigFishSelector) setScalePartName("");
                             }}
                             className="absolute left-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-white/95 text-gray-500 shadow-sm ring-1 ring-gray-200 transition-colors hover:bg-red-50 hover:text-red-600"
                           >
@@ -4498,11 +4444,10 @@ export default function Orders() {
                           <p className="text-xs text-gray-400 uppercase tracking-wide truncate h-4">{p.category || "\u00A0"}</p>
                           <div className="flex items-center justify-between mt-auto pt-1.5 gap-1">
                             <div className="min-w-0 flex-1">
-                               {isBigFishSelector ? (
+                                {isBigFishSelector ? (
                                  <>
                                     <p className="text-sm font-semibold text-[#1A56DB]">₹{Number(p.price).toLocaleString("en-IN")}/{stockUnit}</p>
-                                    <p className="text-[10px] font-medium leading-none text-[#364F9F]">{bigFishPartSummary}</p>
-                                   <p className={`mt-1 text-[10px] font-semibold leading-none ${stock > 0 ? "text-[#364F9F]" : "text-red-500"}`}>
+                                    <p className={`mt-1 text-[10px] font-semibold leading-none ${stock > 0 ? "text-[#364F9F]" : "text-red-500"}`}>
                                      {stock.toLocaleString("en-IN", { maximumFractionDigits: 2 })} {stockUnit} left
                                    </p>
                                  </>
@@ -4518,14 +4463,12 @@ export default function Orders() {
                                  </>
                                )}
                             </div>
-                              {isBigFishSelector ? (
-                                <span className="rounded-lg bg-[#F05B4E] px-2 py-1 text-[10px] font-bold text-white">
-                                   {demoPartItems.length > 0 ? `${demoPartItems.length} part${demoPartItems.length > 1 ? "s" : ""}` : "Select part"}
-                                </span>
-                              ) : cartItem && weightBased ? (
+                              {cartItems.length > 0 && weightBased ? (
                                <span className="rounded-lg bg-[#1A56DB] px-2 py-1 text-[10px] font-bold text-white">
-                                 {cartItem.quantity > 0 ? formatOrderWeight(cartItem.quantity) : "Scale"}
+                                  {formatOrderWeight(cartWeight)}
                                </span>
+                              ) : scaleSelected && weightBased ? (
+                                <span className="rounded-lg bg-[#F05B4E] px-2 py-1 text-[10px] font-bold text-white">Scale selected</span>
                              ) : cartItem ? (
                               <div className="flex items-center bg-[#1A56DB] rounded-lg overflow-hidden shadow-sm flex-shrink-0" onClick={(e) => e.stopPropagation()}>
                                 <button
@@ -4568,13 +4511,37 @@ export default function Orders() {
                     )}
                   </div>
                 </div>
-                <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_82px_82px_auto] sm:items-end">
+                <div className={`mt-3 grid gap-2 sm:items-end ${selectedScaleProduct?.isDemoBigFishSelector ? "sm:grid-cols-[minmax(0,1fr)_112px_70px_70px_auto]" : "sm:grid-cols-[minmax(0,1fr)_82px_82px_auto]"}`}>
                   <div className="min-w-0">
                     <span className="mb-1 block text-[11px] font-semibold text-[#51617A]">Selected product</span>
                     <div className="flex h-9 items-center truncate rounded-lg border border-[#E9B8B1] bg-white px-2.5 text-xs font-semibold text-[#162B4D]" data-testid="text-test-scale-product">
                       {selectedScaleProduct ? `${selectedScaleProduct.name} · ${formatRupees(Number(selectedScaleProduct.price) || 0)}/kg` : "Click a weight-based product above"}
                     </div>
                   </div>
+                  {selectedScaleProduct?.isDemoBigFishSelector && (
+                    <label className="block">
+                      <span className="mb-1 block text-[11px] font-semibold text-[#51617A]">Part note (optional)</span>
+                      <select
+                        value={scalePartName}
+                        onChange={(event) => {
+                          const nextPartName = event.target.value as "" | "Head" | "Body" | "Tail";
+                          setScalePartName(nextPartName);
+                          setSelectedProducts((current) => current.map((item) =>
+                            item.productId === scaleProductId
+                              ? { ...item, partName: nextPartName || undefined }
+                              : item
+                          ));
+                        }}
+                        className="h-9 w-full rounded-lg border border-[#E9B8B1] bg-white px-2 text-xs font-semibold text-[#162B4D] outline-none focus:border-[#F05B4E]"
+                        data-testid="select-scale-part-note"
+                      >
+                        <option value="">No note</option>
+                        <option value="Head">Head</option>
+                        <option value="Body">Body</option>
+                        <option value="Tail">Tail</option>
+                      </select>
+                    </label>
+                  )}
                   <label className="block">
                     <span className="mb-1 block text-[11px] font-semibold text-[#51617A]">Kilograms</span>
                     <input type="number" min="0" step="1" value={scaleKg} onChange={(event) => setScaleKg(event.target.value)} placeholder="0" disabled={!selectedScaleProduct} className="h-9 w-full rounded-lg border border-[#E9B8B1] bg-white px-2.5 text-sm font-bold text-[#162B4D] outline-none focus:border-[#F05B4E] disabled:cursor-not-allowed disabled:bg-[#F5F6F8]" data-testid="input-test-scale-kg" />
@@ -5192,15 +5159,16 @@ export default function Orders() {
                     <p className="text-xs text-gray-300 mt-0.5">Tap products to add</p>
                   </div>
                 ) : (
-                  <div className="px-3 py-2 space-y-0">
+        <div className="px-3 py-2 space-y-0">
                     {selectedProducts.map((p) => {
                       const stock = stockOf(p.productId);
                       const weightBased = isWeightBasedProduct(p);
                       const atMax = p.quantity >= stock;
                       return (
-                        <div key={p.productId} className="flex items-center gap-2 py-2 border-b border-gray-100 last:border-0">
+                        <div key={`${p.productId}:${p.partName ?? ""}`} className="flex items-center gap-2 py-2 border-b border-gray-100 last:border-0">
                           <div className="flex-1 min-w-0">
                             <p className="text-xs font-semibold text-[#162B4D] leading-tight truncate">{p.name}</p>
+                            {p.partName && <p className="text-[10px] text-gray-500">Part: {p.partName}</p>}
                             <p className="text-[11px] text-gray-400">{formatRupees(Number(p.price))}{p.unit ? ` / ${p.unit}` : ""}</p>
                           </div>
                           {weightBased ? (
@@ -5523,48 +5491,6 @@ export default function Orders() {
       document.body
       )}
 
-      <Dialog open={bigFishPartPickerOpen} onOpenChange={setBigFishPartPickerOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              {String(bigFishPartOptions[0]?.name ?? "Surmai").replace(/ - (Head|Body|Tail)$/, "")} — Choose a part
-            </DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-gray-500">
-            Choose a part label to put on the order. Head, Body, and Tail all use the same price per kg and share the fish’s total cleaned stock.
-          </p>
-          <div className="grid grid-cols-3 gap-3 pt-2">
-            {bigFishPartOptions.map((part) => {
-              const selectedPart = selectedProducts.find((item) => item.productId === part.productId);
-              const availableWeight = Math.max(0, Number(part.quantity) || 0);
-              return (
-                <button
-                  key={part.productId}
-                  type="button"
-                  disabled={availableWeight <= 0}
-                  onClick={() => {
-                    setScaleProductId(part.productId);
-                    setScaleKg("");
-                    setScaleGrams("");
-                    setBigFishPartPickerOpen(false);
-                  }}
-                  className="rounded-xl border border-gray-200 bg-white p-3 text-left transition-colors hover:border-[#1A56DB] hover:bg-blue-50"
-                >
-                  <span className="block text-sm font-bold text-[#162B4D]">{part.partName}</span>
-                  <span className="mt-1 block text-xs font-semibold text-[#1A56DB]">{formatRupees(part.price)}/kg</span>
-                  <span className="mt-2 block text-[10px] text-gray-500">
-                    {selectedPart
-                      ? `${formatOrderWeight(selectedPart.quantity)} in order`
-                      : `Shared stock: ${formatOrderWeight(availableWeight)}`}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </DialogContent>
-      </Dialog>
-
-
       {/* Order Detail Sheet — slides in from the right */}
       <Sheet open={!!selectedOrder} onOpenChange={(o) => { if (!o) { setSelectedOrder(null); setShowAllPersons(false); } }}>
         <SheetContent
@@ -5670,6 +5596,7 @@ export default function Orders() {
                         <li key={i} className="flex items-center justify-between gap-3">
                           <div className="min-w-0 flex-1">
                             <p className="font-bold text-black text-base">{item.name}</p>
+                            {item.partName && <p className="text-xs font-medium text-gray-500 mt-0.5">Part: {item.partName}</p>}
                             <p className="text-sm font-medium text-black mt-0.5">{orderLineSummary(item)}</p>
                           </div>
                           <span className="font-extrabold text-black text-base whitespace-nowrap">{formatRupees(lineTotal)}</span>
