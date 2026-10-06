@@ -885,7 +885,7 @@ export default function Orders() {
   const editIdFromUrl = isEditPage ? location.replace("/orders/edit/", "") : "";
   const isCreatePage = location === "/orders/new" || location.endsWith("/orders/new") || isEditPage;
 
-  const [activeTab, setActiveTab] = useState<"current" | "history" | "all" | "invoices" | "preorder" | "deleted">("current");
+  const [activeTab, setActiveTab] = useState<"current" | "history" | "all" | "invoices" | "preorder" | "deleted">("all");
   const [invoiceOrder, setInvoiceOrder] = useState<any | null>(null);
 
   // Filters
@@ -2654,6 +2654,9 @@ export default function Orders() {
   }, []);
 
   useEffect(() => { loadStats(); }, [loadStats]);
+  useEffect(() => {
+    if (activeTab === "current" || activeTab === "history") setActiveTab("all");
+  }, [activeTab]);
   useEffect(() => { setPage(1); }, [activeTab, search, statusFilter, deliveryTypeFilter, dateFrom, dateTo, sortField, sortDir, subHubFilter]);
   useEffect(() => { load(); }, [load]);
 
@@ -3185,14 +3188,10 @@ export default function Orders() {
     HISTORY_STATUSES.reduce((s, k) => s + (statsData[k] ?? 0), 0) +
     (statsData.takeaway ?? 0)
   );
-  const totalActive = statsTotals.currentTotal ?? ACTIVE_STATUSES.reduce((s, k) => s + (statsData[k] ?? 0), 0);
-  const totalHistory = statsTotals.historyTotal ?? (HISTORY_STATUSES.reduce((s, k) => s + (statsData[k] ?? 0), 0) + (statsData.takeaway ?? 0));
-
   const invoiceCount =
     (statsData["delivered"] ?? 0) +
     (statsData["takeaway"] ?? 0) +
     (statsData["handed_over"] ?? 0);
-  const totalToday = statsTotals.todayTotal ?? totalActive;
   const totalPreorder = statsTotals.preorderTotal ?? 0;
   const totalDeleted = statsTotals.deletedTotal ?? 0;
   const posHubName =
@@ -3200,8 +3199,6 @@ export default function Orders() {
     superHubs.find((h: any) => String(h.id) === String(selectedSuperHubId))?.name ||
     "Thane Hub";
   const TABS = [
-    { key: "current" as const, label: "Current Orders", count: totalToday, icon: Clock, color: "text-blue-600" },
-    { key: "history" as const, label: "History", count: totalHistory, icon: CheckCircle2, color: "text-green-600" },
     { key: "all" as const, label: "All Orders", count: totalAll, icon: ClipboardList, color: "text-gray-600" },
     { key: "invoices" as const, label: "Order Invoices", count: invoiceCount, icon: FileText, color: "text-violet-600" },
     { key: "preorder" as const, label: "Preorders", count: totalPreorder, icon: Calendar, color: "text-orange-600" },
