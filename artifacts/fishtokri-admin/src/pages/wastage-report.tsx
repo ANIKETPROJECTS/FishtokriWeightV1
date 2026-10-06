@@ -399,7 +399,7 @@ export default function WastageReportPage() {
     <div style={{ display: "flex", alignItems: "center", gap: 14, width: "100%", ...POPPINS }}>
       <div style={{ display: "flex", alignItems: "center", gap: 7, flexShrink: 0 }}>
         <Trash2 style={{ width: 16, height: 16, color: "#F05B4E" }} />
-        <h1 style={{ fontSize: 15, fontWeight: 700, color: "#000", margin: 0, whiteSpace: "nowrap" }}>
+        <h1 style={{ fontSize: 15, fontWeight: 700, color: "#fff", margin: 0, whiteSpace: "nowrap" }}>
           Wastage Report
         </h1>
       </div>
