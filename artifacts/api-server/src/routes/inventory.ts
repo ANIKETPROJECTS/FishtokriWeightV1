@@ -1291,14 +1291,7 @@ async function applyDelta(
       const requestedQuantity = Math.max(0, Number(it.quantity) || 0);
       const overageKg = Math.max(0, requestedQuantity - available);
       const isKgProduct = /kg/i.test(String(it.unit || product.unit || ""));
-      const productCategory = [
-        typeof product.category === "object" ? product.category?.name : product.category,
-        typeof product.subCategory === "object" ? product.subCategory?.name : product.subCategory,
-      ].filter(Boolean).join(" ");
-      const isFishProduct =
-        product.demoKey === "big-fish-parts" ||
-        /fish|surmai/i.test(productCategory);
-      const canUsePosBuffer = Boolean(order.posWeightBuffer) && isKgProduct && isFishProduct;
+      const canUsePosBuffer = Boolean(order.posWeightBuffer) && isKgProduct;
       if (overageKg > 0 && (!canUsePosBuffer || available <= 0 || overageKg > POS_WEIGHT_OVERAGE_LIMIT_KG + 1e-9)) {
         logger.warn(
           { orderId, productId: String(pid), productName: product.name, available, requested: requestedQuantity },

@@ -464,17 +464,6 @@ function isWeightBasedProduct(product: any) {
   return !product?.isCombo && getWeightPricing(product?.unit).isWeightBased;
 }
 
-function isFishWeightProduct(product: any) {
-  const category = product?.category && typeof product.category === "object"
-    ? product.category.name
-    : product?.category;
-  const subCategory = product?.subCategory && typeof product.subCategory === "object"
-    ? product.subCategory.name
-    : product?.subCategory;
-  return Boolean(product?.isDemoBigFishPart || product?.demoKey === "big-fish-parts") ||
-    /fish|surmai/i.test(`${category ?? ""} ${subCategory ?? ""}`);
-}
-
 const POS_WEIGHT_OVERAGE_LIMIT_KG = 1;
 
 function formatOrderWeight(weightInKg: number) {
@@ -1729,8 +1718,7 @@ export default function Orders() {
     const canUsePosBuffer =
       orderDeliveryType === "takeaway" &&
       posProductMode === "normal" &&
-      isWeightBasedProduct(selectedScaleProduct) &&
-      isFishWeightProduct(selectedScaleProduct);
+      isWeightBasedProduct(selectedScaleProduct);
     if (
       overageKg > 0 &&
       (!canUsePosBuffer || available <= 0 || overageKg > POS_WEIGHT_OVERAGE_LIMIT_KG + 1e-9)
@@ -4601,7 +4589,7 @@ export default function Orders() {
                     <p className="text-[11px] text-[#8D3D36]">Click a weight-based product above, then enter kg and grams to add it to the order.</p>
                     {orderDeliveryType === "takeaway" && posProductMode === "normal" && (
                       <p className="text-[10px] leading-4 text-[#8D3D36]">
-                        For fish sold by weight, you can add up to 1 kg above available stock when stock remains. The full scale weight is billed; the extra is logged separately and is not deducted from stock.
+                        For any product sold by weight, you can add up to 1 kg above available stock when stock remains. The full scale weight is billed; the extra is logged separately and is not deducted from stock.
                       </p>
                     )}
                   </div>
