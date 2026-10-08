@@ -49,8 +49,23 @@ function formatDateTime(iso: string) {
   return d.toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-function formatWeightKg(value: number) {
-  return `${Number(value).toLocaleString("en-IN", { maximumFractionDigits: 3 })} kg`;
+function formatInventoryQuantity(value: number, unit?: string) {
+  const quantity = Number(value);
+  if (!Number.isFinite(quantity)) return "—";
+
+  if (/kg|kilogram/i.test(unit ?? "")) {
+    const totalGrams = Math.round(Math.abs(quantity) * 1000);
+    if (totalGrams === 0) return "0 g";
+
+    const kilograms = Math.floor(totalGrams / 1000);
+    const grams = totalGrams % 1000;
+    const sign = quantity < 0 ? "-" : "";
+    if (kilograms > 0 && grams > 0) return `${sign}${kilograms} kg ${grams} g`;
+    if (kilograms > 0) return `${sign}${kilograms} kg`;
+    return `${sign}${grams} g`;
+  }
+
+  return quantity.toLocaleString("en-IN", { maximumFractionDigits: 3 });
 }
 
 type SubReasonMeta = { label: string; tone: string };
@@ -266,7 +281,7 @@ export default function InventoryHistory() {
                                 )}
                                 {Number(m.weightOverageKg) > 0 && (
                                   <p className="text-[11px] font-semibold text-amber-700">
-                                    {formatWeightKg(Number(m.weightOverageKg))} overage billed; not deducted from stock
+                                    {formatInventoryQuantity(Number(m.weightOverageKg), "kg")} overage billed; not deducted from stock
                                   </p>
                                 )}
                               </div>
@@ -293,10 +308,15 @@ export default function InventoryHistory() {
                               <span className="text-gray-300">—</span>
                             )}
                           </td>
-                          <td className={`px-4 py-3 text-right font-semibold ${isPositive ? "text-emerald-600" : "text-red-600"}`}>
-                            {isPositive ? "+" : ""}{m.change}
+                          <td
+                            data-testid={`text-movement-change-${m._id}`}
+                            className={`px-4 py-3 text-right font-semibold ${isPositive ? "text-emerald-600" : "text-red-600"}`}
+                          >
+                            {isPositive ? "+" : ""}{formatInventoryQuantity(m.change, m.unit)}
                           </td>
-                          <td className="px-4 py-3 text-right text-gray-700">{m.balance}</td>
+                          <td data-testid={`text-movement-balance-${m._id}`} className="px-4 py-3 text-right text-gray-700">
+                            {formatInventoryQuantity(m.balance, m.unit)}
+                          </td>
                         </tr>
                       );
                     })}
