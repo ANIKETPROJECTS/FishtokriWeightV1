@@ -216,7 +216,7 @@ const settingsSchema = z.object({
     gstNumber: z.string().trim().max(40),
     fssaiNumber: z.string().trim().max(40),
   }).optional(),
-  weighingMode: z.enum(["manual", "automated"]).default("manual"),
+  weighingMode: z.enum(["manual", "automated"]).optional(),
   currentPassword: z.string().min(1).max(200),
   newPassword: z.string().max(200).optional(),
 });
@@ -238,7 +238,7 @@ router.put("/master-admin/settings", requireAuth as any, requireMasterAdmin as a
     if (parsed.data.recoveryEmail) settings.recoveryEmail = parsed.data.recoveryEmail.toLowerCase();
     if (parsed.data.newPassword) settings.passwordHash = await bcrypt.hash(parsed.data.newPassword, 12);
     if (parsed.data.invoiceHeader) settings.invoiceHeader = parsed.data.invoiceHeader;
-    settings.weighingMode = parsed.data.weighingMode;
+    if (parsed.data.weighingMode) settings.weighingMode = parsed.data.weighingMode;
     await settings.save();
     const primaryHub = await getPrimaryHub();
     if (primaryHub) {
