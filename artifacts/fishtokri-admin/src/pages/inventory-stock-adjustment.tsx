@@ -79,7 +79,6 @@ type FormRow = {
   quantityBefore: number;
   mode: FormMode;
   addQuantity: string;
-  batchPrice: string;
   rawWeight: string;
   cleanedWeight: string;
   shelfLifeDays: string;
@@ -171,7 +170,7 @@ function generateNextBatchNumber(productName: string, productBatches: Batch[], s
 function emptyRow(): FormRow {
   return {
     productId: "", productName: "", category: "", unit: "", quantityBefore: 0,
-    mode: "add", addQuantity: "", batchPrice: "", rawWeight: "", cleanedWeight: "", shelfLifeDays: "", expiryDate: "", expiryTime: getCurrentTime12h(), batchNumber: "",
+    mode: "add", addQuantity: "", rawWeight: "", cleanedWeight: "", shelfLifeDays: "", expiryDate: "", expiryTime: getCurrentTime12h(), batchNumber: "",
     batchNotes: "",
     removeQuantity: "", selectedBatchId: "", search: "",
   };
@@ -1052,7 +1051,7 @@ export default function InventoryStockAdjustment() {
       ...r,
       productId: p.id, productName: p.name, category: p.category || "",
       unit: p.unit, quantityBefore: p.quantity, search: p.name,
-      addQuantity: "", batchPrice: String(p.price ?? ""),
+      addQuantity: "",
       rawWeight: "", cleanedWeight: "", removeQuantity: "",
       batchNumber: r.mode === "add" ? autoNum : "",
       batchNotes: "",
@@ -1063,7 +1062,7 @@ export default function InventoryStockAdjustment() {
   function clearProduct(i: number) {
     updateRow(i, {
       productId: "", productName: "", category: "", unit: "", quantityBefore: 0, search: "",
-      addQuantity: "", batchPrice: "", rawWeight: "", cleanedWeight: "", removeQuantity: "",
+      addQuantity: "", rawWeight: "", cleanedWeight: "", removeQuantity: "",
       batchNumber: "", selectedBatchId: "",
     });
   }
@@ -1071,7 +1070,7 @@ export default function InventoryStockAdjustment() {
   function onSearchChange(i: number, val: string) {
     updateRow(i, {
       search: val, productId: "", productName: "", category: "", unit: "", quantityBefore: 0,
-      addQuantity: "", batchPrice: "", rawWeight: "", cleanedWeight: "", removeQuantity: "",
+      addQuantity: "", rawWeight: "", cleanedWeight: "", removeQuantity: "",
       batchNumber: "", selectedBatchId: "",
     });
   }
@@ -1166,12 +1165,13 @@ export default function InventoryStockAdjustment() {
     const missingBigFishPrice = validRows.find((r) =>
       r.mode === "add" &&
       isBigFishRow(r) &&
-      (!Number.isFinite(Number(r.batchPrice)) || Number(r.batchPrice) <= 0)
+      (!Number.isFinite(Number(products.find((product) => product.id === r.productId)?.price))
+        || Number(products.find((product) => product.id === r.productId)?.price) <= 0)
     );
     if (missingBigFishPrice) {
       toast({
-        title: "Enter a price per kg",
-        description: `Set one positive per-kg price for ${missingBigFishPrice.productName}. The same rate is used for Head, Body, and Tail.`,
+        title: "Set the product price first",
+        description: `Set a positive per-kg selling price for ${missingBigFishPrice.productName} in product settings before receiving stock.`,
         variant: "destructive",
       });
       return;
@@ -1186,20 +1186,23 @@ export default function InventoryStockAdjustment() {
           reason: formReason,
           notes: formNotes,
           items: validRows.map((r) => {
-            if (r.mode === "add") return {
-              productId: r.productId, mode: "add",
-              addQuantity: Number(r.addQuantity),
-              price: r.batchPrice !== "" ? Number(r.batchPrice) : undefined,
-               rawWeight: Number(r.rawWeight),
-               cleanedWeight: Number(r.cleanedWeight),
-               yieldPercentage: Number(r.cleanedWeight) / Number(r.rawWeight) * 100,
-              shelfLifeDays: r.shelfLifeDays !== "" ? Number(r.shelfLifeDays) : undefined,
-              expiryDate: r.expiryDate
-                ? (r.expiryTime ? `${r.expiryDate}T${to24hTime(r.expiryTime)}:00+05:30` : r.expiryDate)
-                : undefined,
-              batchNumber: r.batchNumber || undefined,
-              notes: r.batchNotes || undefined,
-            };
+            if (r.mode === "add") {
+              const productPrice = products.find((product) => product.id === r.productId)?.price;
+              return {
+                productId: r.productId, mode: "add",
+                addQuantity: Number(r.addQuantity),
+                price: productPrice != null && Number.isFinite(Number(productPrice)) ? Number(productPrice) : undefined,
+                rawWeight: Number(r.rawWeight),
+                cleanedWeight: Number(r.cleanedWeight),
+                yieldPercentage: Number(r.cleanedWeight) / Number(r.rawWeight) * 100,
+                shelfLifeDays: r.shelfLifeDays !== "" ? Number(r.shelfLifeDays) : undefined,
+                expiryDate: r.expiryDate
+                  ? (r.expiryTime ? `${r.expiryDate}T${to24hTime(r.expiryTime)}:00+05:30` : r.expiryDate)
+                  : undefined,
+                batchNumber: r.batchNumber || undefined,
+                notes: r.batchNotes || undefined,
+              };
+            }
             if (r.mode === "add_existing") return {
               productId: r.productId, mode: "add_existing",
               batchId: r.selectedBatchId,
@@ -1391,42 +1394,10 @@ export default function InventoryStockAdjustment() {
                           />
                         </div>
 
-                         {/* Batch price for a new batch */}
-                         {isAdd && (
-                           <div className="col-span-6 md:col-span-2 space-y-1">
-                              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                                 {isBigFish ? "Price per kg" : "Batch Price"}{isBigFish ? "" : ` / ${row.unit || "unit"}`}
-                              </label>
-                             <input
-                               type="number"
-                                min={isBigFish ? "0.01" : "0"}
-                               step="0.01"
-                               value={row.batchPrice}
-                                onChange={(e) => updateRow(idx, { batchPrice: e.target.value })}
-                                placeholder={isBigFish ? "One shared selling rate" : "Product price"}
-                                className="w-full h-9 px-3 text-sm font-semibold text-[#162B4D] border border-gray-200 rounded-lg bg-white outline-none focus:ring-2 focus:ring-[#364F9F]/20 focus:border-[#364F9F]"
-                             />
-                              {isBigFish && (
-                                 <p className="text-[10px] text-gray-400">One selling rate for Head, Body, and Tail.</p>
-                              )}
-                           </div>
-                         )}
-
                          {/* Conditional fields */}
                         {isAdd ? (
                           <>
-                            {/* Shelf Life */}
-                            <div className="col-span-6 md:col-span-2 space-y-1">
-                              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Shelf Life (days)</label>
-                              <input
-                                type="number" min="0"
-                                value={row.shelfLifeDays}
-                                onChange={(e) => setShelfLife(idx, e.target.value)}
-                                placeholder="e.g. 7"
-                                className="w-full h-9 px-3 text-sm font-medium text-center border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-[#364F9F]/20 focus:border-[#364F9F]"
-                              />
-                            </div>
-                            {/* Expiry Date + Time */}
+                            {/* Expiry takes the former batch-price position in the row */}
                             <div className="col-span-6 md:col-span-2 space-y-1">
                               <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Expiry Date &amp; Time</label>
                               <input
@@ -1434,6 +1405,7 @@ export default function InventoryStockAdjustment() {
                                 value={row.expiryDate}
                                 onChange={(e) => setExpiryDate(idx, e.target.value)}
                                 className={`w-full h-9 px-2 text-xs font-semibold border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-[#364F9F]/20 focus:border-[#364F9F] ${expTone}`}
+                                data-testid={`input-adjustment-expiry-date-${idx}`}
                               />
                               <ClockPickerField
                                 value={row.expiryTime}
@@ -1444,6 +1416,17 @@ export default function InventoryStockAdjustment() {
                                   {dLeft < 0 ? `Expired ${Math.abs(dLeft)}d ago` : dLeft === 0 ? "Expires today" : `${dLeft}d left`}
                                 </p>
                               )}
+                            </div>
+                            {/* Shelf Life */}
+                            <div className="col-span-6 md:col-span-2 space-y-1">
+                              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Shelf Life (days)</label>
+                              <input
+                                type="number" min="0"
+                                value={row.shelfLifeDays}
+                                onChange={(e) => setShelfLife(idx, e.target.value)}
+                                placeholder="e.g. 7"
+                                className="w-full h-9 px-3 text-sm font-medium text-center border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-[#364F9F]/20 focus:border-[#364F9F]"
+                              />
                             </div>
                           </>
                         ) : (isAddExisting || row.mode === "remove") ? (
