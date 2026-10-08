@@ -817,10 +817,7 @@ export default function Orders() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [showFilters, setShowFilters] = useState(false);
-  const [subHubFilter, setSubHubFilter] = useState("");
-  const [filterSubHubs, setFilterSubHubs] = useState<{ id: string; name: string }[]>([]);
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const knownSubHubsRef = useRef<Map<string, { id: string; name: string }>>(new Map());
   // Tracks FTW order IDs that currently have an in-flight UPI+RZPAY fix request.
   // Removed on completion (success or failure) so polls re-check until the DB confirms.
   const ftwInFlightRef = useRef<Set<string>>(new Set());
@@ -2548,7 +2545,6 @@ export default function Orders() {
       // Only send date-range params when on the All Orders tab.
       if (activeTab === "all" && dateFrom) params.set("from", dateFrom);
       if (activeTab === "all" && dateTo) params.set("to", dateTo);
-      if (subHubFilter) params.set("subHubId", subHubFilter);
 
       const data = await apiFetch(`/api/orders?${params}`);
       orderLoadErrorShownRef.current = false;
@@ -2622,22 +2618,13 @@ export default function Orders() {
         })();
       }
 
-      // Accumulate unique sub-hubs from orders for the filter dropdown
-      let changed = false;
-      for (const o of loadedOrders) {
-        if (o.subHubId && !knownSubHubsRef.current.has(String(o.subHubId))) {
-          knownSubHubsRef.current.set(String(o.subHubId), { id: String(o.subHubId), name: o.subHubName ?? "Sub Hub" });
-          changed = true;
-        }
-      }
-      if (changed) setFilterSubHubs(Array.from(knownSubHubsRef.current.values()));
     } catch (err: any) {
       if (!orderLoadErrorShownRef.current) {
         orderLoadErrorShownRef.current = true;
         toast({ title: "Error loading orders", description: err.message, variant: "destructive" });
       }
     } finally { setLoading(false); }
-  }, [search, sortField, sortDir, page, activeTab, statusFilter, deliveryTypeFilter, dateFrom, dateTo, subHubFilter, toast]);
+  }, [search, sortField, sortDir, page, activeTab, statusFilter, deliveryTypeFilter, dateFrom, dateTo, toast]);
 
   const loadStats = useCallback(async () => {
     try {
@@ -2661,7 +2648,7 @@ export default function Orders() {
   useEffect(() => {
     if (activeTab === "current" || activeTab === "history") setActiveTab("all");
   }, [activeTab]);
-  useEffect(() => { setPage(1); }, [activeTab, search, statusFilter, deliveryTypeFilter, dateFrom, dateTo, sortField, sortDir, subHubFilter]);
+  useEffect(() => { setPage(1); }, [activeTab, search, statusFilter, deliveryTypeFilter, dateFrom, dateTo, sortField, sortDir]);
   useEffect(() => {
     if (isCreatePage) return;
     load();
@@ -3243,10 +3230,10 @@ export default function Orders() {
   const clearFilters = () => {
     setSearch(""); setStatusFilter(""); setDeliveryTypeFilter("");
     setDateFrom(""); setDateTo(""); setSortField("createdAt"); setSortDir("desc");
-    setSubHubFilter(""); setPayFilter(false); setPayModeFilter("");
+    setPayFilter(false); setPayModeFilter("");
   };
 
-  const hasFilters = !!(search || statusFilter || deliveryTypeFilter || dateFrom || dateTo || subHubFilter || payFilter);
+  const hasFilters = !!(search || statusFilter || deliveryTypeFilter || dateFrom || dateTo || payFilter);
 
   const totalAll = (statsTotals.total ?? 0) || (
     ACTIVE_STATUSES.reduce((s, k) => s + (statsData[k] ?? 0), 0) +
@@ -3373,21 +3360,6 @@ export default function Orders() {
             />
             {search && <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-black hover:text-red-500"><X className="w-3.5 h-3.5" /></button>}
           </div>
-
-          {/* Sub Hub filter */}
-          {filterSubHubs.length > 0 && (
-            <Select value={subHubFilter || "_all"} onValueChange={(v) => setSubHubFilter(v === "_all" ? "" : v)}>
-              <SelectTrigger className="h-9 w-36 text-sm text-black rounded-full border-gray-200">
-                <SelectValue placeholder="All Sub Hubs" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="_all">All Sub Hubs</SelectItem>
-                {filterSubHubs.map((h) => (
-                  <SelectItem key={h.id} value={h.id}>{h.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
 
           {/* Status filter dropdown */}
           <Select value={statusFilter || "_all"} onValueChange={(v) => { setStatusFilter(v === "_all" ? "" : v); }}>
