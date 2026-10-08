@@ -190,10 +190,26 @@ function isBigFishRow(row: FormRow): boolean {
     || name === "big fish (demo)";
 }
 
-function addDaysISO(days: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  return d.toISOString().split("T")[0];
+function addDaysISO(baseDate: string, days: number): string {
+  const [year, month, day] = baseDate.slice(0, 10).split("-").map(Number);
+  if (!year || !month || !day) return "";
+  const d = new Date(Date.UTC(year, month - 1, day));
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function daysBetweenISO(stockDate: string, expiryDate: string): number | null {
+  if (!stockDate || !expiryDate) return null;
+  const toUtcDay = (date: string) => {
+    const [year, month, day] = date.slice(0, 10).split("-").map(Number);
+    if (!year || !month || !day) return NaN;
+    return Date.UTC(year, month - 1, day);
+  };
+  const stockDay = toUtcDay(stockDate);
+  const expiryDay = toUtcDay(expiryDate);
+  if (!Number.isFinite(stockDay) || !Number.isFinite(expiryDay)) return null;
+  const difference = (expiryDay - stockDay) / 86400000;
+  return Number.isInteger(difference) && difference >= 0 ? difference : null;
 }
 
 function parse12h(time: string): { h: number; m: number; ampm: "AM" | "PM" } {
@@ -881,10 +897,8 @@ function ExistingBatchesCard({
                     onChange={(e) => {
                       const days = e.target.value === "" ? null : Number(e.target.value);
                       let expiryDate = b.expiryDate;
-                      if (days !== null && b.receivedDate) {
-                        const d = new Date(b.receivedDate);
-                        d.setDate(d.getDate() + days);
-                        const dateISO = d.toISOString().slice(0, 10);
+                      if (days !== null && days >= 0 && Number.isInteger(days) && b.receivedDate) {
+                        const dateISO = addDaysISO(b.receivedDate, days);
                         expiryDate = `${dateISO}T${to24hTime(b.expiryTime || DEFAULT_EXPIRY_TIME)}:00+05:30`;
                       }
                       patchBatch(i, { shelfLifeDays: days, expiryDate });
@@ -899,8 +913,7 @@ function ExistingBatchesCard({
                       const received = e.target.value || null;
                       const patch: Partial<Batch> = { receivedDate: received };
                       if (received && b.expiryDate) {
-                        const days = Math.round((new Date(b.expiryDate).getTime() - new Date(received).getTime()) / 86400000);
-                        patch.shelfLifeDays = days >= 0 ? days : null;
+                        patch.shelfLifeDays = daysBetweenISO(received, b.expiryDate);
                       }
                       patchBatch(i, patch);
                     }}
@@ -917,8 +930,7 @@ function ExistingBatchesCard({
                         if (dateVal) {
                           patch.expiryDate = `${dateVal}T${to24hTime(b.expiryTime || DEFAULT_EXPIRY_TIME)}:00+05:30`;
                           if (b.receivedDate) {
-                            const days = Math.round((new Date(patch.expiryDate).getTime() - new Date(b.receivedDate).getTime()) / 86400000);
-                            patch.shelfLifeDays = days >= 0 ? days : null;
+                            patch.shelfLifeDays = daysBetweenISO(b.receivedDate, dateVal);
                           }
                         } else {
                           patch.expiryDate = null;
@@ -1027,6 +1039,15 @@ export default function InventoryStockAdjustment() {
     setFormRows((rows) => rows.map((r, idx) => idx === i ? { ...r, ...patch } : r));
   }
 
+  function setStockDate(date: string) {
+    setFormDate(date);
+    setFormRows((rows) => rows.map((row) => {
+      if (row.mode !== "add" || !row.expiryDate) return row;
+      const days = daysBetweenISO(date, row.expiryDate);
+      return { ...row, shelfLifeDays: days == null ? "" : String(days) };
+    }));
+  }
+
   function setRemoveWeight(i: number, part: "kg" | "grams", value: string) {
     const row = formRows[i];
     if (!row) return;
@@ -1097,17 +1118,15 @@ export default function InventoryStockAdjustment() {
 
   function setShelfLife(i: number, val: string) {
     const days = Number(val);
-    const expiry = val !== "" && Number.isFinite(days) ? addDaysISO(days) : "";
+    const expiry = val !== "" && Number.isInteger(days) && days >= 0 && formDate
+      ? addDaysISO(formDate, days)
+      : "";
     updateRow(i, { shelfLifeDays: val, expiryDate: expiry });
   }
 
   function setExpiryDate(i: number, val: string) {
-    let shelfLifeDays = "";
-    if (val) {
-      const days = Math.round((new Date(val).getTime() - Date.now()) / 86400000);
-      if (days >= 0) shelfLifeDays = String(days);
-    }
-    updateRow(i, { expiryDate: val, shelfLifeDays });
+    const days = daysBetweenISO(formDate, val);
+    updateRow(i, { expiryDate: val, shelfLifeDays: days == null ? "" : String(days) });
   }
 
   function setWeight(i: number, field: "rawWeight" | "cleanedWeight", value: string) {
@@ -1140,6 +1159,20 @@ export default function InventoryStockAdjustment() {
     const missingExpiry = validRows.find((r) => r.mode === "add" && !r.shelfLifeDays && !r.expiryDate);
     if (missingExpiry) {
       toast({ title: "Set shelf life or expiry", description: `Add shelf life (days) or an expiry date for ${missingExpiry.productName}.`, variant: "destructive" });
+      return;
+    }
+    const invalidExpiryDate = validRows.find((r) =>
+      r.mode === "add" &&
+      r.expiryDate &&
+      formDate &&
+      daysBetweenISO(formDate, r.expiryDate) == null
+    );
+    if (invalidExpiryDate) {
+      toast({
+        title: "Check the expiry date",
+        description: `Expiry for ${invalidExpiryDate.productName} must be on or after the stock date.`,
+        variant: "destructive",
+      });
       return;
     }
     const missingBatch = validRows.find((r) => r.mode === "add_existing" && !r.selectedBatchId);
@@ -1252,7 +1285,7 @@ export default function InventoryStockAdjustment() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="space-y-1.5">
                 <Label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Date</Label>
-                <Input type="date" value={formDate} onChange={(e) => setFormDate(e.target.value)} className="h-9 text-sm font-medium text-[#162B4D]" />
+                <Input type="date" value={formDate} onChange={(e) => setStockDate(e.target.value)} className="h-9 text-sm font-medium text-[#162B4D]" />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
