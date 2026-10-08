@@ -692,6 +692,23 @@ router.post("/adjustments", async (req, res) => {
         const rmQty = Math.max(0, Number(it.removeQuantity) || 0);
         if (rmQty <= 0) continue;
 
+        const reducibleQuantity = currentBatches.length > 0
+          ? currentBatches.reduce((total, batch) => {
+              const expiresAt = batch.expiryDate ? new Date(batch.expiryDate).getTime() : null;
+              if (expiresAt != null && expiresAt < now.getTime()) return total;
+              return total + Math.max(0, Number(batch.quantity) || 0);
+            }, 0)
+          : Math.max(0, Number(existing.quantity) || 0);
+        if (rmQty > reducibleQuantity + 1e-9) {
+          const unit = String(existing.unit || "units");
+          const available = reducibleQuantity.toLocaleString("en-IN", { maximumFractionDigits: 3 });
+          res.status(400).json({
+            error: "ValidationError",
+            message: `Cannot reduce more than the available stock (${available} ${unit}). Check the quantity and unit.`,
+          });
+          return;
+        }
+
         // If a specific batchId is provided, reduce from that batch first then FIFO for remainder
         if (it.batchId) {
           const targetIdx = currentBatches.findIndex((b) => String(b._id) === String(it.batchId));

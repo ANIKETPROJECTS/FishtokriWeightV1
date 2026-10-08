@@ -372,7 +372,6 @@ export default function InventoryProductDetail() {
                 <tr className="bg-gray-50 border-b border-gray-100">
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Batch #</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Quantity</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Price / {product.unit || "unit"}</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Received</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Expiry Date</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Shelf Life</th>
@@ -384,7 +383,7 @@ export default function InventoryProductDetail() {
               <tbody className="divide-y divide-gray-100">
                 {tabBatches.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="px-4 py-12 text-center text-sm text-gray-400">
+                    <td colSpan={8} className="px-4 py-12 text-center text-sm text-gray-400">
                       No {activeTab} batches found
                     </td>
                   </tr>
@@ -431,9 +430,6 @@ export default function InventoryProductDetail() {
                           {b.quantity}
                         </span>
                         <span className="text-xs text-gray-400 ml-1">{product.unit}</span>
-                      </td>
-                      <td className="px-4 py-3 text-right text-sm font-semibold text-[#162B4D]">
-                        ₹{Number(b.price ?? product.price).toLocaleString("en-IN")}
                       </td>
                       <td className="px-4 py-3 text-gray-600 text-xs">
                         <div className="flex items-center gap-1">

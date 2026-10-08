@@ -857,6 +857,8 @@ export default function Orders() {
 
   // Detail modal
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const showPreorderHandoverAt = String(selectedOrder?.orderType ?? "").trim().toLowerCase() === "preorder"
+    && Boolean(selectedOrder?.posHandedOverAt);
   const [editStatus, setEditStatus] = useState("");
   const [savingStatus, setSavingStatus] = useState(false);
   const [preorderStatusDrafts, setPreorderStatusDrafts] = useState<Record<string, string>>({});
@@ -4488,7 +4490,7 @@ export default function Orders() {
                                 min="0"
                                 step="1"
                                 value={entry.kg}
-                                onKeyDown={(event) => { if (/[eE+\-.,]/.test(event.key)) event.preventDefault(); }}
+                                onKeyDown={(event) => { if (event.key.length === 1 && /[eE+\-.,]/.test(event.key)) event.preventDefault(); }}
                                 onChange={(event) => {
                                   const value = event.target.value;
                                   if (!/^\d*$/.test(value)) return;
@@ -4511,7 +4513,7 @@ export default function Orders() {
                                 max="999"
                                 step="1"
                                 value={entry.grams}
-                                onKeyDown={(event) => { if (/[eE+\-.,]/.test(event.key)) event.preventDefault(); }}
+                                onKeyDown={(event) => { if (event.key.length === 1 && /[eE+\-.,]/.test(event.key)) event.preventDefault(); }}
                                 onChange={(event) => {
                                   const value = event.target.value;
                                   if (!/^\d*$/.test(value) || (value !== "" && Number(value) > 999)) return;
@@ -5239,7 +5241,7 @@ export default function Orders() {
                                       min="0"
                                       step="1"
                                       value={editDraft.kg}
-                                      onKeyDown={(event) => { if (/[eE+\-.,]/.test(event.key)) event.preventDefault(); }}
+                                      onKeyDown={(event) => { if (event.key.length === 1 && /[eE+\-.,]/.test(event.key)) event.preventDefault(); }}
                                       onChange={(event) => {
                                         const value = event.target.value;
                                         if (!/^\d*$/.test(value)) return;
@@ -5260,7 +5262,7 @@ export default function Orders() {
                                       max="999"
                                       step="1"
                                       value={editDraft.grams}
-                                      onKeyDown={(event) => { if (/[eE+\-.,]/.test(event.key)) event.preventDefault(); }}
+                                      onKeyDown={(event) => { if (event.key.length === 1 && /[eE+\-.,]/.test(event.key)) event.preventDefault(); }}
                                       onChange={(event) => {
                                         const value = event.target.value;
                                         if (!/^\d*$/.test(value) || (value !== "" && Number(value) > 999)) return;
@@ -5894,45 +5896,12 @@ export default function Orders() {
                   );
                 })()}
 
-                 {/* ── 4. PICKUP / DELIVERY & HUB ── */}
-                <div className="px-6 py-6">
-                  <div className="flex items-center gap-2.5 mb-5">
-                    <MaskIcon src={iconMotorbike} color="#364F9F" className="w-[20px] h-[20px]" />
-                     <span className="text-xs font-bold text-[#364F9F] uppercase tracking-widest">
-                       {selectedOrder.deliveryType === "takeaway" ? "Pickup & Hub" : "Delivery & Hub"}
-                     </span>
+                {selectedOrder.notes && (
+                  <div className="border-t border-gray-100 px-6 py-4">
+                    <p className="text-xs font-bold tracking-wider text-black mb-1">CUSTOMER NOTES</p>
+                    <p className="text-sm font-medium text-black italic">"{selectedOrder.notes}"</p>
                   </div>
-                  <div className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
-                    <div>
-                      <p className="text-xs font-bold tracking-wider text-black mb-1">TYPE</p>
-                      <p className="font-bold text-black capitalize">{selectedOrder.deliveryType ?? "—"}</p>
-                    </div>
-                    <div>
-                       <p className="text-xs font-bold tracking-wider text-black mb-1">
-                         {selectedOrder.deliveryType === "takeaway" ? "PICKUP DATE" : "DELIVERY DATE"}
-                       </p>
-                      <p className="font-bold text-black">{formatDeliveryDate(selectedOrder.deliveryDate) || formatDate(selectedOrder.createdAt)}</p>
-                    </div>
-                    {selectedOrder.superHubName && (
-                      <div>
-                        <p className="text-xs font-bold tracking-wider text-black mb-1">SUPER HUB</p>
-                        <p className="font-bold text-black">{selectedOrder.superHubName}</p>
-                      </div>
-                    )}
-                    {selectedOrder.subHubName && (
-                      <div>
-                        <p className="text-xs font-bold tracking-wider text-black mb-1">SUB HUB</p>
-                        <p className="font-bold text-black">{selectedOrder.subHubName}</p>
-                      </div>
-                    )}
-                    {selectedOrder.notes && (
-                      <div className="col-span-2 pt-3 border-t border-gray-100">
-                        <p className="text-xs font-bold tracking-wider text-black mb-1">CUSTOMER NOTES</p>
-                        <p className="text-sm font-medium text-black italic">"{selectedOrder.notes}"</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                )}
 
                 {/* ── 5. POS TIMELINE / DELIVERY TIMELINE ── */}
                 {selectedOrder.deliveryType === "takeaway" ? (
@@ -5941,10 +5910,12 @@ export default function Orders() {
                       <Clock className="w-5 h-5 text-[#364F9F]" />
                       <span className="text-xs font-bold text-[#364F9F] uppercase tracking-widest">POS Timeline</span>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className={`grid grid-cols-1 gap-3 ${showPreorderHandoverAt ? "sm:grid-cols-2" : ""}`}>
                       {[
                         { label: "ORDERED AT", value: selectedOrder.createdAt, color: "text-[#364F9F]", bg: "bg-[#EEF1F9]" },
-                        { label: "HANDED OVER AT", value: selectedOrder.posHandedOverAt, color: "text-emerald-700", bg: "bg-emerald-50" },
+                        ...(showPreorderHandoverAt
+                          ? [{ label: "HANDED OVER AT", value: selectedOrder.posHandedOverAt, color: "text-emerald-700", bg: "bg-emerald-50" }]
+                          : []),
                       ].map((event) => (
                         <div key={event.label} className={`rounded-xl px-3 py-3 ${event.bg}`}>
                           <p className="text-[10px] font-bold tracking-wider text-black/50 mb-1">{event.label}</p>

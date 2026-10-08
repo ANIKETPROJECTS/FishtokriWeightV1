@@ -87,6 +87,8 @@ type FormRow = {
   batchNumber: string;
   batchNotes: string;
   removeQuantity: string;
+  removeKg: string;
+  removeGrams: string;
   selectedBatchId: string;
   search: string;
 };
@@ -110,6 +112,7 @@ const REASONS = [
   "Stock damaged", "Stock wastage", "Stocking new inventory",
   "EXTRA SKU", "SKU TRANSFER", "Stock correction", "Other",
 ];
+const DEFAULT_EXPIRY_TIME = "07:00 PM";
 
 // ─── BATCH NUMBER GENERATION ─────────────────────────────────────────────────
 function generateBatchPrefix(productName: string): string {
@@ -170,10 +173,14 @@ function generateNextBatchNumber(productName: string, productBatches: Batch[], s
 function emptyRow(): FormRow {
   return {
     productId: "", productName: "", category: "", unit: "", quantityBefore: 0,
-    mode: "add", addQuantity: "", rawWeight: "", cleanedWeight: "", shelfLifeDays: "", expiryDate: "", expiryTime: getCurrentTime12h(), batchNumber: "",
+    mode: "add", addQuantity: "", rawWeight: "", cleanedWeight: "", shelfLifeDays: "", expiryDate: "", expiryTime: DEFAULT_EXPIRY_TIME, batchNumber: "",
     batchNotes: "",
-    removeQuantity: "", selectedBatchId: "", search: "",
+    removeQuantity: "", removeKg: "", removeGrams: "", selectedBatchId: "", search: "",
   };
+}
+
+function isKilogramUnit(unit: string | undefined): boolean {
+  return /\bkg\b|kilograms?/i.test(String(unit ?? ""));
 }
 
 function isBigFishRow(row: FormRow): boolean {
@@ -215,33 +222,23 @@ function to24hTime(time12h: string): string {
   return `${String(hour).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
-function getCurrentTime12h(): string {
-  const now = new Date();
-  const h24 = now.getHours();
-  const m = now.getMinutes();
-  const ampm: "AM" | "PM" = h24 >= 12 ? "PM" : "AM";
-  let h = h24 % 12;
-  if (h === 0) h = 12;
-  return format12h(h, m, ampm);
-}
-
 /**
  * Extracts the time (12-h format) from a stored ISO string, correctly converted to IST.
  * MongoDB stores everything as UTC (e.g. "2026-07-07T08:45:00.000Z") so we must
  * shift by +05:30 before reading hours/minutes — never read raw T-digits from the string.
- * Falls back to "06:00 PM" (18:00 IST) for date-only strings or missing values.
+ * Falls back to the default expiry time for date-only strings or missing values.
  */
 function extractTime12hFromISO(iso: string | null): string {
-  if (!iso) return "06:00 PM";
+  if (!iso) return DEFAULT_EXPIRY_TIME;
   const d = new Date(iso);
-  if (isNaN(d.getTime())) return "06:00 PM";
+  if (isNaN(d.getTime())) return DEFAULT_EXPIRY_TIME;
   // Convert UTC → IST by adding 5h30m
   const istMs = d.getTime() + (5 * 60 + 30) * 60 * 1000;
   const ist = new Date(istMs);
   const h24 = ist.getUTCHours();
   const m = ist.getUTCMinutes();
-  // Treat midnight IST as a sign that no real time was recorded — default to 6 PM
-  if (h24 === 0 && m === 0) return "06:00 PM";
+  // Treat midnight IST as a sign that no real time was recorded.
+  if (h24 === 0 && m === 0) return DEFAULT_EXPIRY_TIME;
   const ampm: "AM" | "PM" = h24 >= 12 ? "PM" : "AM";
   let h = h24 % 12;
   if (h === 0) h = 12;
@@ -604,14 +601,12 @@ function ProductSelector({
 function BatchSelector({
   batches,
   unit,
-  defaultPrice,
   selectedBatchId,
   onSelect,
   mode = "remove",
 }: {
   batches: Batch[];
   unit: string;
-  defaultPrice: number;
   selectedBatchId: string;
   onSelect: (batchId: string) => void;
   mode?: "remove" | "add_existing";
@@ -711,8 +706,8 @@ function BatchSelector({
                 <div>
                   <p className="text-sm font-bold text-[#162B4D]">{b.batchNumber || "Unnamed Batch"}</p>
                     <p className="text-[11px] text-gray-400 mt-0.5">
-                     Added {formatDate(b.receivedDate)} · Price ₹{Number(b.price ?? defaultPrice).toLocaleString("en-IN")} / {unit} · Exp <span className={`font-semibold ${tone}`}>{formatExpiry(b.expiryDate)}</span>
-                   </p>
+                      Added {formatDate(b.receivedDate)} · Exp <span className={`font-semibold ${tone}`}>{formatExpiry(b.expiryDate)}</span>
+                    </p>
                 </div>
                 <div className="text-right flex-shrink-0">
                   <p className="text-sm font-bold text-[#162B4D]">{b.quantity}</p>
@@ -750,11 +745,10 @@ function BatchSelector({
 
 // ─── EXISTING BATCHES CARD (editable) ────────────────────────────────────────
 function ExistingBatchesCard({
-  batches, unit, defaultPrice, productId, subHubId, onReload,
+  batches, unit, productId, subHubId, onReload,
 }: {
   batches: Batch[];
   unit: string;
-  defaultPrice: number;
   productId: string;
   subHubId: string;
   onReload: () => void;
@@ -777,7 +771,7 @@ function ExistingBatchesCard({
 
   // Sync local edit state when batches prop changes or panel opens
   useEffect(() => {
-    setEdited(visibleBatches.map((b) => ({ ...b, price: b.price ?? defaultPrice, expiryTime: extractTime12hFromISO(b.expiryDate) })));
+    setEdited(visibleBatches.map((b) => ({ ...b, expiryTime: extractTime12hFromISO(b.expiryDate) })));
     setDirty(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [batches, open, showAllBatches]);
@@ -796,7 +790,7 @@ function ExistingBatchesCard({
       const batchesToSend = edited.map(({ expiryTime, ...rest }) => ({
         ...rest,
         expiryDate: rest.expiryDate
-          ? `${rest.expiryDate.slice(0, 10)}T${to24hTime(expiryTime || "06:00 PM")}:00+05:30`
+          ? `${rest.expiryDate.slice(0, 10)}T${to24hTime(expiryTime || DEFAULT_EXPIRY_TIME)}:00+05:30`
           : rest.expiryDate,
       }));
       await apiFetch(`/api/inventory/products/${productId}/batches?subHubId=${subHubId}`, {
@@ -814,7 +808,7 @@ function ExistingBatchesCard({
   }
 
   function handleCancel() {
-    setEdited(visibleBatches.map((b) => ({ ...b, price: b.price ?? defaultPrice, expiryTime: extractTime12hFromISO(b.expiryDate) })));
+    setEdited(visibleBatches.map((b) => ({ ...b, expiryTime: extractTime12hFromISO(b.expiryDate) })));
     setDirty(false);
   }
 
@@ -847,10 +841,9 @@ function ExistingBatchesCard({
         <>
           {/* Column headers */}
           <div className="px-3 py-1.5 bg-[#364F9F]/5 border-y border-[#364F9F]/10">
-            <div className="grid grid-cols-7 gap-2">
+            <div className="grid grid-cols-6 gap-2">
               <span className="text-[10px] font-bold text-[#364F9F] uppercase tracking-wider">Batch ID</span>
               <span className="text-[10px] font-bold text-[#364F9F] uppercase tracking-wider">Qty ({unit})</span>
-              <span className="text-[10px] font-bold text-[#364F9F] uppercase tracking-wider">Price / {unit}</span>
               <span className="text-[10px] font-bold text-[#364F9F] uppercase tracking-wider">Shelf Life (d)</span>
               <span className="text-[10px] font-bold text-[#364F9F] uppercase tracking-wider">Received</span>
               <span className="text-[10px] font-bold text-[#364F9F] uppercase tracking-wider">Expiry Date &amp; Time</span>
@@ -867,7 +860,7 @@ function ExistingBatchesCard({
                 : dl <= 7 ? "border-amber-300 bg-amber-50"
                 : "border-emerald-200 bg-emerald-50";
               return (
-                <div key={b.id} className="px-3 py-2 grid grid-cols-7 gap-2 items-start bg-white/50 hover:bg-white/80 transition-colors">
+                <div key={b.id} className="px-3 py-2 grid grid-cols-6 gap-2 items-start bg-white/50 hover:bg-white/80 transition-colors">
                   <input
                     type="text"
                     value={b.batchNumber}
@@ -884,15 +877,6 @@ function ExistingBatchesCard({
                   <input
                     type="number"
                     min="0"
-                    step="0.01"
-                    value={b.price ?? ""}
-                    onChange={(e) => patchBatch(i, { price: e.target.value === "" ? null : Number(e.target.value) })}
-                    placeholder={String(defaultPrice)}
-                    className="h-7 px-2 text-[11px] font-bold text-[#162B4D] border border-gray-200 rounded bg-white focus:outline-none focus:ring-1 focus:ring-[#364F9F]/30 mt-0.5"
-                  />
-                  <input
-                    type="number"
-                    min="0"
                     value={b.shelfLifeDays ?? ""}
                     onChange={(e) => {
                       const days = e.target.value === "" ? null : Number(e.target.value);
@@ -901,7 +885,7 @@ function ExistingBatchesCard({
                         const d = new Date(b.receivedDate);
                         d.setDate(d.getDate() + days);
                         const dateISO = d.toISOString().slice(0, 10);
-                        expiryDate = `${dateISO}T${to24hTime(b.expiryTime || "06:00 PM")}:00+05:30`;
+                        expiryDate = `${dateISO}T${to24hTime(b.expiryTime || DEFAULT_EXPIRY_TIME)}:00+05:30`;
                       }
                       patchBatch(i, { shelfLifeDays: days, expiryDate });
                     }}
@@ -931,7 +915,7 @@ function ExistingBatchesCard({
                         const dateVal = e.target.value || null;
                         const patch: Partial<Batch> = {};
                         if (dateVal) {
-                          patch.expiryDate = `${dateVal}T${to24hTime(b.expiryTime || "06:00 PM")}:00+05:30`;
+                          patch.expiryDate = `${dateVal}T${to24hTime(b.expiryTime || DEFAULT_EXPIRY_TIME)}:00+05:30`;
                           if (b.receivedDate) {
                             const days = Math.round((new Date(patch.expiryDate).getTime() - new Date(b.receivedDate).getTime()) / 86400000);
                             patch.shelfLifeDays = days >= 0 ? days : null;
@@ -945,7 +929,7 @@ function ExistingBatchesCard({
                       className={`w-full h-7 px-2 text-[11px] text-[#162B4D] border rounded focus:outline-none focus:ring-1 focus:ring-[#364F9F]/30 ${expColor}`}
                     />
                     <ClockPickerField
-                      value={b.expiryTime || "06:00 PM"}
+                      value={b.expiryTime || DEFAULT_EXPIRY_TIME}
                       onChange={(v) => {
                         const patch: Partial<Batch> = { expiryTime: v };
                         if (b.expiryDate) {
@@ -1043,6 +1027,19 @@ export default function InventoryStockAdjustment() {
     setFormRows((rows) => rows.map((r, idx) => idx === i ? { ...r, ...patch } : r));
   }
 
+  function setRemoveWeight(i: number, part: "kg" | "grams", value: string) {
+    const row = formRows[i];
+    if (!row) return;
+    const removeKg = part === "kg" ? value : row.removeKg;
+    const removeGrams = part === "grams" ? value : row.removeGrams;
+    const quantityKg = (Number(removeKg) || 0) + (Number(removeGrams) || 0) / 1000;
+    updateRow(i, {
+      removeKg,
+      removeGrams,
+      removeQuantity: removeKg === "" && removeGrams === "" ? "" : quantityKg.toFixed(3),
+    });
+  }
+
   function selectProduct(i: number, p: Product) {
     // Only pass this product's own batches so the sequence counter is per-product.
     const productBatches: Batch[] = p.batches ?? [];
@@ -1052,7 +1049,7 @@ export default function InventoryStockAdjustment() {
       productId: p.id, productName: p.name, category: p.category || "",
       unit: p.unit, quantityBefore: p.quantity, search: p.name,
       addQuantity: "",
-      rawWeight: "", cleanedWeight: "", removeQuantity: "",
+      rawWeight: "", cleanedWeight: "", removeQuantity: "", removeKg: "", removeGrams: "",
       batchNumber: r.mode === "add" ? autoNum : "",
       batchNotes: "",
       selectedBatchId: "",
@@ -1062,7 +1059,7 @@ export default function InventoryStockAdjustment() {
   function clearProduct(i: number) {
     updateRow(i, {
       productId: "", productName: "", category: "", unit: "", quantityBefore: 0, search: "",
-      addQuantity: "", rawWeight: "", cleanedWeight: "", removeQuantity: "",
+      addQuantity: "", rawWeight: "", cleanedWeight: "", removeQuantity: "", removeKg: "", removeGrams: "",
       batchNumber: "", selectedBatchId: "",
     });
   }
@@ -1070,7 +1067,7 @@ export default function InventoryStockAdjustment() {
   function onSearchChange(i: number, val: string) {
     updateRow(i, {
       search: val, productId: "", productName: "", category: "", unit: "", quantityBefore: 0,
-      addQuantity: "", rawWeight: "", cleanedWeight: "", removeQuantity: "",
+      addQuantity: "", rawWeight: "", cleanedWeight: "", removeQuantity: "", removeKg: "", removeGrams: "",
       batchNumber: "", selectedBatchId: "",
     });
   }
@@ -1093,6 +1090,8 @@ export default function InventoryStockAdjustment() {
       cleanedWeight: mode === "add" ? row.cleanedWeight : "",
       addQuantity: mode === "remove" ? "" : row.addQuantity,
       removeQuantity: mode === "remove" ? row.removeQuantity : "",
+      removeKg: mode === "remove" ? row.removeKg : "",
+      removeGrams: mode === "remove" ? row.removeGrams : "",
     });
   }
 
@@ -1197,7 +1196,7 @@ export default function InventoryStockAdjustment() {
                 yieldPercentage: Number(r.cleanedWeight) / Number(r.rawWeight) * 100,
                 shelfLifeDays: r.shelfLifeDays !== "" ? Number(r.shelfLifeDays) : undefined,
                 expiryDate: r.expiryDate
-                  ? (r.expiryTime ? `${r.expiryDate}T${to24hTime(r.expiryTime)}:00+05:30` : r.expiryDate)
+                  ? `${r.expiryDate}T${to24hTime(r.expiryTime || DEFAULT_EXPIRY_TIME)}:00+05:30`
                   : undefined,
                 batchNumber: r.batchNumber || undefined,
                 notes: r.batchNotes || undefined,
@@ -1287,6 +1286,7 @@ export default function InventoryStockAdjustment() {
                 const isAdd = row.mode === "add";
                 const isAddExisting = row.mode === "add_existing";
                 const isAddAny = isAdd || isAddExisting;
+                const isWeightReduction = row.mode === "remove" && isKilogramUnit(row.unit);
                 const isBigFish = isBigFishRow(row);
                 const dLeft = isAdd ? daysUntil(row.expiryDate) : null;
                 const expTone = dLeft == null ? "text-gray-400"
@@ -1382,22 +1382,49 @@ export default function InventoryStockAdjustment() {
                         {/* Quantity */}
                         <div className="col-span-6 md:col-span-2 space-y-1">
                           <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                            {isAdd ? `Final Weight (${row.unit || "unit"})` : "Quantity"}
+                            {isAdd ? `Final Weight (${row.unit || "unit"})` : isWeightReduction ? "Weight to reduce" : `Quantity (${row.unit || "unit"})`}
                           </label>
-                          <input
-                            type="number" min="0"
-                            value={isAddAny ? row.addQuantity : row.removeQuantity}
-                            onChange={(e) => updateRow(idx, isAddAny ? { addQuantity: e.target.value, cleanedWeight: isAdd ? e.target.value : row.cleanedWeight } : { removeQuantity: e.target.value })}
-                            placeholder={isAdd ? "From cleaned weight" : "0"}
-                            readOnly={isAdd}
-                            className={`w-full h-9 px-3 text-sm font-bold text-[#162B4D] text-center border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-[#364F9F]/20 focus:border-[#364F9F] ${isAdd ? "bg-emerald-50/60" : "bg-white"}`}
-                          />
+                          {isWeightReduction ? (
+                            <div className="grid grid-cols-2 gap-1.5">
+                              <div className="relative">
+                                <input
+                                  type="number" min="0" step="any"
+                                  value={row.removeKg}
+                                  onChange={(e) => setRemoveWeight(idx, "kg", e.target.value)}
+                                  placeholder="0"
+                                  aria-label={`Kilograms to reduce for ${row.productName}`}
+                                  className="w-full h-9 px-2 pr-7 text-sm font-bold text-[#162B4D] text-center border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-[#364F9F]/20 focus:border-[#364F9F] bg-white"
+                                />
+                                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-500">kg</span>
+                              </div>
+                              <div className="relative">
+                                <input
+                                  type="number" min="0" step="1"
+                                  value={row.removeGrams}
+                                  onChange={(e) => setRemoveWeight(idx, "grams", e.target.value)}
+                                  placeholder="0"
+                                  aria-label={`Grams to reduce for ${row.productName}`}
+                                  className="w-full h-9 px-2 pr-6 text-sm font-bold text-[#162B4D] text-center border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-[#364F9F]/20 focus:border-[#364F9F] bg-white"
+                                />
+                                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-500">g</span>
+                              </div>
+                            </div>
+                          ) : (
+                            <input
+                              type="number" min="0" step={isKilogramUnit(row.unit) ? "0.001" : "any"}
+                              value={isAddAny ? row.addQuantity : row.removeQuantity}
+                              onChange={(e) => updateRow(idx, isAddAny ? { addQuantity: e.target.value, cleanedWeight: isAdd ? e.target.value : row.cleanedWeight } : { removeQuantity: e.target.value })}
+                              placeholder={isAdd ? "From cleaned weight" : "0"}
+                              readOnly={isAdd}
+                              className={`w-full h-9 px-3 text-sm font-bold text-[#162B4D] text-center border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-[#364F9F]/20 focus:border-[#364F9F] ${isAdd ? "bg-emerald-50/60" : "bg-white"}`}
+                            />
+                          )}
                         </div>
 
                          {/* Conditional fields */}
                         {isAdd ? (
                           <>
-                            {/* Expiry takes the former batch-price position in the row */}
+                            {/* New batch expiry and shelf life */}
                             <div className="col-span-6 md:col-span-2 space-y-1">
                               <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Expiry Date &amp; Time</label>
                               <input
@@ -1439,16 +1466,10 @@ export default function InventoryStockAdjustment() {
                                 <BatchSelector
                                   batches={prodBatches}
                                   unit={row.unit}
-                                  defaultPrice={prod?.price ?? 0}
                                   selectedBatchId={row.selectedBatchId}
                                   onSelect={(batchId) => updateRow(idx, { selectedBatchId: batchId })}
                                   mode={isAddExisting ? "add_existing" : "remove"}
                                 />
-                                {row.selectedBatchId && (
-                                  <p className="text-[10px] text-gray-400">
-                                    Batch price: <span className="font-bold text-[#162B4D]">₹{Number(prodBatches.find((b) => b.id === row.selectedBatchId)?.price ?? prod?.price ?? 0).toLocaleString("en-IN")} / {row.unit}</span>
-                                  </p>
-                                )}
                               </>
                             ) : (
                               <div className="h-9 px-3 flex items-center text-xs text-gray-400 border border-dashed border-gray-200 rounded-lg">
@@ -1549,7 +1570,6 @@ export default function InventoryStockAdjustment() {
                         <ExistingBatchesCard
                           batches={prodBatches}
                           unit={row.unit}
-                          defaultPrice={prod?.price ?? 0}
                           productId={row.productId}
                           subHubId={selectedSubHubId}
                           onReload={reload}

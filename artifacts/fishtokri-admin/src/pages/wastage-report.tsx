@@ -42,6 +42,21 @@ function fmtDateTime(iso: string | null) {
 function fmtRupees(n: number) {
   return `₹${(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 }
+function formatWastageQuantity(value: number, unit?: string) {
+  const quantity = Number(value);
+  if (!Number.isFinite(quantity)) return "—";
+  if (/kg|kilogram/i.test(unit ?? "")) {
+    const totalGrams = Math.round(Math.abs(quantity) * 1000);
+    if (totalGrams === 0) return "0 g";
+    const kilograms = Math.floor(totalGrams / 1000);
+    const grams = totalGrams % 1000;
+    const sign = quantity < 0 ? "-" : "";
+    if (kilograms > 0 && grams > 0) return `${sign}${kilograms} kg ${grams} g`;
+    if (kilograms > 0) return `${sign}${kilograms} kg`;
+    return `${sign}${grams} g`;
+  }
+  return quantity.toLocaleString("en-IN", { maximumFractionDigits: 3 });
+}
 function isoToMs(iso: string | null) {
   if (!iso) return 0;
   return new Date(iso).getTime() || 0;
@@ -649,7 +664,7 @@ export default function WastageReportPage() {
                               <TypeBadge type={r.type} />
                             </td>
                             <td style={{ padding: "10px 14px", textAlign: "right", fontWeight: 700, color: "#dc2626", fontSize: 14 }}>
-                              {(r.quantity ?? 0).toLocaleString("en-IN")}
+                              {formatWastageQuantity(r.quantity ?? 0, r.unit)}
                             </td>
                             <td style={{ padding: "10px 14px", textAlign: "right", fontWeight: 700, color: "#111", whiteSpace: "nowrap" }}>
                               {r.totalPrice > 0 ? fmtRupees(r.totalPrice) : <span style={{ color: "#bbb" }}>—</span>}
