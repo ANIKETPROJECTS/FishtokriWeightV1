@@ -554,14 +554,21 @@ router.get("/movements", async (req, res) => {
     }
 
     const enriched = rows.map((r: any) => {
-      if (!r.orderId) return r;
+      const batchNumbers = [...new Set(
+        [r.batchNumbers, r.batchNumber]
+          .flatMap((value: any) => Array.isArray(value) ? value : [value])
+          .filter((value: any) => typeof value === "string" && value.trim())
+          .map((value: string) => value.trim())
+      )].join(", ");
+      const movement = batchNumbers ? { ...r, batchNumbers } : r;
+      if (!r.orderId) return movement;
       const raw = customerMap.get(String(r.orderId));
-      if (!raw) return r;
+      if (!raw) return movement;
       try {
         const { customerName, invoiceId } = JSON.parse(raw);
-        return { ...r, customerName: customerName || undefined, invoiceId: invoiceId || undefined };
+        return { ...movement, customerName: customerName || undefined, invoiceId: invoiceId || undefined };
       } catch {
-        return { ...r, customerName: raw || undefined };
+        return { ...movement, customerName: raw || undefined };
       }
     });
 
