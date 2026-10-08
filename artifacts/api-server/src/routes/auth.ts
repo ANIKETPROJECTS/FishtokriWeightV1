@@ -61,6 +61,7 @@ function publicSettings(settings: any) {
       ...DEFAULT_INVOICE_HEADER,
       ...(settings.invoiceHeader?.toObject?.() ?? settings.invoiceHeader ?? {}),
     },
+    weighingMode: settings.weighingMode === "automated" ? "automated" : "manual",
   };
 }
 
@@ -194,6 +195,15 @@ router.get("/invoice-header", requireAuth as any, async (_req, res) => {
   }
 });
 
+router.get("/pos-settings", requireAuth as any, async (_req, res) => {
+  try {
+    const settings = await getMasterAdminSettings();
+    res.json({ weighingMode: publicSettings(settings).weighingMode });
+  } catch {
+    res.status(500).json({ error: "InternalError", message: "Could not load POS settings" });
+  }
+});
+
 const settingsSchema = z.object({
   name: z.string().trim().min(1).max(100),
   email: z.string().trim().email().max(200),
@@ -206,6 +216,7 @@ const settingsSchema = z.object({
     gstNumber: z.string().trim().max(40),
     fssaiNumber: z.string().trim().max(40),
   }).optional(),
+  weighingMode: z.enum(["manual", "automated"]).default("manual"),
   currentPassword: z.string().min(1).max(200),
   newPassword: z.string().max(200).optional(),
 });
@@ -227,6 +238,7 @@ router.put("/master-admin/settings", requireAuth as any, requireMasterAdmin as a
     if (parsed.data.recoveryEmail) settings.recoveryEmail = parsed.data.recoveryEmail.toLowerCase();
     if (parsed.data.newPassword) settings.passwordHash = await bcrypt.hash(parsed.data.newPassword, 12);
     if (parsed.data.invoiceHeader) settings.invoiceHeader = parsed.data.invoiceHeader;
+    settings.weighingMode = parsed.data.weighingMode;
     await settings.save();
     const primaryHub = await getPrimaryHub();
     if (primaryHub) {

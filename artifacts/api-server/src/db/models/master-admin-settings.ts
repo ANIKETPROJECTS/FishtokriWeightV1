@@ -19,6 +19,7 @@ const masterAdminSettingsSchema = new mongoose.Schema(
     recoveryEmail: { type: String, required: true, lowercase: true, trim: true },
     passwordHash: { type: String, required: true },
     invoiceHeader: { type: invoiceHeaderSchema, default: () => ({}) },
+    weighingMode: { type: String, enum: ["manual", "automated"], default: "manual" },
   },
   { timestamps: true }
 );

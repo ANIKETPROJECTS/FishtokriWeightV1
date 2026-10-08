@@ -1003,12 +1003,33 @@ export default function Orders() {
     grams: string;
     partNote: string;
   }[]>([]);
+  const [weighingMode, setWeighingMode] = useState<"manual" | "automated">("manual");
   const [editingWeighedItem, setEditingWeighedItem] = useState<{
     productId: string;
     kg: string;
     grams: string;
     partNote: string;
   } | null>(null);
+
+  useEffect(() => {
+    if (!isCreatePage) return;
+    let active = true;
+    apiFetch("/api/auth/pos-settings")
+      .then((data) => {
+        if (!active) return;
+        setWeighingMode(data.weighingMode === "automated" ? "automated" : "manual");
+      })
+      .catch((error: any) => {
+        if (!active) return;
+        setWeighingMode("manual");
+        toast({
+          title: "Could not load POS weighing mode",
+          description: `${error?.message || "The saved setting could not be read."} Manual weight entry remains available.`,
+          variant: "destructive",
+        });
+      });
+    return () => { active = false; };
+  }, [isCreatePage, toast]);
 
   useEffect(() => {
     if (editingWeighedItem && !selectedProducts.some((item) => item.productId === editingWeighedItem.productId)) {
@@ -4470,6 +4491,7 @@ export default function Orders() {
                     const isBigFishSelector = Boolean(p.isDemoBigFishSelector);
                     const selectedForCard = cartItems.length > 0 || isInWeighQueue;
                     const weightBased = isWeightBasedProduct(p);
+                    const machineRequired = weightBased && weighingMode === "automated";
                     const stock = Number(p.quantity) || 0;
                      const rawUnit = String(p.unit || "kg").trim() || "kg";
                      const stockUnit = /kg/i.test(rawUnit) ? "kg" : rawUnit;
@@ -4482,6 +4504,8 @@ export default function Orders() {
                         className={`relative rounded-xl border-2 transition-all select-none flex flex-col ${
                           outOfStock
                             ? "border-gray-100 bg-gray-50 opacity-40 cursor-not-allowed"
+                            : machineRequired
+                              ? "border-amber-200 bg-amber-50/40 cursor-not-allowed"
                             : selectedForCard
                               ? "border-[#1A56DB] bg-blue-50/60 shadow-md shadow-blue-100 cursor-pointer"
                               : "border-gray-200 bg-white hover:border-[#1A56DB]/60 hover:shadow-md cursor-pointer"
@@ -4489,6 +4513,14 @@ export default function Orders() {
                         onClick={() => {
                           if (outOfStock) { toast({ title: "Out of stock", description: `${p.name} is unavailable.`, variant: "destructive" }); return; }
                           if (weightBased) {
+                            if (weighingMode === "automated") {
+                              toast({
+                                title: "Connect weighing machine",
+                                description: "Automated weighing is selected, but no machine is connected yet. Connect a machine or switch to Manual weight entry in Hub Settings.",
+                                variant: "destructive",
+                              });
+                              return;
+                            }
                             const existingFishLine = selectedProducts.find((item) => item.productId === pid);
                             setScaleEntries((current) => current.some((entry) => entry.productId === pid)
                               ? current.filter((entry) => entry.productId !== pid)
@@ -4576,7 +4608,7 @@ export default function Orders() {
                 </div>
               )}
             </div>
-            {selectedSubHubId && (
+            {selectedSubHubId && (weighingMode === "manual" ? (
               <section className="mx-4 mb-4 shrink-0 rounded-xl border border-dashed border-[#F1A59D] bg-[#FFF8F6] p-3" data-testid="section-test-weighing-scale">
                 <div className="flex items-start gap-2">
                   <div className="flex h-10 w-12 shrink-0 items-center justify-center rounded-md border-2 border-black bg-white p-1">
@@ -4725,7 +4757,22 @@ export default function Orders() {
                   </div>
                 )}
               </section>
-            )}
+            ) : (
+              <section className="mx-4 mb-4 shrink-0 rounded-xl border border-dashed border-[#F1A59D] bg-[#FFF8F6] p-3" data-testid="section-automated-weighing">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-12 shrink-0 items-center justify-center rounded-md border-2 border-black bg-white p-1">
+                    <img src={foodScaleIcon} alt="" className="h-full w-full object-contain" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-lg font-bold leading-6 text-black">Automated weighing selected</h3>
+                    <p className="text-sm leading-5 text-black">Connect machine to capture product weights automatically.</p>
+                  </div>
+                </div>
+                <div className="mt-3 rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm text-black">
+                  <span className="font-bold">Connect machine:</span> no weighing machine is connected yet, so weight-based products cannot be added in automated mode.
+                </div>
+              </section>
+            ))}
           </div>
 
           {/* ── RIGHT: ORDER PANEL — split: customer/schedule | cart ── */}

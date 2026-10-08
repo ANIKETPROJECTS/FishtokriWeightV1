@@ -7,11 +7,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DEFAULT_INVOICE_HEADER, type InvoiceHeaderSettings } from "@/lib/invoice-header";
 
+type WeighingMode = "manual" | "automated";
+
 type Settings = {
   name: string;
   email: string;
   hub: { id: string; name: string; location: string; superHubName: string } | null;
   invoiceHeader: InvoiceHeaderSettings;
+  weighingMode: WeighingMode;
 };
 
 function getToken() {
@@ -81,6 +84,7 @@ export default function SettingsPage() {
     currentPassword: "",
     newPassword: "",
     invoiceHeader: { ...DEFAULT_INVOICE_HEADER },
+    weighingMode: "manual" as WeighingMode,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -96,6 +100,7 @@ export default function SettingsPage() {
           name: next.name || "",
           email: next.email || "",
           invoiceHeader: { ...DEFAULT_INVOICE_HEADER, ...(next.invoiceHeader || {}) },
+          weighingMode: next.weighingMode === "automated" ? "automated" : "manual",
         }));
       })
       .catch((error) => toast({ title: "Could not load Hub Settings", description: error.message, variant: "destructive" }))
@@ -104,6 +109,10 @@ export default function SettingsPage() {
 
   const update = (field: keyof typeof form, value: string) => {
     setForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const updateWeighingMode = (weighingMode: WeighingMode) => {
+    setForm((current) => ({ ...current, weighingMode }));
   };
 
   const updateInvoiceHeader = (field: keyof InvoiceHeaderSettings, value: string) => {
@@ -138,14 +147,14 @@ export default function SettingsPage() {
       {headerSlot && createPortal(
         <div className="min-w-0">
           <h1 className="text-sm font-bold text-white leading-tight">Hub Settings</h1>
-          <p className="text-[11px] text-white/75 leading-tight hidden sm:block">Manage hub identity and access</p>
+          <p className="text-[11px] text-white/75 leading-tight hidden sm:block">Hub identity, POS weighing and access</p>
         </div>,
         headerSlot,
       )}
 
       <div>
         <h2 className="text-2xl font-bold text-[#162B4D]">Hub Settings</h2>
-        <p className="text-gray-500 text-sm mt-1">Rename the operating hub and manage the credentials used to log in.</p>
+        <p className="text-gray-500 text-sm mt-1">Manage hub identity, POS weighing, invoice details and admin access.</p>
       </div>
 
       {loading ? (
@@ -195,6 +204,47 @@ export default function SettingsPage() {
               />
               <p className="text-xs text-gray-400">Use at least 8 characters. The eye icon only reveals what you typed.</p>
             </div>
+          </div>
+
+          <div className="border-t border-gray-100 pt-5">
+            <fieldset>
+              <legend className="font-semibold text-[#162B4D]">POS weighing mode</legend>
+              <p className="mt-1 text-sm text-gray-500">Choose how the POS handles products sold by weight.</p>
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                <label className={`flex cursor-pointer items-start gap-3 rounded-lg border p-4 transition-colors ${form.weighingMode === "manual" ? "border-[#1A56DB] bg-blue-50" : "border-gray-200 bg-white hover:border-[#1A56DB]/50"}`}>
+                  <input
+                    type="radio"
+                    name="weighingMode"
+                    value="manual"
+                    checked={form.weighingMode === "manual"}
+                    onChange={() => updateWeighingMode("manual")}
+                    disabled={saving}
+                    className="mt-1 accent-[#1A56DB]"
+                    data-testid="radio-weighing-mode-manual"
+                  />
+                  <span>
+                    <span className="block font-semibold text-[#162B4D]">Manual weight entry</span>
+                    <span className="mt-1 block text-sm text-gray-600">Show the POS weighing panel with kilogram and gram inputs.</span>
+                  </span>
+                </label>
+                <label className={`flex cursor-pointer items-start gap-3 rounded-lg border p-4 transition-colors ${form.weighingMode === "automated" ? "border-[#1A56DB] bg-blue-50" : "border-gray-200 bg-white hover:border-[#1A56DB]/50"}`}>
+                  <input
+                    type="radio"
+                    name="weighingMode"
+                    value="automated"
+                    checked={form.weighingMode === "automated"}
+                    onChange={() => updateWeighingMode("automated")}
+                    disabled={saving}
+                    className="mt-1 accent-[#1A56DB]"
+                    data-testid="radio-weighing-mode-automated"
+                  />
+                  <span>
+                    <span className="block font-semibold text-[#162B4D]">Automated machine</span>
+                    <span className="mt-1 block text-sm text-gray-600">Hide manual weight inputs. The POS will show a connect-machine notice; machine integration is not active yet.</span>
+                  </span>
+                </label>
+              </div>
+            </fieldset>
           </div>
 
           <div className="border-t border-gray-100 pt-5 space-y-4">
