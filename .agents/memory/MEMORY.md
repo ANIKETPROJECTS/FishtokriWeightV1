@@ -15,3 +15,4 @@
 - [POS takeaway reporting](pos-takeaway-reporting.md) — walk-in sales may omit name/phone; preserve customer creation for complete details and count sales by creation date.
 - [POS weight overage](pos-weight-based-overage.md) — normal takeaway sales for any kg-priced POS product may bill up to 1 kg above stock while logging the excess.
 - [Day-end preorder inclusion](day-end-report-preorders.md) — paid confirmed preorders count as sales before handover and must not be status-filtered out of the report.
+- [Single-hub product scope](single-hub-product-scope.md) — treat FishTokri operations as one hub unless the user explicitly asks otherwise.
