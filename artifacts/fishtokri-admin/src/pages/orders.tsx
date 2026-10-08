@@ -192,32 +192,7 @@ function SolidStatusBadge({ status, deliveryType, orderType }: { status: string;
   );
 }
 
-function modeDisplayLabel(mode: string, upiVariant?: string): string {
-  const m = String(mode).toLowerCase().trim();
-  if (m === "upi" && upiVariant) return String(upiVariant).trim();
-  if (m === "upi") return "UPI";
-  if (m === "card") return "Card";
-  if (m === "wallet") return "Wallet";
-  if (m === "cash" || m === "cod" || m === "") return "COD";
-  return m.toUpperCase();
-}
-
-function combinedPaymentLabel(order: any): string {
-  const pays: any[] = Array.isArray(order?.payments) ? order.payments : [];
-  const modes = pays.map((p: any) => String(p?.mode || "").toLowerCase().trim()).filter(Boolean);
-  const hasWallet = modes.includes("wallet");
-  const nonWallet = [...new Set(modes.filter(m => m !== "wallet"))];
-
-  if (hasWallet && nonWallet.length > 0) {
-    const otherLabels = nonWallet.map(m => modeDisplayLabel(m, order?.upiVariant));
-    return "Wallet + " + otherLabels.join(" + ");
-  }
-  // Fall back to paymentMode field
-  const rawMode = String(order?.paymentMode || modes[0] || "").toLowerCase().trim();
-  return modeDisplayLabel(rawMode, order?.upiVariant);
-}
-
-/** Returns one of the 7 composite-mode keys used by the change-mode dropdown. */
+/** Returns the composite key used by the payment-mode filter. */
 function orderPaymentModeKey(order: any): string {
   const pays: any[] = Array.isArray(order?.payments) ? order.payments : [];
   const modes = pays.map((p: any) => String(p?.mode || "").toLowerCase().trim()).filter(Boolean);
@@ -234,25 +209,6 @@ function orderPaymentModeKey(order: any): string {
   if (raw === "cash" || raw === "cod" || raw === "") return "cod";
   return raw; // upi | card | etc.
 }
-
-/** Does the given mode key involve a UPI leg? */
-function modeHasUpi(modeKey: string): boolean {
-  return modeKey === "upi" || modeKey === "wallet+upi";
-}
-
-function PaymentBadge({ order }: { order: any }) {
-  return <span className="text-xs font-medium text-black">{combinedPaymentLabel(order)}</span>;
-}
-
-const CHANGE_PAYMENT_MODES = [
-  { value: "cod",         label: "COD" },
-  { value: "upi",         label: "UPI" },
-  { value: "wallet",      label: "Wallet" },
-  { value: "card",        label: "Card" },
-  { value: "wallet+cod",  label: "Wallet + COD" },
-  { value: "wallet+upi",  label: "Wallet + UPI" },
-  { value: "wallet+card", label: "Wallet + Card" },
-];
 
 function formatTime12(t: string): string {
   const str = String(t).trim();
@@ -880,8 +836,6 @@ export default function Orders() {
   const [upiVariantInput, setUpiVariantInput] = useState("");
   const [editingVariant, setEditingVariant] = useState<string | null>(null);
   const [editVariantValue, setEditVariantValue] = useState("");
-  const [assigningVariantOrderId, setAssigningVariantOrderId] = useState<string | null>(null);
-  const [changingPayModeOrderId, setChangingPayModeOrderId] = useState<string | null>(null);
 
   // Payment Types
   const [customPaymentTypes, setCustomPaymentTypes] = useState<string[]>([]);
@@ -2464,102 +2418,7 @@ export default function Orders() {
       .catch(() => {});
   }, []);
 
-  // UPI Variant management functions
-  const assignUpiVariant = async (orderId: string, variant: string) => {
-    setAssigningVariantOrderId(orderId);
-    try {
-      await apiFetch(`/api/orders/${orderId}`, { method: "PUT", body: JSON.stringify({ upiVariant: variant || null }) });
-      setOrders((prev) => prev.map((o) => String(o._id) === orderId ? { ...o, upiVariant: variant || undefined } : o));
-      setSelectedOrder((o: any) => o && String(o._id) === orderId ? { ...o, upiVariant: variant || undefined } : o);
-    } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
-    } finally { setAssigningVariantOrderId(null); }
-  };
-
-  const changePaymentMode = async (orderId: string, modeKey: string) => {
-    const order = orders.find((o) => String(o._id) === orderId);
-    if (!order) return;
-    setChangingPayModeOrderId(orderId);
-    try {
-      const total = Number(order.total) || 0;
-      // Preserve existing wallet amount when switching to a combo mode
-      const existingWallet = (() => {
-        const pays: any[] = Array.isArray(order.payments) ? order.payments : [];
-        const wEntry = pays.find((p: any) => String(p?.mode || "").toLowerCase() === "wallet");
-        return wEntry ? Number(wEntry.amount) || 0 : Number(order.walletUsed) || 0;
-      })();
-
-      let paymentMode = "";
-      let walletUsed = 0;
-      let payments: { mode: string; amount: number; reference: string }[] = [];
-
-      switch (modeKey) {
-        case "cod":
-          paymentMode = "cash";
-          payments = [{ mode: "cash", amount: total, reference: "" }];
-          break;
-        case "upi":
-          paymentMode = "upi";
-          payments = [{ mode: "upi", amount: total, reference: "" }];
-          break;
-        case "wallet":
-          paymentMode = "wallet";
-          walletUsed = total;
-          payments = [{ mode: "wallet", amount: total, reference: "" }];
-          break;
-        case "card":
-          paymentMode = "card";
-          payments = [{ mode: "card", amount: total, reference: "" }];
-          break;
-        case "wallet+cod": {
-          const wAmt = existingWallet > 0 ? Math.min(existingWallet, total) : 0;
-          paymentMode = "wallet";
-          walletUsed = wAmt;
-          payments = [
-            { mode: "wallet", amount: wAmt, reference: "" },
-            { mode: "cash", amount: Math.max(0, total - wAmt), reference: "" },
-          ];
-          break;
-        }
-        case "wallet+upi": {
-          const wAmt = existingWallet > 0 ? Math.min(existingWallet, total) : 0;
-          paymentMode = "wallet";
-          walletUsed = wAmt;
-          payments = [
-            { mode: "wallet", amount: wAmt, reference: "" },
-            { mode: "upi", amount: Math.max(0, total - wAmt), reference: "" },
-          ];
-          break;
-        }
-        case "wallet+card": {
-          const wAmt = existingWallet > 0 ? Math.min(existingWallet, total) : 0;
-          paymentMode = "wallet";
-          walletUsed = wAmt;
-          payments = [
-            { mode: "wallet", amount: wAmt, reference: "" },
-            { mode: "card", amount: Math.max(0, total - wAmt), reference: "" },
-          ];
-          break;
-        }
-        default:
-          paymentMode = modeKey;
-          payments = [{ mode: modeKey, amount: total, reference: "" }];
-      }
-
-      await apiFetch(`/api/orders/${orderId}`, {
-        method: "PUT",
-        body: JSON.stringify({ paymentMode, payments, walletUsed, paymentStatus: "paid" }),
-      });
-      const updates = { paymentMode, payments, walletUsed, paymentStatus: "paid" };
-      setOrders((prev) => prev.map((o) => String(o._id) === orderId ? { ...o, ...updates } : o));
-      setSelectedOrder((o: any) => o && String(o._id) === orderId ? { ...o, ...updates } : o);
-    } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
-    } finally {
-      setChangingPayModeOrderId(null);
-    }
-  };
-
+  // UPI variant and payment type management functions
   const addUpiVariant = async () => {
     const name = upiVariantInput.trim();
     if (!name) return;
@@ -3693,19 +3552,17 @@ export default function Orders() {
           <div className="overflow-x-auto">
              <table className="w-full table-fixed text-sm">
                <colgroup>
-                 <col className="w-[26%]" />
-                 <col className="w-[25%]" />
-                 <col className="w-[12%]" />
-                 <col className="w-[16%]" />
-                 <col className="w-[12%]" />
-                 <col className="w-[9%]" />
+                  <col className="w-[25%]" />
+                  <col className="w-[27%]" />
+                  <col className="w-[13%]" />
+                  <col className="w-[18%]" />
+                  <col className="w-[17%]" />
                </colgroup>
               <thead>
                 <tr className="bg-white border-b border-gray-200 text-xs font-semibold text-black uppercase tracking-wide">
                    <th className="px-3 py-4 text-left">Customer</th>
                    <th className="px-3 py-4 text-left">Items</th>
                    <th className="px-3 py-4 text-left">Total</th>
-                   <th className="px-3 py-4 text-left">Payment</th>
                    <th className="px-3 py-4 text-left">Status</th>
                   <th className="px-3 py-4 text-center">Actions</th>
                 </tr>
@@ -3753,36 +3610,6 @@ export default function Orders() {
                           const walletAmt = walletEntry ? Number(walletEntry.amount) || 0 : 0;
                           return walletAmt > 0 ? <p className="text-xs text-[#364F9F] font-medium">−{formatRupees(walletAmt)} wallet</p> : null;
                         })()}
-                      </td>
-                       <td className="px-3 py-4 align-top">
-                        {/* Payment mode change dropdown */}
-                        <select
-                          value={orderPaymentModeKey(o)}
-                          disabled={changingPayModeOrderId === String(o._id)}
-                          onChange={(e) => changePaymentMode(String(o._id), e.target.value)}
-                          className="text-[10px] border border-gray-200 rounded px-1.5 py-0.5 text-gray-700 bg-white cursor-pointer hover:border-blue-300 transition-colors max-w-[120px] font-medium"
-                        >
-                          {CHANGE_PAYMENT_MODES.map((m) => (
-                            <option key={m.value} value={m.value}>{m.label}</option>
-                          ))}
-                          {customPaymentTypes.map((t) => (
-                            <option key={`custom_${t}`} value={`custom_${t}`}>{t}</option>
-                          ))}
-                        </select>
-                        {/* UPI variant sub-dropdown for UPI and Wallet+UPI modes */}
-                        {modeHasUpi(orderPaymentModeKey(o)) && (
-                          <div className="mt-1">
-                            <select
-                              value={o.upiVariant || ""}
-                              disabled={assigningVariantOrderId === String(o._id)}
-                              onChange={(e) => assignUpiVariant(String(o._id), e.target.value)}
-                              className="text-[10px] border border-gray-200 rounded px-1.5 py-0.5 text-gray-600 bg-white cursor-pointer hover:border-blue-300 transition-colors max-w-[120px]"
-                            >
-                              <option value="">— type —</option>
-                              {upiVariants.map((v) => <option key={v} value={v}>{v}</option>)}
-                            </select>
-                          </div>
-                        )}
                       </td>
                         <td className="px-3 py-4 align-top">
                           <SolidStatusBadge status={o.status} deliveryType={o.deliveryType} orderType={o.orderType} />
