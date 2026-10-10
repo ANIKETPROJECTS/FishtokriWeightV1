@@ -307,8 +307,8 @@ export default function Dashboard() {
             <Package className="h-4 w-4 text-emerald-600" />
           </div>
           <div>
-            <h2 className="text-sm font-bold text-[#162B4D]">Top Selling Products</h2>
-            <p className="mt-0.5 text-xs text-gray-500">Completed POS item value before discounts · last 7 days</p>
+            <h2 className="text-sm font-bold text-[#162B4D]">Past 7 Days — Total Sold</h2>
+            <p className="mt-0.5 text-xs text-gray-500">Completed POS quantity, orders, and item value by product</p>
           </div>
         </div>
         {loading ? (
