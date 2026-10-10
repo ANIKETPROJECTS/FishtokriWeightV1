@@ -955,20 +955,40 @@ router.get("/stats", async (req: ScopedRequest, res) => {
       orderId: { $regex: /^#?FTS/i },
       deliveryType: "takeaway",
     };
-    const [todayPosSales, activePreorderSales] = await Promise.all([
-      conn.db.collection(COLLECTION).countDocuments({
+    const todayPosSalesFilter = {
         ...posInvoiceClause,
         orderType: { $ne: "preorder" },
         status: { $in: ["takeaway", "handed_over"] },
         createdAt: { $gte: todayStart, $lt: tomorrowStart },
-      }),
+    };
+    const [todayPosSales, activePreorderSales, todayPosSalesAmountRows] = await Promise.all([
+      conn.db.collection(COLLECTION).countDocuments(todayPosSalesFilter),
       conn.db.collection(COLLECTION).countDocuments({
         ...posInvoiceClause,
         orderType: "preorder",
         status: { $in: ACTIVE },
         deliveryDate: { $gt: todayISO },
       }),
+      conn.db.collection(COLLECTION).aggregate([
+        { $match: todayPosSalesFilter },
+        {
+          $group: {
+            _id: null,
+            total: {
+              $sum: {
+                $convert: {
+                  input: "$total",
+                  to: "double",
+                  onError: 0,
+                  onNull: 0,
+                },
+              },
+            },
+          },
+        },
+      ]).toArray(),
     ]);
+    const todayPosSalesAmount = Number(todayPosSalesAmountRows[0]?.total ?? 0);
 
     res.json({
       stats,
@@ -981,6 +1001,7 @@ router.get("/stats", async (req: ScopedRequest, res) => {
       preorderTotal,
       deletedTotal,
       todayPosSales,
+      todayPosSalesAmount,
       activePreorderSales,
     });
   } catch (err) {

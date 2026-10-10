@@ -1,29 +1,17 @@
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useLocation } from "wouter";
-import {
-  useGetStatsSummary,
-  getGetStatsSummaryQueryKey,
-  useGetSuperHubs,
-  getGetSuperHubsQueryKey,
-} from "@workspace/api-client-react";
-import {
-  Building2, MapPin, Users, Warehouse, Package, Settings2,
-  CheckCircle2, ShoppingBag, Clock,
-  XCircle, RefreshCw, Phone, User,
-  ArrowRight,
-} from "lucide-react";
+import { Clock, Package, RefreshCw, Settings2, ShoppingBag, Warehouse } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell,
-  AreaChart, Area, CartesianGrid,
-} from "recharts";
 
-// ─── HELPERS ──────────────────────────────────────────────────────────────────
-function getToken() { return localStorage.getItem("fishtokri_token") || ""; }
-function getBase() { return import.meta.env.BASE_URL?.replace(/\/$/, "") || ""; }
+function getToken() {
+  return localStorage.getItem("fishtokri_token") || "";
+}
+
+function getBase() {
+  return import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
+}
 
 async function apiFetch(path: string) {
   const res = await fetch(`${getBase()}${path}`, {
@@ -33,459 +21,205 @@ async function apiFetch(path: string) {
   return res.json();
 }
 
-function formatRupees(n: number) {
-  return `₹${Number(n || 0).toLocaleString("en-IN")}`;
-}
-function formatDate(d: any) {
-  if (!d) return "—";
-  return new Date(d).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
-}
-function istDateKey(value: any): string {
-  const date = value ? new Date(value) : null;
-  if (!date || Number.isNaN(date.getTime())) return "";
-  const ist = new Date(date.getTime() + 5.5 * 60 * 60 * 1000);
-  return `${ist.getUTCFullYear()}-${String(ist.getUTCMonth() + 1).padStart(2, "0")}-${String(ist.getUTCDate()).padStart(2, "0")}`;
-}
-function todayISTKey(): string {
-  return istDateKey(new Date());
+function formatRupees(value: number) {
+  return `₹${Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 }
 
-// ─── COLORS ───────────────────────────────────────────────────────────────────
-const HUB_COLORS   = ["#1A56DB", "#10B981", "#F59E0B", "#8B5CF6", "#EF4444"];
-
-const ORDER_STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; chart: string; icon: any }> = {
-  pending:          { label: "Awaiting Action", color: "text-amber-600",  bg: "bg-amber-50 border-amber-200",  chart: "#F59E0B", icon: Clock },
-  confirmed:        { label: "Confirmed",       color: "text-blue-600",   bg: "bg-blue-50 border-blue-200",    chart: "#1A56DB", icon: CheckCircle2 },
-  out_for_delivery: { label: "Ready for Handover", color: "text-indigo-600", bg: "bg-indigo-50 border-indigo-200", chart: "#6366F1", icon: CheckCircle2 },
-  delivered:        { label: "Handed Over",     color: "text-green-600",  bg: "bg-green-50 border-green-200",  chart: "#10B981", icon: CheckCircle2 },
-  takeaway:         { label: "Today's Sale",    color: "text-orange-600", bg: "bg-orange-50 border-orange-200", chart: "#F97316", icon: ShoppingBag },
-  cancelled:        { label: "Cancelled",       color: "text-red-500",    bg: "bg-red-50 border-red-200",      chart: "#EF4444", icon: XCircle },
-};
-
-// ─── CUSTOM TOOLTIP ───────────────────────────────────────────────────────────
-const CustomTooltip = ({ active, payload, label }: any) => {
-  if (active && payload && payload.length) {
-    return (
-      <div className="bg-white border border-gray-100 shadow-xl rounded-xl px-3 py-2.5 text-xs">
-        <p className="font-bold text-gray-700 mb-1.5">{label}</p>
-        {payload.map((p: any) => (
-          <p key={p.name} className="flex items-center gap-1.5 font-medium" style={{ color: p.color }}>
-            <span className="w-2 h-2 rounded-full" style={{ background: p.color }} />
-            {p.name}: <span className="text-gray-800 font-bold">{p.value}</span>
-          </p>
-        ))}
-      </div>
-    );
-  }
-  return null;
-};
-
-// ─── STAT CARD ────────────────────────────────────────────────────────────────
 function StatCard({
-  title, value, sub, icon: Icon, iconColor, iconBg, border, badge, badgeColor, loading,
+  title,
+  value,
+  description,
+  icon: Icon,
+  color,
+  background,
+  loading,
 }: {
-  title: string; value: string | number; sub: string;
-  icon: any; iconColor: string; iconBg: string; border: string;
-  badge?: string; badgeColor?: string; loading?: boolean;
+  title: string;
+  value: string | number;
+  description: string;
+  icon: typeof ShoppingBag;
+  color: string;
+  background: string;
+  loading: boolean;
 }) {
-  if (loading) return <Skeleton className="h-[108px] rounded-2xl" />;
+  if (loading) return <Skeleton className="h-32 rounded-2xl" />;
+
   return (
-    <div className={`bg-white rounded-2xl border ${border} shadow-sm p-5 flex flex-col gap-3`}>
-      <div className="flex items-start justify-between">
-        <div className={`w-10 h-10 rounded-xl ${iconBg} flex items-center justify-center flex-shrink-0`}>
-          <Icon className={`w-5 h-5 ${iconColor}`} />
-        </div>
-        {badge && (
-          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${badgeColor ?? "bg-green-50 text-green-600"}`}>
-            {badge}
-          </span>
-        )}
+    <div className="flex min-h-32 items-start gap-4 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+      <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${background}`}>
+        <Icon className={`h-5 w-5 ${color}`} />
       </div>
-      <div>
-        <p className="text-2xl font-extrabold text-[#162B4D] leading-none">{value}</p>
-        <p className="text-xs font-semibold text-gray-500 mt-1">{title}</p>
-        <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>
+      <div className="min-w-0">
+        <p className="text-2xl font-extrabold leading-tight text-[#162B4D]">{value}</p>
+        <p className="mt-1 text-sm font-semibold text-gray-600">{title}</p>
+        <p className="mt-0.5 text-xs text-gray-400">{description}</p>
       </div>
     </div>
   );
 }
 
-// ─── SECTION HEADER ───────────────────────────────────────────────────────────
-function SectionHeader({ icon: Icon, iconColor, title, action, onAction }: any) {
-  return (
-    <div className="flex items-center justify-between mb-5">
-      <div className="flex items-center gap-2">
-        <Icon className={`w-4 h-4 ${iconColor}`} />
-        <h3 className="text-sm font-bold text-[#162B4D]">{title}</h3>
-      </div>
-      {action && (
-        <button onClick={onAction} className="flex items-center gap-1 text-[11px] font-semibold text-[#1A56DB] hover:text-[#1447B4] bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg transition-colors">
-          {action} <ArrowRight className="w-3 h-3" />
-        </button>
-      )}
-    </div>
-  );
-}
-
-// ─── MAIN ─────────────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const [, navigate] = useLocation();
-  const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useGetStatsSummary(undefined, {
-    query: { queryKey: getGetStatsSummaryQueryKey() },
-  });
-  const { data: superHubsData, isLoading: hubsLoading, refetch: refetchHubs } = useGetSuperHubs(undefined, {
-    query: { queryKey: getGetSuperHubsQueryKey() },
-  });
+  const [loading, setLoading] = useState(true);
+  const [orderStats, setOrderStats] = useState<Record<string, number>>({});
+  const [todayPosOrders, setTodayPosOrders] = useState(0);
+  const [todayPosSales, setTodayPosSales] = useState(0);
+  const [activePreorders, setActivePreorders] = useState(0);
+  const [operatingHub, setOperatingHub] = useState<any | null>(null);
 
-  const [orderStats, setOrderStats]           = useState<Record<string, number>>({});
-  const [orderSummary, setOrderSummary]       = useState({ todayPosSales: 0, activePreorderSales: 0 });
-  const [recentOrders, setRecentOrders]       = useState<any[]>([]);
-  const [customers, setCustomers]             = useState<{ total: number }>({ total: 0 });
-  const [operatingHub, setOperatingHub]       = useState<any | null>(null);
-  const [extraLoading, setExtraLoading]       = useState(true);
-
-  const loadExtra = useCallback(async (silent = false) => {
-    if (!silent) setExtraLoading(true);
+  const loadDashboard = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
-      const [oStats, oRecent, cust, hubData] = await Promise.allSettled([
+      const [ordersResult, hubsResult] = await Promise.allSettled([
         apiFetch("/api/orders/stats"),
-        apiFetch("/api/orders?limit=6&sort=createdAt&order=desc"),
-        apiFetch("/api/customers?limit=1"),
         apiFetch("/api/sub-hubs"),
       ]);
-      if (oStats.status === "fulfilled") {
-        setOrderStats(oStats.value.stats ?? {});
-        setOrderSummary({
-          todayPosSales: Number(oStats.value.todayPosSales ?? 0),
-          activePreorderSales: Number(oStats.value.activePreorderSales ?? 0),
-        });
+
+      if (ordersResult.status === "fulfilled") {
+        const orders = ordersResult.value;
+        setOrderStats(orders.stats ?? {});
+        setTodayPosOrders(Number(orders.todayPosSales ?? 0));
+        setTodayPosSales(Number(orders.todayPosSalesAmount ?? 0));
+        setActivePreorders(Number(orders.activePreorderSales ?? 0));
       }
-      if (oRecent.status === "fulfilled")  setRecentOrders(oRecent.value.orders ?? []);
-      if (cust.status === "fulfilled")     setCustomers({ total: cust.value.total ?? 0 });
-      if (hubData.status === "fulfilled") {
-        const subHubs = hubData.value.subHubs ?? [];
+
+      if (hubsResult.status === "fulfilled") {
+        const subHubs = hubsResult.value.subHubs ?? [];
         setOperatingHub(
           subHubs.find((hub: any) => String(hub.name ?? "").toLowerCase().includes("thane")) ??
           subHubs[0] ??
           null,
         );
       }
-    } finally { setExtraLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  useEffect(() => { loadExtra(); }, [loadExtra]);
+  useEffect(() => {
+    void loadDashboard();
+  }, [loadDashboard]);
 
   useEffect(() => {
-    const id = setInterval(() => { loadExtra(true); refetchStats(); refetchHubs(); }, 5000);
-    return () => clearInterval(id);
-  }, [loadExtra, refetchStats, refetchHubs]);
+    const interval = setInterval(() => void loadDashboard(true), 30000);
+    return () => clearInterval(interval);
+  }, [loadDashboard]);
 
-  const handleRefresh = () => {
-    refetchStats();
-    refetchHubs();
-    loadExtra();
-  };
-
-  const superHubs = superHubsData?.superHubs ?? [];
-  const isLoading = statsLoading || hubsLoading;
-
-  // ── Derived order data ───────────────────────────────────────────────────
-  // The API's `takeaway` bucket is an all-time status bucket used by the
-  // orders page. For this dashboard, "Today's Sale" must be today's POS
-  // takeaway count only.
-  const dashboardOrderStats = { ...orderStats, takeaway: orderSummary.todayPosSales };
-  const totalOrders    = Object.values(dashboardOrderStats).reduce((a, b) => a + b, 0);
-  const activeOrders   = (orderStats.pending ?? 0) + (orderStats.confirmed ?? 0) + (orderStats.out_for_delivery ?? 0);
-  const pendingOrders  = orderStats.pending ?? 0;
-
-  const orderStatusPieData = Object.entries(ORDER_STATUS_CONFIG)
-    .map(([key, cfg]) => ({ name: cfg.label, value: dashboardOrderStats[key] ?? 0, color: cfg.chart }))
-    .filter((d) => d.value > 0);
-
-  const orderStatusBarData = Object.entries(ORDER_STATUS_CONFIG).map(([key, cfg]) => ({
-    name: cfg.label.replace(" for ", "\nfor "),
-    count: dashboardOrderStats[key] ?? 0,
-    color: cfg.chart,
-  }));
-
-  // ── Hub bar data ─────────────────────────────────────────────────────────
-  const awaitingAction = (orderStats.pending ?? 0) + (orderStats.confirmed ?? 0);
-  const itemsHandedOver = (orderStats.delivered ?? 0) + (orderStats.takeaway ?? 0);
+  const handleRefresh = () => void loadDashboard();
+  const awaitingAction = Number(orderStats.pending ?? 0) + Number(orderStats.confirmed ?? 0);
   const headerSlot = document.getElementById("page-header-slot");
 
   return (
-    <div className="space-y-7 max-w-7xl mx-auto">
+    <div className="mx-auto max-w-7xl space-y-7">
       {headerSlot && createPortal(
-        <div className="flex items-center justify-between w-full min-w-0">
+        <div className="flex w-full min-w-0 items-center justify-between">
           <div className="min-w-0">
-            <h1 className="text-sm font-bold text-white leading-tight">Dashboard</h1>
-            <p className="text-[11px] text-white/75 leading-tight hidden sm:block">
-              Overview of your hub operations
-            </p>
+            <h1 className="text-sm font-bold leading-tight text-white">Dashboard</h1>
+            <p className="hidden text-[11px] leading-tight text-white/75 sm:block">Today at a glance</p>
           </div>
           <Button
             variant="outline"
             size="sm"
             onClick={handleRefresh}
-            className="h-8 gap-1.5 border-white/30 bg-white/10 text-white hover:bg-white/20 hover:text-white flex-shrink-0"
+            className="h-8 flex-shrink-0 gap-1.5 border-white/30 bg-white/10 text-white hover:bg-white/20 hover:text-white"
           >
-            <RefreshCw className="w-3.5 h-3.5" /> Refresh
+            <RefreshCw className="h-3.5 w-3.5" /> Refresh
           </Button>
         </div>,
         headerSlot,
       )}
 
-      {/* ── Top: Hub operations shortcuts ────────────────────────────────────── */}
-      <div>
-        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
-          <Warehouse className="w-3 h-3" /> Hub operations
-        </p>
-        {extraLoading && !operatingHub ? (
-          <Skeleton className="h-[190px] rounded-2xl" />
-        ) : operatingHub ? (
-          <div className="space-y-4">
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center">
-                    <Warehouse className="w-6 h-6 text-[#1A56DB]" />
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-bold text-[#162B4D]">{operatingHub.name}</h2>
-                    <p className="text-sm text-gray-500">{operatingHub.location || "Thane"} · Single operating hub</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-gray-500">
-                  <Building2 className="w-4 h-4 text-[#1A56DB]" />
-                  Hub operations
-                </div>
-              </div>
-            </div>
+      <section>
+        <div className="mb-3 flex items-center gap-1.5">
+          <Warehouse className="h-3.5 w-3.5 text-[#1A56DB]" />
+          <h2 className="text-xs font-bold uppercase tracking-widest text-gray-500">Quick access</h2>
+        </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <button
-                onClick={() => navigate(`/sub-hub-menu/${operatingHub.id}`)}
-                className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 text-left hover:border-[#1A56DB]/40 transition-colors"
-              >
-                <Package className="w-6 h-6 text-[#1A56DB] mb-3" />
-                <p className="font-bold text-[#162B4D]">Manage Products</p>
-                <p className="text-sm text-gray-500 mt-1">Add and edit the products sold by {operatingHub.name}.</p>
-              </button>
-              <button
-                onClick={() => navigate("/inventory/products")}
-                className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 text-left hover:border-[#1A56DB]/40 transition-colors"
-              >
-                <Warehouse className="w-6 h-6 text-[#1A56DB] mb-3" />
-                <p className="font-bold text-[#162B4D]">View Inventory</p>
-                <p className="text-sm text-gray-500 mt-1">See current products, stock, batches, and expiry.</p>
-              </button>
-              <button
-                onClick={() => navigate("/inventory/adjustment")}
-                className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 text-left hover:border-[#1A56DB]/40 transition-colors"
-              >
-                <Settings2 className="w-6 h-6 text-emerald-600 mb-3" />
-                <p className="font-bold text-[#162B4D]">Stock Adjustments</p>
-                <p className="text-sm text-gray-500 mt-1">Record cleaned weight and update usable stock.</p>
-              </button>
-            </div>
+        {loading && !operatingHub ? (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <Skeleton key={index} className="h-36 rounded-2xl" />
+            ))}
+          </div>
+        ) : operatingHub ? (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <button
+              onClick={() => navigate(`/sub-hub-menu/${operatingHub.id}`)}
+              className="rounded-2xl border border-gray-100 bg-white p-5 text-left shadow-sm transition-colors hover:border-[#1A56DB]/40"
+            >
+              <Package className="mb-3 h-6 w-6 text-[#1A56DB]" />
+              <p className="font-bold text-[#162B4D]">Manage Products</p>
+              <p className="mt-1 text-sm text-gray-500">Add products, prices, and availability.</p>
+            </button>
+            <button
+              onClick={() => navigate("/inventory/products")}
+              className="rounded-2xl border border-gray-100 bg-white p-5 text-left shadow-sm transition-colors hover:border-[#1A56DB]/40"
+            >
+              <Warehouse className="mb-3 h-6 w-6 text-[#1A56DB]" />
+              <p className="font-bold text-[#162B4D]">View Inventory</p>
+              <p className="mt-1 text-sm text-gray-500">Check current stock, batches, and expiry.</p>
+            </button>
+            <button
+              onClick={() => navigate("/inventory/adjustment")}
+              className="rounded-2xl border border-gray-100 bg-white p-5 text-left shadow-sm transition-colors hover:border-emerald-400"
+            >
+              <Settings2 className="mb-3 h-6 w-6 text-emerald-600" />
+              <p className="font-bold text-[#162B4D]">Stock Adjustments</p>
+              <p className="mt-1 text-sm text-gray-500">Receive, reduce, or correct stock.</p>
+            </button>
           </div>
         ) : (
-          <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-8 text-center">
-            <Warehouse className="w-9 h-9 text-gray-300 mx-auto mb-2" />
+          <div className="rounded-2xl border border-dashed border-gray-200 bg-white p-6 text-center">
             <p className="text-sm font-semibold text-[#162B4D]">No operating hub configured</p>
-            <p className="text-xs text-gray-500 mt-1">Hub shortcuts will appear here once an operating hub is available.</p>
+            <p className="mt-1 text-xs text-gray-500">Quick links will appear when a hub is available.</p>
           </div>
         )}
-      </div>
+      </section>
 
-      {/* ── Row 1: Network stats ─────────────────────────────────────────────── */}
-      <div>
-        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
-          <Building2 className="w-3 h-3" /> Network
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl">
-          <StatCard loading={isLoading} title="Total Hubs" value={stats?.totalSubHubs ?? 0} sub={`${stats?.activeSubHubs ?? 0} active`} icon={Building2} iconColor="text-[#1A56DB]" iconBg="bg-blue-50" border="border-blue-100" badge={`${stats?.totalSubHubs ? Math.round((stats.activeSubHubs / stats.totalSubHubs) * 100) : 0}% active`} badgeColor="bg-blue-50 text-blue-600" />
-          <StatCard loading={isLoading} title="Master Admin" value={1} sub="active system account" icon={Users} iconColor="text-amber-600" iconBg="bg-amber-50" border="border-amber-100" badge="100% active" badgeColor="bg-amber-50 text-amber-600" />
+      <section>
+        <div className="mb-3 flex items-center gap-1.5">
+          <ShoppingBag className="h-3.5 w-3.5 text-orange-500" />
+          <h2 className="text-xs font-bold uppercase tracking-widest text-gray-500">Today at a glance</h2>
         </div>
-      </div>
-
-      {/* ── Row 2: Order + people stats ──────────────────────────────────────── */}
-      <div>
-        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
-          <ShoppingBag className="w-3 h-3" /> Operations
-        </p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <StatCard loading={extraLoading} title="Today's POS Sales" value={orderSummary.todayPosSales} sub="completed takeaway sales" icon={ShoppingBag} iconColor="text-orange-600" iconBg="bg-orange-50" border="border-orange-100" badge="FTS sales" badgeColor="bg-orange-50 text-orange-600" />
-          <StatCard loading={extraLoading} title="Active Preorders" value={orderSummary.activePreorderSales} sub="future handovers" icon={Clock} iconColor="text-purple-600" iconBg="bg-purple-50" border="border-purple-100" badge="Future" badgeColor="bg-purple-50 text-purple-600" />
-          <StatCard loading={extraLoading} title="Awaiting Action" value={awaitingAction} sub="orders needing staff action" icon={Clock} iconColor="text-amber-600" iconBg="bg-amber-50" border="border-amber-100" badge={`${pendingOrders} pending`} badgeColor={pendingOrders > 0 ? "bg-amber-50 text-amber-600" : "bg-gray-50 text-gray-400"} />
-          <StatCard loading={extraLoading} title="Total Customers" value={customers.total} sub="registered accounts" icon={User} iconColor="text-sky-600" iconBg="bg-sky-50" border="border-sky-100" badge="Customers" badgeColor="bg-sky-50 text-sky-600" />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard
+            loading={loading}
+            title="Today's POS Sales"
+            value={formatRupees(todayPosSales)}
+            description="Total value of completed POS orders"
+            icon={ShoppingBag}
+            color="text-orange-600"
+            background="bg-orange-50"
+          />
+          <StatCard
+            loading={loading}
+            title="Completed POS Orders"
+            value={todayPosOrders}
+            description="Today's takeaway orders"
+            icon={Package}
+            color="text-blue-600"
+            background="bg-blue-50"
+          />
+          <StatCard
+            loading={loading}
+            title="Awaiting Action"
+            value={awaitingAction}
+            description="Pending or confirmed orders"
+            icon={Clock}
+            color="text-amber-600"
+            background="bg-amber-50"
+          />
+          <StatCard
+            loading={loading}
+            title="Active Preorders"
+            value={activePreorders}
+            description="Scheduled for future pickup"
+            icon={Clock}
+            color="text-purple-600"
+            background="bg-purple-50"
+          />
         </div>
-      </div>
-
-      {/* ── Row 3: Order breakdown + recent orders ───────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-
-        {/* Order status bar chart */}
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <SectionHeader icon={ShoppingBag} iconColor="text-orange-500" title="Orders by Status" />
-          {extraLoading ? (
-            <Skeleton className="h-52 rounded-xl" />
-          ) : totalOrders === 0 ? (
-            <div className="h-52 flex flex-col items-center justify-center text-gray-300">
-              <ShoppingBag className="w-10 h-10 mb-2" />
-              <p className="text-sm font-medium">No orders yet</p>
-            </div>
-          ) : (
-            <>
-              <ResponsiveContainer width="100%" height={180}>
-                <BarChart data={orderStatusBarData} barSize={28} margin={{ top: 4, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#9CA3AF" }} axisLine={false} tickLine={false} interval={0} />
-                  <YAxis tick={{ fontSize: 10, fill: "#9CA3AF" }} axisLine={false} tickLine={false} allowDecimals={false} />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Bar dataKey="count" name="Orders" radius={[6, 6, 0, 0]}>
-                    {orderStatusBarData.map((d, i) => <Cell key={i} fill={d.color} />)}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-              {/* Mini legend */}
-              <div className="flex flex-wrap gap-x-3 gap-y-1.5 mt-3">
-                {orderStatusPieData.map((d) => (
-                  <div key={d.name} className="flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: d.color }} />
-                    <span className="text-[10px] text-gray-500">{d.name}: <strong className="text-gray-700">{d.value}</strong></span>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Recent orders table */}
-        <div className="lg:col-span-3 bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <SectionHeader icon={Clock} iconColor="text-[#1A56DB]" title="Recent Orders" action="View all" onAction={() => window.location.hash = "#/orders"} />
-          {extraLoading ? (
-            <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 rounded-xl" />)}</div>
-          ) : recentOrders.length === 0 ? (
-            <div className="h-52 flex flex-col items-center justify-center text-gray-300">
-              <Clock className="w-10 h-10 mb-2" />
-              <p className="text-sm font-medium">No recent orders</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {recentOrders.map((o) => {
-                const cfg = ORDER_STATUS_CONFIG[o.status];
-                const Icon = cfg?.icon ?? Clock;
-                const total = (o.items ?? []).reduce((s: number, i: any) => s + Number(i.price || 0) * Number(i.quantity || 1), 0);
-                return (
-                  <div key={String(o._id)} className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:bg-gray-50/60 transition-colors">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${cfg?.bg ?? "bg-gray-50"}`}>
-                      <Icon className={`w-4 h-4 ${cfg?.color ?? "text-gray-400"}`} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-semibold text-[#162B4D] truncate">{o.customerName}</p>
-                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border flex-shrink-0 ${cfg?.bg ?? "bg-gray-50 border-gray-200"} ${cfg?.color ?? "text-gray-500"}`}>
-                          {cfg?.label ?? o.status}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-[10px] text-gray-400 flex items-center gap-0.5"><Phone className="w-2.5 h-2.5" />{o.phone}</span>
-                        <span className="text-[10px] text-gray-400">
-                          {o.orderType === "preorder"
-                            ? "Preorder"
-                            : istDateKey(o.createdAt) === todayISTKey()
-                              ? "Today's Sale"
-                              : "POS Sale"}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="text-right flex-shrink-0">
-                      <p className="text-sm font-bold text-[#162B4D]">{formatRupees(total)}</p>
-                      <p className="text-[10px] text-gray-400">{formatDate(o.createdAt)}</p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ── Order handover summary + Hub performance ─────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-        {/* POS order summary card */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <SectionHeader icon={ShoppingBag} iconColor="text-indigo-500" title="POS Order Summary" />
-          <div className="space-y-3">
-            {[
-              { key: "today-sales", label: "Today's POS Sales", icon: ShoppingBag, color: "text-orange-600", bg: "bg-orange-50", bar: "bg-orange-500", count: orderSummary.todayPosSales },
-              { key: "preorders", label: "Active Preorders", icon: Clock, color: "text-purple-600", bg: "bg-purple-50", bar: "bg-purple-500", count: orderSummary.activePreorderSales },
-              { key: "awaiting", label: "Awaiting Action", icon: Clock, color: "text-amber-600", bg: "bg-amber-50", bar: "bg-amber-400", count: awaitingAction },
-              { key: "handed", label: "Items Handed Over", icon: CheckCircle2, color: "text-green-600", bg: "bg-green-50", bar: "bg-green-500", count: itemsHandedOver },
-              { key: "cancelled", label: "Cancelled", icon: XCircle, color: "text-red-500", bg: "bg-red-50", bar: "bg-red-400", count: orderStats.cancelled ?? 0 },
-            ].map(({ key, label, icon: Icon, color, bg, bar, count }) => {
-              const pct   = totalOrders > 0 ? Math.round((count / totalOrders) * 100) : 0;
-              return (
-                <div key={key} className="flex items-center gap-3">
-                  <div className={`w-7 h-7 rounded-lg ${bg} flex items-center justify-center flex-shrink-0`}>
-                    <Icon className={`w-3.5 h-3.5 ${color}`} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-semibold text-gray-700">{label}</span>
-                      <span className={`text-xs font-bold ${color}`}>{count}</span>
-                    </div>
-                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                      <div className={`h-full ${bar} rounded-full transition-all duration-700`} style={{ width: `${pct}%` }} />
-                    </div>
-                  </div>
-                  <span className="text-[10px] text-gray-400 w-7 text-right">{pct}%</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Hub performance table */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <SectionHeader icon={Building2} iconColor="text-[#1A56DB]" title="Hub Performance" />
-          {hubsLoading ? (
-            <Skeleton className="h-48 rounded-xl" />
-          ) : superHubs.length === 0 ? (
-            <div className="h-48 flex flex-col items-center justify-center text-gray-300">
-              <Building2 className="w-10 h-10 mb-2" />
-              <p className="text-sm font-medium">No hubs yet</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {superHubs.map((hub, idx) => {
-                return (
-                  <div key={hub.id} className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:bg-gray-50/60 transition-colors">
-                    <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 font-bold text-white text-sm" style={{ background: HUB_COLORS[idx % HUB_COLORS.length] }}>
-                      {hub.name.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-bold text-[#162B4D] truncate">{hub.name}</p>
-                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2 flex-shrink-0 ${hub.status === "Active" ? "bg-green-50 text-green-600" : "bg-red-50 text-red-500"}`}>
-                          {hub.status}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-3 mt-1">
-                        {hub.location && <span className="text-[10px] text-gray-400 flex items-center gap-0.5"><MapPin className="w-2.5 h-2.5" />{hub.location}</span>}
-                        <span className="text-[10px] text-blue-600 font-semibold bg-blue-50 px-1.5 py-0.5 rounded-full">Hub</span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </div>
-
+      </section>
     </div>
   );
 }
