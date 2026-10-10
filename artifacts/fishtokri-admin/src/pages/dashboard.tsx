@@ -15,6 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 
 type DailySales = { date: string; sales: number; orders: number };
+type ProductSales = { name: string; unit: string; sales: number; quantity: number; orders: number };
 
 function getToken() {
   return localStorage.getItem("fishtokri_token") || "";
@@ -34,6 +35,15 @@ async function apiFetch(path: string) {
 
 function formatRupees(value: number) {
   return `₹${Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+}
+
+function formatSoldQuantity(quantity: number, unit: string) {
+  const normalizedUnit = unit.trim().toLowerCase();
+  if (/kg|kilogram/.test(normalizedUnit)) {
+    if (quantity > 0 && quantity < 1) return `${Math.round(quantity * 1000)} g`;
+    return `${Number(quantity).toLocaleString("en-IN", { maximumFractionDigits: 3 })} kg`;
+  }
+  return `${Number(quantity).toLocaleString("en-IN", { maximumFractionDigits: 2 })}${unit ? ` ${unit}` : " sold"}`;
 }
 
 function StatCard({
@@ -77,6 +87,7 @@ export default function Dashboard() {
   const [todayPosSales, setTodayPosSales] = useState(0);
   const [activePreorders, setActivePreorders] = useState(0);
   const [weeklyPosSales, setWeeklyPosSales] = useState<DailySales[]>([]);
+  const [topSellingProducts, setTopSellingProducts] = useState<ProductSales[]>([]);
   const [operatingHub, setOperatingHub] = useState<any | null>(null);
 
   const loadDashboard = useCallback(async (silent = false) => {
@@ -94,6 +105,7 @@ export default function Dashboard() {
         setTodayPosSales(Number(orders.todayPosSalesAmount ?? 0));
         setActivePreorders(Number(orders.activePreorderSales ?? 0));
         setWeeklyPosSales(Array.isArray(orders.weeklyPosSales) ? orders.weeklyPosSales : []);
+        setTopSellingProducts(Array.isArray(orders.topSellingProducts) ? orders.topSellingProducts : []);
       }
 
       if (hubsResult.status === "fulfilled") {
@@ -129,6 +141,7 @@ export default function Dashboard() {
     }).format(new Date(`${day.date}T00:00:00+05:30`)),
   }));
   const hasWeeklySales = weeklyPosSales.some((day) => day.sales > 0);
+  const maxProductSales = Math.max(0, ...topSellingProducts.map((product) => product.sales));
   const headerSlot = document.getElementById("page-header-slot");
 
   return (
@@ -284,6 +297,59 @@ export default function Dashboard() {
         ) : (
           <div className="flex h-40 items-center justify-center rounded-xl bg-gray-50 px-4 text-center text-sm text-gray-500">
             No completed POS sales recorded in the last 7 days.
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+        <div className="mb-4 flex items-start gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50">
+            <Package className="h-4 w-4 text-emerald-600" />
+          </div>
+          <div>
+            <h2 className="text-sm font-bold text-[#162B4D]">Top Selling Products</h2>
+            <p className="mt-0.5 text-xs text-gray-500">Completed POS item value before discounts · last 7 days</p>
+          </div>
+        </div>
+        {loading ? (
+          <div className="space-y-4">
+            {Array.from({ length: 3 }).map((_, index) => <Skeleton key={index} className="h-14 rounded-lg" />)}
+          </div>
+        ) : topSellingProducts.length ? (
+          <div className="space-y-4">
+            {topSellingProducts.map((product, index) => {
+              const barWidth = maxProductSales > 0 ? (product.sales / maxProductSales) * 100 : 0;
+              return (
+                <div key={`${product.name}-${product.unit}`} className="space-y-2">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-[#162B4D]">
+                        <span className="mr-2 text-xs font-bold text-gray-400">{index + 1}.</span>
+                        {product.name}
+                      </p>
+                      <p className="mt-0.5 text-xs text-gray-500">
+                        {formatSoldQuantity(product.quantity, product.unit)} · {product.orders} orders
+                      </p>
+                    </div>
+                    <p className="shrink-0 text-sm font-bold text-[#162B4D]">{formatRupees(product.sales)}</p>
+                  </div>
+                  <div
+                    className="h-1.5 overflow-hidden rounded-full bg-gray-100"
+                    role="progressbar"
+                    aria-label={`${product.name} sales relative to top seller`}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={Math.round(barWidth)}
+                  >
+                    <div className="h-full rounded-full bg-emerald-500" style={{ width: `${barWidth}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="flex h-32 items-center justify-center rounded-xl bg-gray-50 px-4 text-center text-sm text-gray-500">
+            No completed POS product sales recorded in the last 7 days.
           </div>
         )}
       </section>

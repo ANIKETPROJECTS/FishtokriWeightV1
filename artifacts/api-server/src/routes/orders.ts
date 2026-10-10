@@ -968,7 +968,7 @@ router.get("/stats", async (req: ScopedRequest, res) => {
       status: { $in: ["takeaway", "handed_over"] },
       createdAt: { $gte: weekStart, $lt: tomorrowStart },
     };
-    const [todayPosSales, activePreorderSales, todayPosSalesAmountRows, weeklyPosSalesRows] = await Promise.all([
+    const [todayPosSales, activePreorderSales, todayPosSalesAmountRows, topSellingProductsRows, weeklyPosSalesRows] = await Promise.all([
       conn.db.collection(COLLECTION).countDocuments(todayPosSalesFilter),
       conn.db.collection(COLLECTION).countDocuments({
         ...posInvoiceClause,
@@ -993,6 +993,60 @@ router.get("/stats", async (req: ScopedRequest, res) => {
             },
           },
         },
+      ]).toArray(),
+      conn.db.collection(COLLECTION).aggregate([
+        { $match: weeklyPosSalesFilter },
+        { $unwind: "$items" },
+        {
+          $group: {
+            _id: { name: "$items.name", unit: "$items.unit" },
+            sales: {
+              $sum: {
+                $multiply: [
+                  {
+                    $convert: {
+                      input: "$items.price",
+                      to: "double",
+                      onError: 0,
+                      onNull: 0,
+                    },
+                  },
+                  {
+                    $convert: {
+                      input: "$items.quantity",
+                      to: "double",
+                      onError: 0,
+                      onNull: 0,
+                    },
+                  },
+                ],
+              },
+            },
+            quantity: {
+              $sum: {
+                $convert: {
+                  input: "$items.quantity",
+                  to: "double",
+                  onError: 0,
+                  onNull: 0,
+                },
+              },
+            },
+            orderIds: { $addToSet: "$orderId" },
+          },
+        },
+        {
+          $project: {
+            _id: 0,
+            name: "$_id.name",
+            unit: "$_id.unit",
+            sales: 1,
+            quantity: 1,
+            orders: { $size: "$orderIds" },
+          },
+        },
+        { $sort: { sales: -1, name: 1 } },
+        { $limit: 5 },
       ]).toArray(),
       conn.db.collection(COLLECTION).aggregate([
         { $match: weeklyPosSalesFilter },
@@ -1048,6 +1102,13 @@ router.get("/stats", async (req: ScopedRequest, res) => {
       todayPosSalesAmount,
       activePreorderSales,
       weeklyPosSales,
+      topSellingProducts: topSellingProductsRows.map((row: any) => ({
+        name: String(row.name ?? ""),
+        unit: String(row.unit ?? ""),
+        sales: Number(row.sales ?? 0),
+        quantity: Number(row.quantity ?? 0),
+        orders: Number(row.orders ?? 0),
+      })),
     });
   } catch (err) {
     req.log.error({ err }, "Failed to get order stats");
