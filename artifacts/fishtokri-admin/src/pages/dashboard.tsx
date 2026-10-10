@@ -1,9 +1,20 @@
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useLocation } from "wouter";
-import { Clock, Package, RefreshCw, Settings2, ShoppingBag, Warehouse } from "lucide-react";
+import { Clock, Package, RefreshCw, Settings2, ShoppingBag, TrendingUp, Warehouse } from "lucide-react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+
+type DailySales = { date: string; sales: number; orders: number };
 
 function getToken() {
   return localStorage.getItem("fishtokri_token") || "";
@@ -65,6 +76,7 @@ export default function Dashboard() {
   const [todayPosOrders, setTodayPosOrders] = useState(0);
   const [todayPosSales, setTodayPosSales] = useState(0);
   const [activePreorders, setActivePreorders] = useState(0);
+  const [weeklyPosSales, setWeeklyPosSales] = useState<DailySales[]>([]);
   const [operatingHub, setOperatingHub] = useState<any | null>(null);
 
   const loadDashboard = useCallback(async (silent = false) => {
@@ -81,6 +93,7 @@ export default function Dashboard() {
         setTodayPosOrders(Number(orders.todayPosSales ?? 0));
         setTodayPosSales(Number(orders.todayPosSalesAmount ?? 0));
         setActivePreorders(Number(orders.activePreorderSales ?? 0));
+        setWeeklyPosSales(Array.isArray(orders.weeklyPosSales) ? orders.weeklyPosSales : []);
       }
 
       if (hubsResult.status === "fulfilled") {
@@ -107,6 +120,15 @@ export default function Dashboard() {
 
   const handleRefresh = () => void loadDashboard();
   const awaitingAction = Number(orderStats.pending ?? 0) + Number(orderStats.confirmed ?? 0);
+  const chartSales = weeklyPosSales.map((day) => ({
+    ...day,
+    label: new Intl.DateTimeFormat("en-IN", {
+      day: "2-digit",
+      month: "short",
+      timeZone: "Asia/Kolkata",
+    }).format(new Date(`${day.date}T00:00:00+05:30`)),
+  }));
+  const hasWeeklySales = weeklyPosSales.some((day) => day.sales > 0);
   const headerSlot = document.getElementById("page-header-slot");
 
   return (
@@ -219,6 +241,51 @@ export default function Dashboard() {
             background="bg-purple-50"
           />
         </div>
+      </section>
+
+      <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+        <div className="mb-4 flex items-start gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50">
+            <TrendingUp className="h-4 w-4 text-blue-600" />
+          </div>
+          <div>
+            <h2 className="text-sm font-bold text-[#162B4D]">Weekly POS Sales</h2>
+            <p className="mt-0.5 text-xs text-gray-500">Completed POS sales by day · last 7 days</p>
+          </div>
+        </div>
+        {loading ? (
+          <Skeleton className="h-56 rounded-xl" />
+        ) : hasWeeklySales ? (
+          <div className="h-56 w-full" role="img" aria-label="Bar chart of completed POS sales for the last seven days">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartSales} margin={{ top: 6, right: 12, bottom: 0, left: 4 }}>
+                <CartesianGrid vertical={false} stroke="#E8EDF5" strokeDasharray="3 3" />
+                <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "#6B7280", fontSize: 11 }} />
+                <YAxis
+                  width={58}
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: "#6B7280", fontSize: 11 }}
+                  tickFormatter={(value: number) => `₹${Number(value).toLocaleString("en-IN")}`}
+                />
+                <Tooltip
+                  cursor={{ fill: "#F3F6FB" }}
+                  labelFormatter={(_, payload) => payload?.[0]?.payload?.date ?? ""}
+                  formatter={(value: number, _name: string, item: any) => [
+                    `${formatRupees(Number(value))} · ${item?.payload?.orders ?? 0} orders`,
+                    "Sales",
+                  ]}
+                  contentStyle={{ borderRadius: 12, borderColor: "#E8EDF5", fontSize: 12 }}
+                />
+                <Bar dataKey="sales" name="Sales" fill="#1A56DB" radius={[6, 6, 0, 0]} maxBarSize={42} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <div className="flex h-40 items-center justify-center rounded-xl bg-gray-50 px-4 text-center text-sm text-gray-500">
+            No completed POS sales recorded in the last 7 days.
+          </div>
+        )}
       </section>
     </div>
   );

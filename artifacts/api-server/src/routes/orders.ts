@@ -949,6 +949,7 @@ router.get("/stats", async (req: ScopedRequest, res) => {
 
     const todayStart = new Date(`${todayISO}T00:00:00+05:30`);
     const tomorrowStart = new Date(`${tomorrowISO}T00:00:00+05:30`);
+    const weekStart = new Date(todayStart.getTime() - 6 * 24 * 60 * 60 * 1000);
     const posInvoiceClause = {
       ...scopeClause,
       isDeleted: { $ne: true },
@@ -961,7 +962,13 @@ router.get("/stats", async (req: ScopedRequest, res) => {
         status: { $in: ["takeaway", "handed_over"] },
         createdAt: { $gte: todayStart, $lt: tomorrowStart },
     };
-    const [todayPosSales, activePreorderSales, todayPosSalesAmountRows] = await Promise.all([
+    const weeklyPosSalesFilter = {
+      ...posInvoiceClause,
+      orderType: { $ne: "preorder" },
+      status: { $in: ["takeaway", "handed_over"] },
+      createdAt: { $gte: weekStart, $lt: tomorrowStart },
+    };
+    const [todayPosSales, activePreorderSales, todayPosSalesAmountRows, weeklyPosSalesRows] = await Promise.all([
       conn.db.collection(COLLECTION).countDocuments(todayPosSalesFilter),
       conn.db.collection(COLLECTION).countDocuments({
         ...posInvoiceClause,
@@ -987,8 +994,45 @@ router.get("/stats", async (req: ScopedRequest, res) => {
           },
         },
       ]).toArray(),
+      conn.db.collection(COLLECTION).aggregate([
+        { $match: weeklyPosSalesFilter },
+        {
+          $group: {
+            _id: {
+              $dateToString: {
+                format: "%Y-%m-%d",
+                date: "$createdAt",
+                timezone: "Asia/Kolkata",
+              },
+            },
+            sales: {
+              $sum: {
+                $convert: {
+                  input: "$total",
+                  to: "double",
+                  onError: 0,
+                  onNull: 0,
+                },
+              },
+            },
+            orders: { $sum: 1 },
+          },
+        },
+      ]).toArray(),
     ]);
     const todayPosSalesAmount = Number(todayPosSalesAmountRows[0]?.total ?? 0);
+    const weeklySalesByDate = new Map(
+      weeklyPosSalesRows.map((row: any) => [
+        String(row._id),
+        { sales: Number(row.sales ?? 0), orders: Number(row.orders ?? 0) },
+      ]),
+    );
+    const weeklyPosSales = Array.from({ length: 7 }, (_, index) => {
+      const dayStart = new Date(weekStart.getTime() + index * 24 * 60 * 60 * 1000);
+      const date = new Date(dayStart.getTime() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const values = weeklySalesByDate.get(date) ?? { sales: 0, orders: 0 };
+      return { date, sales: values.sales, orders: values.orders };
+    });
 
     res.json({
       stats,
@@ -1003,6 +1047,7 @@ router.get("/stats", async (req: ScopedRequest, res) => {
       todayPosSales,
       todayPosSalesAmount,
       activePreorderSales,
+      weeklyPosSales,
     });
   } catch (err) {
     req.log.error({ err }, "Failed to get order stats");
