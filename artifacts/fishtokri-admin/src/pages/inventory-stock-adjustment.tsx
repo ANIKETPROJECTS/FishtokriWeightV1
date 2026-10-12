@@ -46,7 +46,6 @@ type Batch = {
   id: string;
   batchNumber: string;
   quantity: number;
-  partWeights?: { Head?: number; Body?: number; Middle?: number; Tail?: number } | null;
   parts?: Array<{ name: string; price: number }>;
   price?: number | null;
   rawWeight?: number | null;

@@ -4415,7 +4415,7 @@ export default function Orders() {
                                  <>
                                     <p className="text-sm font-semibold text-[#1A56DB]">₹{Number(p.price).toLocaleString("en-IN")}/{stockUnit}</p>
                                      <p className={`mt-1 text-[10px] font-semibold leading-none ${stock > 0 ? "text-amber-600" : "text-red-500"}`}>
-                                      {stock.toLocaleString("en-IN", { maximumFractionDigits: 2 })} {stockUnit} {p.posPartName ? "shared stock" : "left"}
+                                      {stock.toLocaleString("en-IN", { maximumFractionDigits: 2 })} {stockUnit} {p.posPartName ? "main cleaned stock" : "left"}
                                    </p>
                                  </>
                                ) : (
@@ -4472,7 +4472,7 @@ export default function Orders() {
                   </div>
                   <div className="min-w-0">
                     <h3 className="text-lg font-bold leading-6 text-black">Weigh products</h3>
-                    <p className="text-sm leading-5 text-black">Select products above, enter each weight, then add them to the order together.</p>
+                    <p className="text-sm leading-5 text-black">Parts are price choices only; every weighed sale reduces the same main cleaned stock.</p>
                   </div>
                 </div>
                 {scaleEntries.length === 0 ? (
@@ -4493,7 +4493,7 @@ export default function Orders() {
                               <p className="truncate text-base font-bold leading-5 text-black">{entry.partName ? `${product.name} - ${entry.partName}` : product.displayName ?? product.name}</p>
                               <p className="flex flex-wrap gap-x-1 text-sm leading-5 text-black">
                                 <span>₹{scaleEntryPrice(product, entry).toLocaleString("en-IN")}/kg</span>
-                                <span>· {formatOrderWeight(Math.max(0, Number(product.quantity) || 0))} {entry.partName ? "shared stock" : "left"}</span>
+                                <span>· {formatOrderWeight(Math.max(0, Number(product.quantity) || 0))} {entry.partName ? "main cleaned stock" : "left"}</span>
                                 <span>· {formatRupees(amount)}</span>
                               </p>
                             </div>

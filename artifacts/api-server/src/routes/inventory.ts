@@ -77,7 +77,6 @@ type Batch = {
   _id?: any;
   batchNumber?: string;
   quantity: number;
-  partWeights?: { Head: number; Body: number; Tail: number } | null;
   parts?: Array<{ name: string; price: number }>;
   price?: number | null;
   rawWeight?: number | null;
@@ -89,8 +88,6 @@ type Batch = {
   notes?: string;
   createdAt?: Date;
 };
-
-const BIG_FISH_PART_NAMES = ["Head", "Body", "Tail"] as const;
 
 function isSurmaiProduct(product: any): boolean {
   const normalizedName = String(product?.name ?? "").trim().toLowerCase();
@@ -118,13 +115,6 @@ function normalizeBatch(b: any): Batch {
     _id: b?._id ?? new mongoose.Types.ObjectId(),
     batchNumber: b?.batchNumber ? String(b.batchNumber).trim() : "",
     quantity: Math.max(0, Number(b?.quantity) || 0),
-    partWeights: b?.partWeights && typeof b.partWeights === "object"
-      ? {
-        Head: Math.max(0, Number(b.partWeights.Head) || 0),
-        Body: Math.max(0, Number(b.partWeights.Body ?? b.partWeights.Middle) || 0),
-        Tail: Math.max(0, Number(b.partWeights.Tail) || 0),
-      }
-      : null,
     parts: Array.isArray(b?.parts)
       ? b.parts
         .map((part: any) => ({ name: String(part?.name ?? "").trim().slice(0, 60), price: Number(part?.price) }))
@@ -148,22 +138,9 @@ function batchesTotal(batches: Batch[] | undefined | null): number {
 }
 
 function reduceBatchQuantity(batch: Batch, newQuantity: number) {
-  const quantity = Math.max(0, Number(batch.quantity) || 0);
-  const nextQuantity = Math.max(0, newQuantity);
-  const partTotal = batch.partWeights
-    ? BIG_FISH_PART_NAMES.reduce((sum, part) => sum + Math.max(0, Number(batch.partWeights?.[part]) || 0), 0)
-    : 0;
-  if (partTotal > 0 && quantity > 0) {
-    const scale = nextQuantity / partTotal;
-    batch.partWeights = {
-      Head: Math.max(0, Number(batch.partWeights?.Head) || 0) * scale,
-      Body: Math.max(0, Number(batch.partWeights?.Body) || 0) * scale,
-      Tail: Math.max(0, Number(batch.partWeights?.Tail) || 0) * scale,
-    };
-  } else if (batch.partWeights && nextQuantity <= 0) {
-    batch.partWeights = { Head: 0, Body: 0, Tail: 0 };
-  }
-  batch.quantity = nextQuantity;
+  // A batch has one cleaned-weight balance. Part cards affect only the sale
+  // label and rate; never split or scale stock into per-part quantities.
+  batch.quantity = Math.max(0, newQuantity);
 }
 
 function sortBatchesFIFO(batches: Batch[]): Batch[] {
@@ -486,7 +463,6 @@ router.get("/products", async (req, res) => {
             id: String(b._id ?? ""),
             batchNumber: b.batchNumber ?? "",
             quantity: Number(b.quantity) || 0,
-            partWeights: b.partWeights ?? null,
            parts: b.parts ?? [],
             price: b.price ?? null,
             rawWeight: b.rawWeight ?? null,
@@ -694,7 +670,7 @@ router.post("/adjustments", async (req, res) => {
         if (targetIdx < 0) continue;
         newBatches = currentBatches.map((b, i) => {
           if (i !== targetIdx) return b;
-          const target = { ...b, partWeights: b.partWeights ? { ...b.partWeights } : null };
+          const target = { ...b };
           reduceBatchQuantity(target, target.quantity + addQty);
           return target;
         });
@@ -1382,7 +1358,7 @@ async function applyDelta(
           }
           newBatches = currentBatches.map((batch) => {
             if (String(batch._id) !== String(it.batchId)) return batch;
-            const updated = { ...batch, partWeights: batch.partWeights ? { ...batch.partWeights } : null };
+            const updated = { ...batch };
             reduceBatchQuantity(updated, updated.quantity - qty);
             return updated;
           });
