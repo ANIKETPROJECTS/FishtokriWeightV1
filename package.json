@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "license": "MIT",
   "scripts": {
-    "build": "pnpm install && npm --prefix artifacts/api-server run build && npm --prefix artifacts/fishtokri-admin run build",
+    "build": "npx --yes pnpm@10.26.1 install --filter @workspace/api-server... --frozen-lockfile && npx --yes pnpm@10.26.1 install --filter @workspace/fishtokri-admin... --frozen-lockfile && npm --prefix artifacts/api-server run build && npm --prefix artifacts/fishtokri-admin run build",
     "build:dev": "pnpm run typecheck && pnpm -r --if-present run build",
     "typecheck:libs": "tsc --build",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
