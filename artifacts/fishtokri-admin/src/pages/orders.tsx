@@ -4414,19 +4414,21 @@ export default function Orders() {
                                 {isBigFishSelector ? (
                                  <>
                                     <p className="text-sm font-semibold text-[#1A56DB]">₹{Number(p.price).toLocaleString("en-IN")}/{stockUnit}</p>
-                                     <p className={`mt-1 text-[10px] font-semibold leading-none ${stock > 0 ? "text-amber-600" : "text-red-500"}`}>
-                                      {stock.toLocaleString("en-IN", { maximumFractionDigits: 2 })} {stockUnit} {p.posPartName ? "main cleaned stock" : "left"}
-                                   </p>
+                                    {!p.posPartName && (
+                                      <p className={`mt-1 text-[10px] font-semibold leading-none ${stock > 0 ? "text-amber-600" : "text-red-500"}`}>
+                                        {stock.toLocaleString("en-IN", { maximumFractionDigits: 2 })} {stockUnit} left
+                                      </p>
+                                    )}
                                  </>
                                ) : (
                                  <>
                                    <p className="text-sm font-semibold text-[#1A56DB]">₹{Number(p.price).toLocaleString("en-IN")}/{stockUnit}</p>
-                                   {!outOfStock && (
+                                    {!p.posPartName && !outOfStock && (
                                      <p className={`text-[10px] font-medium leading-none ${lowStock ? "text-amber-600" : "text-[#364F9F]"}`}>
                                        {stock.toLocaleString("en-IN", { maximumFractionDigits: 2 })} {stockUnit} left
                                      </p>
                                    )}
-                                   {outOfStock && <p className="text-[10px] font-bold text-red-500 leading-none">Out of stock</p>}
+                                    {!p.posPartName && outOfStock && <p className="text-[10px] font-bold text-red-500 leading-none">Out of stock</p>}
                                  </>
                                )}
                             </div>
@@ -4493,7 +4495,7 @@ export default function Orders() {
                               <p className="truncate text-base font-bold leading-5 text-black">{entry.partName ? `${product.name} - ${entry.partName}` : product.displayName ?? product.name}</p>
                               <p className="flex flex-wrap gap-x-1 text-sm leading-5 text-black">
                                 <span>₹{scaleEntryPrice(product, entry).toLocaleString("en-IN")}/kg</span>
-                                <span>· {formatOrderWeight(Math.max(0, Number(product.quantity) || 0))} {entry.partName ? "main cleaned stock" : "left"}</span>
+                                {!entry.partName && <span>· {formatOrderWeight(Math.max(0, Number(product.quantity) || 0))} left</span>}
                                 <span>· {formatRupees(amount)}</span>
                               </p>
                             </div>
