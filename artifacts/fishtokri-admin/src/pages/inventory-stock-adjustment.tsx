@@ -1068,6 +1068,14 @@ export default function InventoryStockAdjustment() {
     // Only pass this product's own batches so the sequence counter is per-product.
     const productBatches: Batch[] = p.batches ?? [];
     const autoNum = generateNextBatchNumber(p.name, productBatches, p.shortCode);
+    const savedParts = productBatches
+      .map((batch, index) => ({ batch, index }))
+      .sort((a, b) =>
+        new Date(b.batch.createdAt ?? b.batch.receivedDate ?? 0).getTime() -
+          new Date(a.batch.createdAt ?? a.batch.receivedDate ?? 0).getTime() ||
+        b.index - a.index
+      )
+      .find(({ batch }) => (batch.parts?.length ?? 0) > 0)?.batch.parts ?? [];
     setFormRows((rows) => rows.map((r, idx) => idx === i ? {
       ...r,
       productId: p.id, productName: p.name, category: p.category || "",
@@ -1076,6 +1084,7 @@ export default function InventoryStockAdjustment() {
       rawWeight: "", cleanedWeight: "", removeQuantity: "", removeKg: "", removeGrams: "",
       batchNumber: r.mode === "add" ? autoNum : "",
       batchNotes: "",
+      parts: savedParts.map((part) => ({ name: part.name, price: String(part.price) })),
       selectedBatchId: "",
     } : r));
   }
@@ -1410,7 +1419,7 @@ export default function InventoryStockAdjustment() {
                         </div>
 
                         {/* Mode */}
-                        <div className="col-span-6 md:col-span-2 space-y-1">
+                             <div className="col-span-6 md:col-span-3 space-y-1">
                           <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Mode</label>
                           <Select value={row.mode} onValueChange={(v) => changeMode(idx, v as FormMode)}>
                             <SelectTrigger className="h-9 text-sm font-semibold">
@@ -1478,17 +1487,19 @@ export default function InventoryStockAdjustment() {
                             {/* New batch expiry and shelf life */}
                             <div className="col-span-6 md:col-span-2 space-y-1">
                               <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Expiry Date &amp; Time</label>
-                              <input
-                                type="date"
-                                value={row.expiryDate}
-                                onChange={(e) => setExpiryDate(idx, e.target.value)}
-                                className={`w-full h-9 px-2 text-xs font-semibold border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-[#364F9F]/20 focus:border-[#364F9F] ${expTone}`}
-                                data-testid={`input-adjustment-expiry-date-${idx}`}
-                              />
-                              <ClockPickerField
-                                value={row.expiryTime}
-                                onChange={(v) => updateRow(idx, { expiryTime: v })}
-                              />
+                              <div className="grid grid-cols-1 min-[768px]:grid-cols-[1fr_1fr] items-center gap-1">
+                                <input
+                                  type="date"
+                                  value={row.expiryDate}
+                                  onChange={(e) => setExpiryDate(idx, e.target.value)}
+                                  className={`w-full min-w-0 h-9 px-1.5 text-[11px] font-semibold border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-[#364F9F]/20 focus:border-[#364F9F] ${expTone}`}
+                                  data-testid={`input-adjustment-expiry-date-${idx}`}
+                                />
+                                <ClockPickerField
+                                  value={row.expiryTime}
+                                  onChange={(v) => updateRow(idx, { expiryTime: v })}
+                                />
+                              </div>
                               {dLeft != null && (
                                 <p className={`text-[10px] font-bold ${expTone}`}>
                                   {dLeft < 0 ? `Expired ${Math.abs(dLeft)}d ago` : dLeft === 0 ? "Expires today" : `${dLeft}d left`}

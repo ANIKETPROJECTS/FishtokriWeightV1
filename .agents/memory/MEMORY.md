@@ -16,4 +16,4 @@
 - [POS weight overage](pos-weight-based-overage.md) — normal takeaway sales for any kg-priced POS product may bill up to 1 kg above stock while logging the excess.
 - [Day-end preorder inclusion](day-end-report-preorders.md) — paid confirmed preorders count as sales before handover and must not be status-filtered out of the report.
 - [Single-hub product scope](single-hub-product-scope.md) — treat FishTokri operations as one hub unless the user explicitly asks otherwise.
-- [Batch fish parts and shared stock](batch-fish-parts.md) — configure each batch’s part names/prices; all selected parts deduct from that batch’s one cleaned-weight balance.
+- [Batch fish parts and shared stock](batch-fish-parts.md) — carry part names forward and use current rates across stock; POS deductions consume oldest stock first.

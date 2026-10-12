@@ -167,19 +167,15 @@ function reduceBatchQuantity(batch: Batch, newQuantity: number) {
 }
 
 function sortBatchesFIFO(batches: Batch[]): Batch[] {
-  // earliest expiry first; batches without expiry sort to the end
   return [...batches].sort((a, b) => {
-    const ax = a.expiryDate ? new Date(a.expiryDate).getTime() : Infinity;
-    const bx = b.expiryDate ? new Date(b.expiryDate).getTime() : Infinity;
-    if (ax !== bx) return ax - bx;
-    const ac = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-    const bc = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    const ac = new Date(a.receivedDate ?? a.createdAt ?? 0).getTime();
+    const bc = new Date(b.receivedDate ?? b.createdAt ?? 0).getTime();
     return ac - bc;
   });
 }
 
 /**
- * Consume `qty` units from batches FIFO (earliest expiry first),
+ * Consume `qty` units from batches FIFO (oldest received first),
  * skipping any batches that have already expired.
  * Expired batches are preserved unchanged in the returned list so
  * admins can still see and remove them manually.
@@ -679,6 +675,14 @@ router.post("/adjustments", async (req, res) => {
           parts: it.parts,
           createdAt: now,
         });
+        // Part pricing is the current POS price list for this product, even when
+        // FIFO later consumes stock from an older physical batch.
+        if (batch.parts?.length) {
+          newBatches = currentBatches.map((existingBatch) => ({
+            ...existingBatch,
+            parts: batch.parts!.map((part) => ({ ...part })),
+          }));
+        }
         newBatches.push(batch);
         delta = addQty;
         appliedBatch = batch;
@@ -1049,7 +1053,9 @@ async function expandOrderItems(
           : null;
         const validPart = it.batchId
           ? sourceBatch?.parts?.some((part: any) => String(part.name) === requestedPart)
-          : isSurmaiProduct(parent);
+          : isSurmaiProduct(parent) || parent?.batches?.some((batch: any) =>
+            batch.parts?.some((part: any) => String(part.name) === requestedPart)
+          );
         if (!parent || !validPart) {
           throw new InsufficientStockError(parent?.name ?? it.name ?? "Configured part", 0, qty);
         }
@@ -1181,6 +1187,7 @@ async function applyDelta(
   const itemKey = (item: { productId: string; partName?: BigFishPartName; batchId?: string }) =>
     `${item.productId}:${item.batchId ?? ""}:${item.partName ?? ""}`;
   const deductionPlan = new Map<string, { quantity: number; requestedQuantity: number; overageKg: number }>();
+  const restoreBatchDeductions = new Map<string, Array<{ batchObjectId: string; batchNumber?: string; quantity: number }>>();
 
   // ── Pre-flight stock check (deduct only) ────────────────────────────────────
   // This runs INSIDE withDeductionLock so only one request at a time reaches
@@ -1206,7 +1213,7 @@ async function applyDelta(
         : [];
       // Legacy fish part weights are ignored: every part draws from the same
       // active cleaned-weight batches on its parent product.
-      const activeBatches = isSurmaiProduct(product) || it.batchId
+      const activeBatches = isSurmaiProduct(product) || it.partName || it.batchId
         ? currentBatches.filter((batch) => !batch.expiryDate || new Date(batch.expiryDate).getTime() >= now.getTime())
         : currentBatches;
       const selectedBatch = it.batchId
@@ -1287,6 +1294,9 @@ async function applyDelta(
         .sort({ createdAt: -1, _id: -1 })
         .limit(1)
         .toArray();
+      if (Array.isArray(latestMovement?.batchDeductions)) {
+        restoreBatchDeductions.set(itemKey(it), latestMovement.batchDeductions);
+      }
       if (latestMovement?.type === "order_deduct") {
         it.quantity = Math.min(
           Math.max(0, Number(it.quantity) || 0),
@@ -1347,6 +1357,7 @@ async function applyDelta(
     let newBatches = currentBatches;
     let appliedExpiry: Date | null = null;
     let appliedBatchNumbers: string | undefined;
+    let appliedBatchDeductions: Array<{ batchObjectId: string; batchNumber?: string; quantity: number }> | undefined;
     if (direction === "deduct") {
       if (currentBatches.length > 0) {
         const now2 = new Date();
@@ -1365,9 +1376,18 @@ async function applyDelta(
             return updated;
           });
           appliedBatchNumbers = selectedBatch.batchNumber;
+          appliedBatchDeductions = [{ batchObjectId: String(selectedBatch._id), batchNumber: selectedBatch.batchNumber, quantity: qty }];
         } else {
+          const beforeQuantities = new Map(currentBatches.map((batch) => [String(batch._id), Number(batch.quantity) || 0]));
           const consumed = consumeBatches(currentBatches, qty, now2);
           newBatches = consumed.batches;
+          appliedBatchDeductions = newBatches.flatMap((batch) => {
+            const batchObjectId = String(batch._id ?? "");
+            const deducted = Math.max(0, (beforeQuantities.get(batchObjectId) ?? 0) - (Number(batch.quantity) || 0));
+            return batchObjectId && deducted > 0
+              ? [{ batchObjectId, batchNumber: batch.batchNumber, quantity: deducted }]
+              : [];
+          });
         }
         logger.info({ orderId, productId: String(pid), batchesAfter: newBatches.length, totalAfter: batchesTotal(newBatches) }, "applyDelta: consumeBatches result");
         if (it.batchId) {
@@ -1378,13 +1398,9 @@ async function applyDelta(
             currentBatches.filter((b) => !b.expiryDate || new Date(b.expiryDate).getTime() >= nowMs2)
           );
           appliedExpiry = activeSorted[0]?.expiryDate ?? null;
-          const consumedNames: string[] = [];
-          let rem = qty;
-          for (const b of activeSorted) {
-            if (rem <= 0) break;
-            if (b.batchNumber) consumedNames.push(b.batchNumber);
-            rem -= b.quantity;
-          }
+          const consumedNames = (appliedBatchDeductions ?? [])
+            .map((entry) => entry.batchNumber)
+            .filter((name): name is string => Boolean(name));
           if (consumedNames.length > 0) appliedBatchNumbers = consumedNames.join(", ");
         }
       } else {
@@ -1422,10 +1438,19 @@ async function applyDelta(
         return bt - at; // most recent first
       });
       const targetBatch = sortedByRecent[0];
+      const priorDeductions = restoreBatchDeductions.get(itemKey(it));
       const exactBatch = it.batchId
         ? currentBatches.find((batch) => String(batch._id) === String(it.batchId))
         : undefined;
-      if (exactBatch) {
+      if (priorDeductions?.length) {
+        const quantities = new Map(priorDeductions.map((entry) => [entry.batchObjectId, entry.quantity]));
+        newBatches = currentBatches.map((batch) => {
+          const restoreQty = quantities.get(String(batch._id)) ?? 0;
+          if (restoreQty <= 0) return batch;
+          return { ...batch, quantity: batch.quantity + restoreQty };
+        });
+        appliedBatchNumbers = priorDeductions.map((entry) => entry.batchNumber).filter(Boolean).join(", ");
+      } else if (exactBatch) {
         newBatches = currentBatches.map((batch) => String(batch._id) === String(it.batchId)
           ? { ...batch, quantity: batch.quantity + qty }
           : batch);
@@ -1466,6 +1491,7 @@ async function applyDelta(
         requestedQuantity,
         ...(weightOverageKg > 0 ? { weightOverageKg } : {}),
         ...(it.partName ? { partName: it.partName } : {}),
+        ...(appliedBatchDeductions?.length ? { batchDeductions: appliedBatchDeductions } : {}),
       } : {}),
       ...(it.batchId ? { batchObjectId: String(it.batchId) } : {}),
       ...(appliedBatchNumbers ? { batchNumbers: appliedBatchNumbers } : {}),

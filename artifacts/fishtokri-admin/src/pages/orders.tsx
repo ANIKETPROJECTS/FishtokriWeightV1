@@ -960,6 +960,7 @@ export default function Orders() {
     partNote: string;
     partName: string;
     batchId: string;
+    price: number;
   }[]>([]);
   const [weighingMode, setWeighingMode] = useState<"manual" | "automated">("manual");
   const [editingWeighedItem, setEditingWeighedItem] = useState<{
@@ -1640,14 +1641,30 @@ export default function Orders() {
     Math.max(0, Number(entry.kg) || 0) +
     Math.max(0, Number(entry.grams) || 0) / 1000
   ) * 1000) / 1000;
-  const activePartBatches = (product: any) => (Array.isArray(product?.batches) ? product.batches : [])
-    .filter((batch: any) => Number(batch.quantity) > 0 && Array.isArray(batch.parts) && batch.parts.length > 0)
-    .filter((batch: any) => !batch.expiryDate || new Date(batch.expiryDate).getTime() >= Date.now());
-  const scaleEntryPrice = (product: any, entry: { batchId?: string; partName?: string }) => {
-    const batch = (product?.batches ?? []).find((item: any) => String(item._id ?? item.id) === String(entry.batchId));
-    const part = batch?.parts?.find((item: any) => item.name === entry.partName);
-    return Number(part?.price ?? product?.price) || 0;
+  const newestParts = (product: any) => {
+    const latest = (product?.batches ?? [])
+      .map((batch: any, index: number) => ({ batch, index }))
+      .filter(({ batch }: any) => Number(batch.quantity) > 0 && Array.isArray(batch.parts) && batch.parts.length > 0)
+      .sort((a: any, b: any) =>
+        new Date(b.batch.createdAt ?? b.batch.receivedDate ?? 0).getTime() -
+          new Date(a.batch.createdAt ?? a.batch.receivedDate ?? 0).getTime() ||
+        b.index - a.index
+      )[0]?.batch;
+    return latest?.parts ?? [];
   };
+  const productsWithPartCards = filteredProducts.flatMap((product: any) => {
+    const productId = String(product._id);
+    const partCards = newestParts(product).map((part: any) => ({
+      ...product,
+      name: `${product.name} - ${part.name}`,
+      price: Number(part.price) || 0,
+      posPartName: String(part.name),
+      posCardKey: `${productId}:part:${part.name}`,
+    }));
+    return [{ ...product, posPartName: undefined, posCardKey: `${productId}:whole` }, ...partCards];
+  });
+  const scaleEntryPrice = (product: any, entry: { price?: number; partName?: string }) =>
+    Number(entry.price ?? product?.price) || 0;
   const orderLineKey = (item: { productId: string; batchId?: string; partName?: string }) =>
     `${item.productId}:${item.batchId ?? ""}:${item.partName ?? ""}`;
 
@@ -4316,12 +4333,13 @@ export default function Orders() {
                 </div>
               ) : (
                   <div className="grid grid-cols-2 min-[640px]:grid-cols-3 min-[1000px]:grid-cols-4 min-[1440px]:grid-cols-5 gap-2">
-                  {filteredProducts.map((p) => {
+                  {productsWithPartCards.map((p: any) => {
                     const pid = String(p._id);
-                    const cartItems = selectedProducts.filter((sp) => sp.productId === pid);
+                    const cardPartName = p.posPartName as string | undefined;
+                    const cartItems = selectedProducts.filter((sp) => sp.productId === pid && (sp.partName ?? "") === (cardPartName ?? ""));
                     const cartItem = cartItems[0];
                     const cartWeight = cartItems.reduce((total, item) => total + Math.max(0, Number(item.quantity) || 0), 0);
-                    const isInWeighQueue = scaleEntries.some((entry) => entry.productId === pid);
+                    const isInWeighQueue = scaleEntries.some((entry) => entry.productId === pid && (entry.partName ?? "") === (cardPartName ?? ""));
                     const isBigFishSelector = Boolean(p.isDemoBigFishSelector);
                     const selectedForCard = cartItems.length > 0 || isInWeighQueue;
                     const weightBased = isWeightBasedProduct(p);
@@ -4334,7 +4352,7 @@ export default function Orders() {
                      const atMax = cartWeight >= stock;
                     return (
                       <div
-                        key={pid}
+                        key={p.posCardKey}
                         className={`relative rounded-xl border-2 transition-all select-none flex flex-col ${
                           outOfStock
                             ? "border-gray-100 bg-gray-50 opacity-40 cursor-not-allowed"
@@ -4355,19 +4373,18 @@ export default function Orders() {
                               });
                               return;
                             }
-                            const existingFishLine = selectedProducts.find((item) => item.productId === pid);
-                            const firstPartBatch = activePartBatches(p)[0];
-                            const firstPart = firstPartBatch?.parts?.[0];
-                            setScaleEntries((current) => current.some((entry) => entry.productId === pid)
-                              ? current.filter((entry) => entry.productId !== pid)
+                            const existingFishLine = selectedProducts.find((item) => item.productId === pid && (item.partName ?? "") === (cardPartName ?? ""));
+                            setScaleEntries((current) => current.some((entry) => entry.productId === pid && (entry.partName ?? "") === (cardPartName ?? ""))
+                              ? current.filter((entry) => !(entry.productId === pid && (entry.partName ?? "") === (cardPartName ?? "")))
                               : [...current, {
                                 id: crypto.randomUUID(),
                                 productId: pid,
                                 kg: "",
                                 grams: "",
                                 partNote: p.isDemoBigFishSelector ? existingFishLine?.partNote ?? "" : "",
-                                batchId: firstPartBatch ? String(firstPartBatch._id ?? firstPartBatch.id) : "",
-                                partName: firstPart?.name ?? "",
+                                batchId: "",
+                                partName: cardPartName ?? "",
+                                price: Number(p.price) || 0,
                               }]);
                             return;
                           }
@@ -4390,7 +4407,7 @@ export default function Orders() {
                           <img src={p.imageUrl} alt="" className="w-full h-20 object-cover rounded-t-[10px]" />
                         )}
                         <div className="p-2.5 flex flex-col flex-1">
-                           <p className="text-sm font-medium text-[#162B4D] leading-snug line-clamp-2 min-h-[2.5rem]">{p.displayName ?? p.name}</p>
+                            <p className="text-sm font-medium text-[#162B4D] leading-snug line-clamp-2 min-h-[2.5rem]">{p.posPartName ? p.name : p.displayName ?? p.name}</p>
                           <p className="text-xs text-gray-400 uppercase tracking-wide truncate h-4">{p.category || "\u00A0"}</p>
                           <div className="flex items-center justify-between mt-auto pt-1.5 gap-1">
                             <div className="min-w-0 flex-1">
@@ -4468,97 +4485,18 @@ export default function Orders() {
                       const product = productsForMode.find((candidate) => String(candidate._id) === entry.productId);
                       if (!product) return null;
                       const weightKg = weightForScaleEntry(entry);
-                      const partBatches = activePartBatches(product);
-                      const selectedBatch = (product.batches ?? []).find((batch: any) => String(batch._id ?? batch.id) === entry.batchId);
                       const amount = scaleEntryPrice(product, entry) * weightKg;
                       return (
                         <div key={entry.id} className="rounded-lg border border-[#F2D4D0] bg-white p-2">
-                          {partBatches.length > 0 && (
-                            <div className="mb-2 grid grid-cols-2 gap-2">
-                              <label className="block min-w-0">
-                                <span className="mb-1 block text-xs font-semibold text-black">Batch</span>
-                                <select
-                                  value={entry.batchId}
-                                  onChange={(event) => {
-                                    const batch = partBatches.find((item: any) => String(item._id ?? item.id) === event.target.value);
-                                    setScaleEntries((current) => current.map((candidate) => candidate.id === entry.id
-                                      ? { ...candidate, batchId: event.target.value, partName: batch?.parts?.[0]?.name ?? "" }
-                                      : candidate));
-                                  }}
-                                  className="h-9 w-full rounded-md border border-[#E9B8B1] bg-white px-2 text-sm text-black"
-                                >
-                                  {partBatches.map((batch: any) => (
-                                    <option key={String(batch._id ?? batch.id)} value={String(batch._id ?? batch.id)}>
-                                      {batch.batchNumber || "Batch"} · {formatOrderWeight(Number(batch.quantity) || 0)} left
-                                    </option>
-                                  ))}
-                                </select>
-                              </label>
-                              <label className="block min-w-0">
-                                <span className="mb-1 block text-xs font-semibold text-black">Part / price</span>
-                                <select
-                                  value={entry.partName}
-                                  onChange={(event) => setScaleEntries((current) => current.map((candidate) =>
-                                    candidate.id === entry.id ? { ...candidate, partName: event.target.value } : candidate
-                                  ))}
-                                  className="h-9 w-full rounded-md border border-[#E9B8B1] bg-white px-2 text-sm text-black"
-                                >
-                                  {(selectedBatch?.parts ?? []).map((part: any) => (
-                                    <option key={part.name} value={part.name}>{part.name} · ₹{Number(part.price).toLocaleString("en-IN")}/kg</option>
-                                  ))}
-                                </select>
-                              </label>
-                            </div>
-                          )}
-                          <div className={`grid items-center gap-2 ${product.isDemoBigFishSelector
-                            ? "grid-cols-[minmax(96px,1fr)_92px_58px_58px_28px]"
-                            : "grid-cols-[minmax(96px,1fr)_58px_58px_28px]"}`}>
+                          <div className="grid grid-cols-[minmax(96px,1fr)_58px_58px_28px] items-center gap-2">
                             <div className="min-w-0">
-                              <p className="truncate text-base font-bold leading-5 text-black">{product.displayName ?? product.name}</p>
+                              <p className="truncate text-base font-bold leading-5 text-black">{entry.partName ? `${product.name} - ${entry.partName}` : product.displayName ?? product.name}</p>
                               <p className="flex flex-wrap gap-x-1 text-sm leading-5 text-black">
                                 <span>₹{scaleEntryPrice(product, entry).toLocaleString("en-IN")}/kg</span>
-                                <span>· {formatOrderWeight(Math.max(0, Number(selectedBatch?.quantity ?? product.quantity) || 0))} left</span>
+                                <span>· {formatOrderWeight(Math.max(0, Number(product.quantity) || 0))} left</span>
                                 <span>· {formatRupees(amount)}</span>
                               </p>
                             </div>
-                            {product.isDemoBigFishSelector && partBatches.length === 0 && (
-                              <label className="block min-w-0">
-                                <span className="mb-1 block text-sm font-semibold text-black">Part note</span>
-                                <div className="relative">
-                                  <input
-                                    type="text"
-                                    list={`weigh-part-notes-${entry.productId}`}
-                                    value={entry.partNote}
-                                    onChange={(event) => {
-                                      const partNote = event.target.value.slice(0, 100);
-                                      setScaleEntries((current) => current.map((candidate) =>
-                                       candidate.id === entry.id ? { ...candidate, partNote } : candidate
-                                      ));
-                                    }}
-                                    placeholder="Type or select"
-                                    className="h-9 w-full rounded-md border border-[#E9B8B1] bg-white px-2 pr-7 text-sm text-black placeholder:text-black outline-none focus:border-[#F05B4E]"
-                                    aria-label={`${product.name} part note`}
-                                    data-testid={`input-scale-part-note-${entry.productId}`}
-                                  />
-                                  {entry.partNote && (
-                                    <button
-                                      type="button"
-                                      onClick={() => setScaleEntries((current) => current.map((candidate) =>
-                                       candidate.id === entry.id ? { ...candidate, partNote: "" } : candidate
-                                      ))}
-                                      className="absolute right-1 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded text-black hover:bg-red-50 hover:text-red-700"
-                                      aria-label={`Clear ${product.name} part note`}
-                                      title="Clear part note"
-                                    >
-                                      <X className="h-4 w-4" />
-                                    </button>
-                                  )}
-                                </div>
-                                <datalist id={`weigh-part-notes-${entry.productId}`}>
-                                  {SURMAI_PART_NAMES.map((partName) => <option key={partName} value={partName} />)}
-                                </datalist>
-                              </label>
-                            )}
                             <label className="block">
                               <span className="mb-1 block text-sm font-semibold text-black">Kg</span>
                               <input
@@ -4606,7 +4544,7 @@ export default function Orders() {
                             </label>
                             <button
                               type="button"
-                              onClick={() => setScaleEntries((current) => current.filter((candidate) => candidate.productId !== entry.productId))}
+                              onClick={() => setScaleEntries((current) => current.filter((candidate) => candidate.id !== entry.id))}
                               className="flex h-8 w-8 items-center justify-center rounded-md text-[#8D3D36] hover:bg-[#FDE5E1]"
                               aria-label={`Remove ${product.name} from weighing list`}
                               title="Remove from weighing list"
