@@ -949,12 +949,17 @@ export default function Orders() {
     quantity: number;
     isCombo?: boolean;
     partNote?: string;
+    partName?: string;
+    batchId?: string;
   }[]>([]);
   const [scaleEntries, setScaleEntries] = useState<{
+    id: string;
     productId: string;
     kg: string;
     grams: string;
     partNote: string;
+    partName: string;
+    batchId: string;
   }[]>([]);
   const [weighingMode, setWeighingMode] = useState<"manual" | "automated">("manual");
   const [editingWeighedItem, setEditingWeighedItem] = useState<{
@@ -962,6 +967,8 @@ export default function Orders() {
     kg: string;
     grams: string;
     partNote: string;
+    partName?: string;
+    batchId?: string;
   } | null>(null);
 
   useEffect(() => {
@@ -1633,13 +1640,23 @@ export default function Orders() {
     Math.max(0, Number(entry.kg) || 0) +
     Math.max(0, Number(entry.grams) || 0) / 1000
   ) * 1000) / 1000;
+  const activePartBatches = (product: any) => (Array.isArray(product?.batches) ? product.batches : [])
+    .filter((batch: any) => Number(batch.quantity) > 0 && Array.isArray(batch.parts) && batch.parts.length > 0)
+    .filter((batch: any) => !batch.expiryDate || new Date(batch.expiryDate).getTime() >= Date.now());
+  const scaleEntryPrice = (product: any, entry: { batchId?: string; partName?: string }) => {
+    const batch = (product?.batches ?? []).find((item: any) => String(item._id ?? item.id) === String(entry.batchId));
+    const part = batch?.parts?.find((item: any) => item.name === entry.partName);
+    return Number(part?.price ?? product?.price) || 0;
+  };
+  const orderLineKey = (item: { productId: string; batchId?: string; partName?: string }) =>
+    `${item.productId}:${item.batchId ?? ""}:${item.partName ?? ""}`;
 
   const scaleQueueTotals = scaleEntries.reduce((totals, entry) => {
     const product = productsForMode.find((candidate) => String(candidate._id) === entry.productId);
     const weightKg = weightForScaleEntry(entry);
     return {
       weightKg: totals.weightKg + weightKg,
-      amount: totals.amount + (product ? orderProductAmount(product, weightKg) : 0),
+      amount: totals.amount + (product ? scaleEntryPrice(product, entry) * weightKg : 0),
     };
   }, { weightKg: 0, amount: 0 });
 
@@ -1673,17 +1690,20 @@ export default function Orders() {
     const batchWeightsByProduct = new Map<string, number>();
     for (const { entry, product, weightKg } of preparedEntries) {
       const productId = entry.productId;
-      const available = Math.max(0, Number(product.quantity) || 0);
+      const batch = (product.batches ?? []).find((item: any) => String(item._id ?? item.id) === entry.batchId);
+      const available = Math.max(0, Number(batch?.quantity ?? product.quantity) || 0);
+      const stockKey = `${productId}:${entry.batchId || ""}`;
       const existingProductWeight = selectedProducts
-        .filter((item) => item.productId === productId)
+        .filter((item) => item.productId === productId && (item.batchId ?? "") === (entry.batchId ?? ""))
         .reduce((total, item) => total + Math.max(0, Number(item.quantity) || 0), 0)
-        + (batchWeightsByProduct.get(productId) || 0);
+        + (batchWeightsByProduct.get(stockKey) || 0);
       const totalRequestedWeight = existingProductWeight + weightKg;
       const overageKg = Math.max(0, totalRequestedWeight - available);
       const canUsePosBuffer =
         orderDeliveryType === "takeaway" &&
         posProductMode === "normal" &&
-        isWeightBasedProduct(product);
+        isWeightBasedProduct(product) &&
+        !entry.partName;
       if (
         overageKg > 0 &&
         (!canUsePosBuffer || available <= 0 || overageKg > POS_WEIGHT_OVERAGE_LIMIT_KG + 1e-9)
@@ -1700,27 +1720,33 @@ export default function Orders() {
         });
         return;
       }
-      batchWeightsByProduct.set(productId, (batchWeightsByProduct.get(productId) || 0) + weightKg);
+      batchWeightsByProduct.set(stockKey, (batchWeightsByProduct.get(stockKey) || 0) + weightKg);
     }
 
     setSelectedProducts((current) => {
       let next = [...current];
       for (const { entry, product, weightKg } of preparedEntries) {
         const productId = entry.productId;
-        const partNote = product.isDemoBigFishSelector ? entry.partNote.trim() || undefined : undefined;
-        const currentLine = next.find((item) => item.productId === productId);
+        const partNote = product.isDemoBigFishSelector && !entry.partName
+          ? entry.partNote.trim() || undefined
+          : undefined;
+        const currentLine = next.find((item) => orderLineKey(item) === orderLineKey({
+          productId, batchId: entry.batchId, partName: entry.partName,
+        }));
         if (currentLine) {
-          next = next.map((item) => item.productId === productId
+          next = next.map((item) => orderLineKey(item) === orderLineKey(currentLine)
             ? { ...item, quantity: item.quantity + weightKg, partNote: partNote ?? item.partNote }
             : item);
         } else {
           next.push({
             productId,
-            name: product.name,
-            price: Number(product.price) || 0,
+            name: entry.partName ? `${product.name} - ${entry.partName}` : product.name,
+            price: scaleEntryPrice(product, entry),
             unit: product.unit ?? "",
             quantity: weightKg,
             isCombo: false,
+            ...(entry.batchId ? { batchId: entry.batchId } : {}),
+            ...(entry.partName ? { partName: entry.partName } : {}),
             ...(partNote ? { partNote } : {}),
           });
         }
@@ -1730,17 +1756,18 @@ export default function Orders() {
     toast({
       title: "Weights added to order",
       description: preparedEntries.map(({ entry, product, weightKg }) => {
-        const partNote = product.isDemoBigFishSelector ? entry.partNote.trim() : "";
+        const partNote = entry.partName || (product.isDemoBigFishSelector ? entry.partNote.trim() : "");
         return `${product.name}${partNote ? ` · ${partNote}` : ""} · ${formatOrderWeight(weightKg)}`;
       }).join(", "),
     });
     setScaleEntries([]);
   };
 
-  const removeSelectedProduct = (productId: string) => {
-    setSelectedProducts((current) => current.filter((item) => item.productId !== productId));
-    setScaleEntries((current) => current.filter((entry) => entry.productId !== productId));
-    setEditingWeighedItem((current) => current?.productId === productId ? null : current);
+  const removeSelectedProduct = (line: { productId: string; batchId?: string; partName?: string }) => {
+    const key = orderLineKey(line);
+    setSelectedProducts((current) => current.filter((item) => orderLineKey(item) !== key));
+    setScaleEntries((current) => current.filter((entry) => orderLineKey(entry) !== key));
+    setEditingWeighedItem((current) => current && orderLineKey(current) === key ? null : current);
   };
 
   const beginEditingWeighedItem = (item: (typeof selectedProducts)[number]) => {
@@ -1751,6 +1778,8 @@ export default function Orders() {
       kg: String(wholeKg),
       grams: String(grams),
       partNote: item.partNote ?? "",
+      partName: item.partName,
+      batchId: item.batchId,
     });
   };
 
@@ -1778,13 +1807,15 @@ export default function Orders() {
       return;
     }
 
-    const available = Math.max(0, Number(product.quantity) || 0);
+    const selectedBatch = (product.batches ?? []).find((batch: any) => String(batch._id ?? batch.id) === editingWeighedItem.batchId);
+    const available = Math.max(0, Number(selectedBatch?.quantity ?? product.quantity) || 0);
     const canUsePosBuffer =
       orderDeliveryType === "takeaway" &&
       posProductMode === "normal" &&
       isWeightBasedProduct(product) &&
+      !editingWeighedItem.partName &&
       available > 0;
-    const currentLineWeight = selectedProducts.find((item) => item.productId === editingWeighedItem.productId)?.quantity ?? 0;
+    const currentLineWeight = selectedProducts.find((item) => orderLineKey(item) === orderLineKey(editingWeighedItem))?.quantity ?? 0;
     const maxAllowed = Math.max(
       available + (canUsePosBuffer ? POS_WEIGHT_OVERAGE_LIMIT_KG : 0),
       editingOrderId ? currentLineWeight : 0,
@@ -1801,7 +1832,7 @@ export default function Orders() {
     }
 
     const updatedPartNote = editingWeighedItem.partNote.trim().slice(0, 100) || undefined;
-    setSelectedProducts((current) => current.map((item) => item.productId === editingWeighedItem.productId
+    setSelectedProducts((current) => current.map((item) => orderLineKey(item) === orderLineKey(editingWeighedItem)
       ? {
           ...item,
           quantity: nextWeight,
@@ -1811,7 +1842,7 @@ export default function Orders() {
     setEditingWeighedItem(null);
     toast({
       title: "Weighed item updated",
-      description: `${product.name} · ${formatOrderWeight(nextWeight)} · ${formatRupees(orderProductAmount(product, nextWeight))}`,
+      description: `${product.name}${editingWeighedItem.partName ? ` - ${editingWeighedItem.partName}` : ""} · ${formatOrderWeight(nextWeight)} · ${formatRupees(Number(selectedProducts.find((item) => orderLineKey(item) === orderLineKey(editingWeighedItem))?.price ?? product.price) * nextWeight)}`,
     });
   };
 
@@ -2106,14 +2137,16 @@ export default function Orders() {
       .filter((p) => p.quantity > 0)
       .map((p) => ({
         productId: p.productId,
+        ...(p.batchId ? { batchId: p.batchId } : {}),
+        ...(p.partName ? { parentProductId: p.productId, partName: p.partName } : {}),
         ...(p.partNote?.trim()
           ? {
             partNote: p.partNote.trim().slice(0, 100),
-            ...(isSurmaiPartName(p.partNote.trim()) ? { partName: p.partNote.trim() } : {}),
+            ...(!p.partName && isSurmaiPartName(p.partNote.trim()) ? { partName: p.partNote.trim() } : {}),
           }
           : {}),
         name: p.name,
-        price: orderProductPriceForApi(p),
+        price: p.partName ? Number(p.price) || 0 : orderProductPriceForApi(p),
         quantity: p.quantity,
         unit: isWeightBasedProduct(p) ? "per kg" : p.unit,
       }));
@@ -4323,13 +4356,18 @@ export default function Orders() {
                               return;
                             }
                             const existingFishLine = selectedProducts.find((item) => item.productId === pid);
+                            const firstPartBatch = activePartBatches(p)[0];
+                            const firstPart = firstPartBatch?.parts?.[0];
                             setScaleEntries((current) => current.some((entry) => entry.productId === pid)
                               ? current.filter((entry) => entry.productId !== pid)
                               : [...current, {
+                                id: crypto.randomUUID(),
                                 productId: pid,
                                 kg: "",
                                 grams: "",
                                 partNote: p.isDemoBigFishSelector ? existingFishLine?.partNote ?? "" : "",
+                                batchId: firstPartBatch ? String(firstPartBatch._id ?? firstPartBatch.id) : "",
+                                partName: firstPart?.name ?? "",
                               }]);
                             return;
                           }
@@ -4430,21 +4468,60 @@ export default function Orders() {
                       const product = productsForMode.find((candidate) => String(candidate._id) === entry.productId);
                       if (!product) return null;
                       const weightKg = weightForScaleEntry(entry);
-                      const amount = orderProductAmount(product, weightKg);
+                      const partBatches = activePartBatches(product);
+                      const selectedBatch = (product.batches ?? []).find((batch: any) => String(batch._id ?? batch.id) === entry.batchId);
+                      const amount = scaleEntryPrice(product, entry) * weightKg;
                       return (
-                        <div key={entry.productId} className="rounded-lg border border-[#F2D4D0] bg-white p-2">
+                        <div key={entry.id} className="rounded-lg border border-[#F2D4D0] bg-white p-2">
+                          {partBatches.length > 0 && (
+                            <div className="mb-2 grid grid-cols-2 gap-2">
+                              <label className="block min-w-0">
+                                <span className="mb-1 block text-xs font-semibold text-black">Batch</span>
+                                <select
+                                  value={entry.batchId}
+                                  onChange={(event) => {
+                                    const batch = partBatches.find((item: any) => String(item._id ?? item.id) === event.target.value);
+                                    setScaleEntries((current) => current.map((candidate) => candidate.id === entry.id
+                                      ? { ...candidate, batchId: event.target.value, partName: batch?.parts?.[0]?.name ?? "" }
+                                      : candidate));
+                                  }}
+                                  className="h-9 w-full rounded-md border border-[#E9B8B1] bg-white px-2 text-sm text-black"
+                                >
+                                  {partBatches.map((batch: any) => (
+                                    <option key={String(batch._id ?? batch.id)} value={String(batch._id ?? batch.id)}>
+                                      {batch.batchNumber || "Batch"} · {formatOrderWeight(Number(batch.quantity) || 0)} left
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                              <label className="block min-w-0">
+                                <span className="mb-1 block text-xs font-semibold text-black">Part / price</span>
+                                <select
+                                  value={entry.partName}
+                                  onChange={(event) => setScaleEntries((current) => current.map((candidate) =>
+                                    candidate.id === entry.id ? { ...candidate, partName: event.target.value } : candidate
+                                  ))}
+                                  className="h-9 w-full rounded-md border border-[#E9B8B1] bg-white px-2 text-sm text-black"
+                                >
+                                  {(selectedBatch?.parts ?? []).map((part: any) => (
+                                    <option key={part.name} value={part.name}>{part.name} · ₹{Number(part.price).toLocaleString("en-IN")}/kg</option>
+                                  ))}
+                                </select>
+                              </label>
+                            </div>
+                          )}
                           <div className={`grid items-center gap-2 ${product.isDemoBigFishSelector
                             ? "grid-cols-[minmax(96px,1fr)_92px_58px_58px_28px]"
                             : "grid-cols-[minmax(96px,1fr)_58px_58px_28px]"}`}>
                             <div className="min-w-0">
                               <p className="truncate text-base font-bold leading-5 text-black">{product.displayName ?? product.name}</p>
                               <p className="flex flex-wrap gap-x-1 text-sm leading-5 text-black">
-                                <span>₹{Number(product.price || 0).toLocaleString("en-IN")}/kg</span>
-                                <span>· {formatOrderWeight(Math.max(0, Number(product.quantity) || 0))} left</span>
+                                <span>₹{scaleEntryPrice(product, entry).toLocaleString("en-IN")}/kg</span>
+                                <span>· {formatOrderWeight(Math.max(0, Number(selectedBatch?.quantity ?? product.quantity) || 0))} left</span>
                                 <span>· {formatRupees(amount)}</span>
                               </p>
                             </div>
-                            {product.isDemoBigFishSelector && (
+                            {product.isDemoBigFishSelector && partBatches.length === 0 && (
                               <label className="block min-w-0">
                                 <span className="mb-1 block text-sm font-semibold text-black">Part note</span>
                                 <div className="relative">
@@ -4455,7 +4532,7 @@ export default function Orders() {
                                     onChange={(event) => {
                                       const partNote = event.target.value.slice(0, 100);
                                       setScaleEntries((current) => current.map((candidate) =>
-                                        candidate.productId === entry.productId ? { ...candidate, partNote } : candidate
+                                       candidate.id === entry.id ? { ...candidate, partNote } : candidate
                                       ));
                                     }}
                                     placeholder="Type or select"
@@ -4467,7 +4544,7 @@ export default function Orders() {
                                     <button
                                       type="button"
                                       onClick={() => setScaleEntries((current) => current.map((candidate) =>
-                                        candidate.productId === entry.productId ? { ...candidate, partNote: "" } : candidate
+                                       candidate.id === entry.id ? { ...candidate, partNote: "" } : candidate
                                       ))}
                                       className="absolute right-1 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded text-black hover:bg-red-50 hover:text-red-700"
                                       aria-label={`Clear ${product.name} part note`}
@@ -4495,7 +4572,7 @@ export default function Orders() {
                                   const value = event.target.value;
                                   if (!/^\d*$/.test(value)) return;
                                   setScaleEntries((current) => current.map((candidate) =>
-                                    candidate.productId === entry.productId ? { ...candidate, kg: value } : candidate
+                                   candidate.id === entry.id ? { ...candidate, kg: value } : candidate
                                   ));
                                 }}
                                 placeholder="0"
@@ -4518,7 +4595,7 @@ export default function Orders() {
                                   const value = event.target.value;
                                   if (!/^\d*$/.test(value) || (value !== "" && Number(value) > 999)) return;
                                   setScaleEntries((current) => current.map((candidate) =>
-                                    candidate.productId === entry.productId ? { ...candidate, grams: value } : candidate
+                                   candidate.id === entry.id ? { ...candidate, grams: value } : candidate
                                   ));
                                 }}
                                 placeholder="0"
@@ -5175,14 +5252,15 @@ export default function Orders() {
                 ) : (
         <div className="px-3 py-2 space-y-0">
                     {selectedProducts.map((p) => {
-                      const stock = stockOf(p.productId);
                       const weightBased = isWeightBasedProduct(p);
                       const productDetails = productsForMode.find((candidate) => String(candidate._id) === p.productId);
+                      const selectedBatch = (productDetails?.batches ?? []).find((batch: any) => String(batch._id ?? batch.id) === p.batchId);
+                      const stock = Number(selectedBatch?.quantity ?? stockOf(p.productId));
                       const atMax = p.quantity >= stock;
-                      const editDraft = editingWeighedItem?.productId === p.productId ? editingWeighedItem : null;
+                      const editDraft = editingWeighedItem && orderLineKey(editingWeighedItem) === orderLineKey(p) ? editingWeighedItem : null;
                       const editedWeight = editDraft ? weightForScaleEntry(editDraft) : p.quantity;
                       return (
-                        <div key={`${p.productId}:${p.partNote ?? ""}`} className="flex flex-wrap items-center gap-2 py-2 border-b border-gray-100 last:border-0">
+                        <div key={orderLineKey(p)} className="flex flex-wrap items-center gap-2 py-2 border-b border-gray-100 last:border-0">
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-sm font-semibold leading-tight text-black">{p.name}</p>
                             {p.partNote && <p className="truncate text-xs text-black">Note: {p.partNote}</p>}
@@ -5216,7 +5294,7 @@ export default function Orders() {
                               type="button"
                               aria-label={`Remove ${p.name} from order`}
                               title="Delete item"
-                              onClick={() => removeSelectedProduct(p.productId)}
+                              onClick={() => removeSelectedProduct(p)}
                               className="flex h-7 w-7 items-center justify-center rounded text-black hover:bg-red-50 hover:text-red-700"
                             >
                               <Trash2 className="h-4 w-4" />

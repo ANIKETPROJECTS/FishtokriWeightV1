@@ -1417,7 +1417,8 @@ router.post("/", async (req: ScopedRequest, res) => {
     const cleanItems = items.map((it: any) => ({
       productId: it.productId ? String(it.productId) : undefined,
       parentProductId: it.parentProductId ? String(it.parentProductId) : undefined,
-      partName: ["Head", "Body", "Tail"].includes(String(it.partName)) ? String(it.partName) : undefined,
+      batchId: it.batchId ? String(it.batchId) : undefined,
+      partName: typeof it.partName === "string" ? it.partName.trim().slice(0, 60) || undefined : undefined,
       partNote: typeof it.partNote === "string" ? it.partNote.trim().slice(0, 100) || undefined : undefined,
       name: String(it.name ?? "").trim(),
       price: Number(it.price) || 0,
@@ -2095,7 +2096,8 @@ router.put("/:id", async (req: ScopedRequest, res) => {
       update.items = items.map((it: any) => ({
         productId: it?.productId ? String(it.productId) : undefined,
         parentProductId: it?.parentProductId ? String(it.parentProductId) : undefined,
-        partName: ["Head", "Body", "Tail"].includes(String(it?.partName)) ? String(it.partName) : undefined,
+        batchId: it?.batchId ? String(it.batchId) : undefined,
+        partName: typeof it?.partName === "string" ? it.partName.trim().slice(0, 60) || undefined : undefined,
         partNote: typeof it?.partNote === "string" ? it.partNote.trim().slice(0, 100) || undefined : undefined,
         name: String(it?.name ?? "").trim(),
         price: Number(it?.price) || 0,

@@ -78,6 +78,7 @@ type Batch = {
   batchNumber?: string;
   quantity: number;
   partWeights?: { Head: number; Body: number; Tail: number } | null;
+  parts?: Array<{ name: string; price: number }>;
   price?: number | null;
   rawWeight?: number | null;
   cleanedWeight?: number | null;
@@ -124,6 +125,11 @@ function normalizeBatch(b: any): Batch {
         Tail: Math.max(0, Number(b.partWeights.Tail) || 0),
       }
       : null,
+    parts: Array.isArray(b?.parts)
+      ? b.parts
+        .map((part: any) => ({ name: String(part?.name ?? "").trim().slice(0, 60), price: Number(part?.price) }))
+        .filter((part: any) => part.name && Number.isFinite(part.price) && part.price > 0)
+      : [],
     price: b?.price != null && Number.isFinite(Number(b.price)) ? Number(b.price) : null,
     rawWeight: b?.rawWeight != null && Number.isFinite(Number(b.rawWeight)) ? Number(b.rawWeight) : null,
     cleanedWeight: b?.cleanedWeight != null && Number.isFinite(Number(b.cleanedWeight)) ? Number(b.cleanedWeight) : null,
@@ -201,10 +207,10 @@ function consumeBatches(batches: Batch[], qty: number, now: Date = new Date()): 
   return { batches: result, remaining };
 }
 
-type BigFishPartName = "Head" | "Body" | "Tail";
+type BigFishPartName = string;
 
 function isBigFishPartName(value: unknown): value is BigFishPartName {
-  return BIG_FISH_PART_NAMES.includes(String(value) as BigFishPartName);
+  return typeof value === "string" && value.trim().length > 0 && value.trim().length <= 60;
 }
 
 /**
@@ -485,6 +491,7 @@ router.get("/products", async (req, res) => {
             batchNumber: b.batchNumber ?? "",
             quantity: Number(b.quantity) || 0,
             partWeights: b.partWeights ?? null,
+           parts: b.parts ?? [],
             price: b.price ?? null,
             rawWeight: b.rawWeight ?? null,
             cleanedWeight: b.cleanedWeight ?? null,
@@ -669,6 +676,7 @@ router.post("/adjustments", async (req, res) => {
           expiryDate: it.expiryDate,
           receivedDate: it.receivedDate ?? now,
           notes: it.notes,
+          parts: it.parts,
           createdAt: now,
         });
         newBatches.push(batch);
@@ -984,9 +992,9 @@ function orderShouldDeduct(order: OrderForSync, options: OrderInventoryOptions =
 async function expandOrderItems(
   productsCol: any,
   combosCol: any,
-  rawItems: Array<{ productId?: string; parentProductId?: string; partName?: BigFishPartName; name?: string; quantity?: number; unit?: string }>,
-): Promise<Array<{ productId: string; parentProductId?: string; partName?: BigFishPartName; name: string; quantity: number; unit: string }>> {
-  const aggregated = new Map<string, { productId: string; parentProductId?: string; partName?: BigFishPartName; name: string; quantity: number; unit: string }>();
+  rawItems: Array<{ productId?: string; parentProductId?: string; batchId?: string; partName?: BigFishPartName; name?: string; quantity?: number; unit?: string }>,
+): Promise<Array<{ productId: string; parentProductId?: string; batchId?: string; partName?: BigFishPartName; name: string; quantity: number; unit: string }>> {
+  const aggregated = new Map<string, { productId: string; parentProductId?: string; batchId?: string; partName?: BigFishPartName; name: string; quantity: number; unit: string }>();
 
   /** Helper: expand a resolved combo document into aggregated constituent products */
   async function expandCombo(combo: any, qty: number) {
@@ -1027,22 +1035,32 @@ async function expandOrderItems(
 
     // Part labels remain on the order line for receipts and audit history;
     // Head, Body, and Tail all consume the same parent product stock.
-    const requestedPart = isBigFishPartName(it.partName) ? it.partName : undefined;
+    const requestedPart = isBigFishPartName(it.partName) ? it.partName.trim() : undefined;
     const requestedParentId = it.parentProductId ?? it.productId;
     if (requestedPart && requestedParentId) {
       const parentId = toId(String(requestedParentId));
       if (parentId) {
         const parent = await productsCol.findOne(
           { _id: parentId },
-          { projection: { _id: 1, name: 1, unit: 1, demoKey: 1, isDemoBigFishSelector: 1 } },
+          { projection: { _id: 1, name: 1, unit: 1, demoKey: 1, isDemoBigFishSelector: 1, batches: 1 } },
         );
-        if (isSurmaiProduct(parent)) {
-          const key = `${String(parentId)}:${requestedPart}`;
+        const sourceBatch = it.batchId
+          ? parent?.batches?.find((batch: any) => String(batch._id) === String(it.batchId))
+          : null;
+        const validPart = it.batchId
+          ? sourceBatch?.parts?.some((part: any) => String(part.name) === requestedPart)
+          : isSurmaiProduct(parent);
+        if (!parent || !validPart) {
+          throw new InsufficientStockError(parent?.name ?? it.name ?? "Configured part", 0, qty);
+        }
+        if (parent && validPart) {
+          const key = `${String(parentId)}:${it.batchId ?? ""}:${requestedPart}`;
           const entry = aggregated.get(key);
           if (entry) entry.quantity += qty;
           else aggregated.set(key, {
             productId: String(parentId),
             parentProductId: String(parentId),
+            ...(it.batchId ? { batchId: String(it.batchId) } : {}),
             partName: requestedPart,
             name: it.name ?? `${parent.name ?? "Surmai"} - ${requestedPart}`,
             quantity: qty,
@@ -1160,8 +1178,8 @@ async function applyDelta(
     return 0;
   }
 
-  const itemKey = (item: { productId: string; partName?: BigFishPartName }) =>
-    `${item.productId}:${item.partName ?? ""}`;
+  const itemKey = (item: { productId: string; partName?: BigFishPartName; batchId?: string }) =>
+    `${item.productId}:${item.batchId ?? ""}:${item.partName ?? ""}`;
   const deductionPlan = new Map<string, { quantity: number; requestedQuantity: number; overageKg: number }>();
 
   // ── Pre-flight stock check (deduct only) ────────────────────────────────────
@@ -1188,16 +1206,21 @@ async function applyDelta(
         : [];
       // Legacy fish part weights are ignored: every part draws from the same
       // active cleaned-weight batches on its parent product.
-      const activeBatches = isSurmaiProduct(product)
+      const activeBatches = isSurmaiProduct(product) || it.batchId
         ? currentBatches.filter((batch) => !batch.expiryDate || new Date(batch.expiryDate).getTime() >= now.getTime())
         : currentBatches;
-      const available = currentBatches.length > 0
-        ? batchesTotal(activeBatches)
+      const selectedBatch = it.batchId
+        ? activeBatches.find((batch) => String(batch._id) === String(it.batchId))
+        : undefined;
+      const available = it.batchId
+        ? Math.max(0, Number(selectedBatch?.quantity) || 0)
+        : currentBatches.length > 0
+          ? batchesTotal(activeBatches)
         : Math.max(0, Number(product.quantity) || 0);
       const requestedQuantity = Math.max(0, Number(it.quantity) || 0);
       const isKgProduct = /kg/i.test(String(it.unit || product.unit || ""));
-      const canUsePosBuffer = Boolean(order.posWeightBuffer) && isKgProduct;
-      const groupKey = String(pid);
+      const canUsePosBuffer = Boolean(order.posWeightBuffer) && isKgProduct && !it.partName;
+      const groupKey = `${String(pid)}:${it.batchId ?? ""}`;
       const group = stockGroups.get(groupKey) ?? {
         productName: product.name ?? it.name ?? "Unknown product",
         available,
@@ -1256,6 +1279,7 @@ async function applyDelta(
         orderId,
         productId: String(it.productId),
         type: { $in: ["order_deduct", "order_restore"] },
+        ...(it.batchId ? { batchObjectId: String(it.batchId) } : {}),
         ...(it.partName ? { partName: it.partName } : { partName: { $exists: false } }),
       };
       const [latestMovement] = await movements
@@ -1327,23 +1351,42 @@ async function applyDelta(
       if (currentBatches.length > 0) {
         const now2 = new Date();
         const nowMs2 = now2.getTime();
-        const consumed = consumeBatches(currentBatches, qty, now2);
-        newBatches = consumed.batches;
-        logger.info({ orderId, productId: String(pid), batchesAfter: newBatches.length, totalAfter: batchesTotal(newBatches) }, "applyDelta: consumeBatches result");
-        // Pick expiry from the oldest active (non-expired) batch that was consumed
-        const activeSorted = sortBatchesFIFO(
-          currentBatches.filter((b) => !b.expiryDate || new Date(b.expiryDate).getTime() >= nowMs2)
-        );
-        appliedExpiry = activeSorted[0]?.expiryDate ?? null;
-        // Track which batch numbers were consumed (FIFO order) for the movement record
-        const consumedNames: string[] = [];
-        let rem = qty;
-        for (const b of activeSorted) {
-          if (rem <= 0) break;
-          if (b.batchNumber) consumedNames.push(b.batchNumber);
-          rem -= b.quantity;
+        const selectedBatch = it.batchId
+          ? currentBatches.find((batch) => String(batch._id) === String(it.batchId))
+          : undefined;
+        if (it.batchId) {
+          if (!selectedBatch || selectedBatch.quantity + 1e-9 < qty || (selectedBatch.expiryDate && new Date(selectedBatch.expiryDate).getTime() < nowMs2)) {
+            throw new InsufficientStockError(existing.name ?? it.name ?? "Product", Number(selectedBatch?.quantity) || 0, qty);
+          }
+          newBatches = currentBatches.map((batch) => {
+            if (String(batch._id) !== String(it.batchId)) return batch;
+            const updated = { ...batch, partWeights: batch.partWeights ? { ...batch.partWeights } : null };
+            reduceBatchQuantity(updated, updated.quantity - qty);
+            return updated;
+          });
+          appliedBatchNumbers = selectedBatch.batchNumber;
+        } else {
+          const consumed = consumeBatches(currentBatches, qty, now2);
+          newBatches = consumed.batches;
         }
-        if (consumedNames.length > 0) appliedBatchNumbers = consumedNames.join(", ");
+        logger.info({ orderId, productId: String(pid), batchesAfter: newBatches.length, totalAfter: batchesTotal(newBatches) }, "applyDelta: consumeBatches result");
+        if (it.batchId) {
+          appliedExpiry = selectedBatch?.expiryDate ?? null;
+        } else {
+          // Pick expiry and batches from the FIFO stock actually consumed.
+          const activeSorted = sortBatchesFIFO(
+            currentBatches.filter((b) => !b.expiryDate || new Date(b.expiryDate).getTime() >= nowMs2)
+          );
+          appliedExpiry = activeSorted[0]?.expiryDate ?? null;
+          const consumedNames: string[] = [];
+          let rem = qty;
+          for (const b of activeSorted) {
+            if (rem <= 0) break;
+            if (b.batchNumber) consumedNames.push(b.batchNumber);
+            rem -= b.quantity;
+          }
+          if (consumedNames.length > 0) appliedBatchNumbers = consumedNames.join(", ");
+        }
       } else {
         // legacy product with no batches — just decrement quantity
         await products.updateOne(
@@ -1379,7 +1422,15 @@ async function applyDelta(
         return bt - at; // most recent first
       });
       const targetBatch = sortedByRecent[0];
-      if (targetBatch) {
+      const exactBatch = it.batchId
+        ? currentBatches.find((batch) => String(batch._id) === String(it.batchId))
+        : undefined;
+      if (exactBatch) {
+        newBatches = currentBatches.map((batch) => String(batch._id) === String(it.batchId)
+          ? { ...batch, quantity: batch.quantity + qty }
+          : batch);
+        appliedBatchNumbers = exactBatch.batchNumber;
+      } else if (targetBatch && !it.batchId) {
         newBatches = currentBatches.map((b) =>
           b._id && targetBatch._id && String(b._id) === String(targetBatch._id)
             ? { ...b, quantity: b.quantity + qty }
@@ -1416,6 +1467,7 @@ async function applyDelta(
         ...(weightOverageKg > 0 ? { weightOverageKg } : {}),
         ...(it.partName ? { partName: it.partName } : {}),
       } : {}),
+      ...(it.batchId ? { batchObjectId: String(it.batchId) } : {}),
       ...(appliedBatchNumbers ? { batchNumbers: appliedBatchNumbers } : {}),
       expiryDate: appliedExpiry || undefined,
       createdAt: now,

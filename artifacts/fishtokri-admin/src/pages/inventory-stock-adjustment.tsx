@@ -47,6 +47,7 @@ type Batch = {
   batchNumber: string;
   quantity: number;
   partWeights?: { Head?: number; Body?: number; Middle?: number; Tail?: number } | null;
+  parts?: Array<{ name: string; price: number }>;
   price?: number | null;
   rawWeight?: number | null;
   cleanedWeight?: number | null;
@@ -86,6 +87,7 @@ type FormRow = {
   expiryTime: string;
   batchNumber: string;
   batchNotes: string;
+  parts: Array<{ name: string; price: string }>;
   removeQuantity: string;
   removeKg: string;
   removeGrams: string;
@@ -175,6 +177,7 @@ function emptyRow(): FormRow {
     productId: "", productName: "", category: "", unit: "", quantityBefore: 0,
     mode: "add", addQuantity: "", rawWeight: "", cleanedWeight: "", shelfLifeDays: "", expiryDate: "", expiryTime: DEFAULT_EXPIRY_TIME, batchNumber: "",
     batchNotes: "",
+    parts: [],
     removeQuantity: "", removeKg: "", removeGrams: "", selectedBatchId: "", search: "",
   };
 }
@@ -1194,6 +1197,18 @@ export default function InventoryStockAdjustment() {
       });
       return;
     }
+    const invalidParts = validRows.find((r) => {
+      if (r.mode !== "add") return false;
+      const names = r.parts.map((part) => part.name.trim().toLowerCase()).filter(Boolean);
+      return new Set(names).size !== names.length || r.parts.some((part) =>
+        (part.name.trim() || part.price.trim()) &&
+        (!part.name.trim() || !Number.isFinite(Number(part.price)) || Number(part.price) <= 0)
+      );
+    });
+    if (invalidParts) {
+      toast({ title: "Check the part prices", description: `Enter both a part name and a positive per-kg price for ${invalidParts.productName}, or leave the row empty.`, variant: "destructive" });
+      return;
+    }
     const missingBigFishPrice = validRows.find((r) =>
       r.mode === "add" &&
       isBigFishRow(r) &&
@@ -1233,6 +1248,9 @@ export default function InventoryStockAdjustment() {
                   : undefined,
                 batchNumber: r.batchNumber || undefined,
                 notes: r.batchNotes || undefined,
+                parts: r.parts
+                  .filter((part) => part.name.trim() && part.price.trim())
+                  .map((part) => ({ name: part.name.trim(), price: Number(part.price) })),
               };
             }
             if (r.mode === "add_existing") return {
@@ -1513,12 +1531,59 @@ export default function InventoryStockAdjustment() {
                         ) : null}
                       </div>
 
-                        {isAdd && isBigFish && (
+                        {isAdd && isKilogramUnit(row.unit) && (
                           <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50/40 p-3">
-                            <p className="text-xs font-bold text-[#364F9F]">One shared cleaned-weight stock</p>
-                            <p className="mt-1 text-[11px] text-gray-600">
-                              Enter the total weight after cleaning. Head, Body, and Tail are selected as sale labels in POS; all use the same price per kg and draw from this total.
-                            </p>
+                            <div className="flex items-center justify-between gap-2">
+                              <div>
+                                <p className="text-xs font-bold text-[#364F9F]">Sell this batch as parts (optional)</p>
+                                <p className="mt-1 text-[11px] text-gray-600">
+                                  Part sales use separate per-kg prices but share this batch’s cleaned-weight stock.
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                className="shrink-0 rounded-md border border-blue-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-[#364F9F]"
+                                onClick={() => updateRow(idx, { parts: row.parts.length ? [] : [
+                                  { name: "Head", price: "" }, { name: "Middle", price: "" }, { name: "Tail", price: "" },
+                                ] })}
+                              >
+                                {row.parts.length ? "Remove parts" : "Add parts"}
+                              </button>
+                            </div>
+                            {row.parts.length > 0 && (
+                              <div className="mt-3 space-y-2">
+                                {row.parts.map((part, partIndex) => (
+                                  <div key={partIndex} className="grid grid-cols-[1fr_1fr_auto] gap-2">
+                                    <input
+                                      value={part.name}
+                                      onChange={(e) => updateRow(idx, { parts: row.parts.map((p, i) => i === partIndex ? { ...p, name: e.target.value } : p) })}
+                                      aria-label={`Part ${partIndex + 1} name`}
+                                      placeholder="Part name"
+                                      className="h-9 rounded-md border border-blue-100 bg-white px-3 text-sm"
+                                    />
+                                    <input
+                                      type="number" min="0.01" step="0.01"
+                                      value={part.price}
+                                      onChange={(e) => updateRow(idx, { parts: row.parts.map((p, i) => i === partIndex ? { ...p, price: e.target.value } : p) })}
+                                      aria-label={`Price per kg for ${part.name || `part ${partIndex + 1}`}`}
+                                      placeholder="Price / kg"
+                                      className="h-9 rounded-md border border-blue-100 bg-white px-3 text-sm"
+                                    />
+                                    <button
+                                      type="button"
+                                      aria-label="Remove part"
+                                      className="px-2 text-red-500"
+                                      onClick={() => updateRow(idx, { parts: row.parts.filter((_, i) => i !== partIndex) })}
+                                    >×</button>
+                                  </div>
+                                ))}
+                                <button
+                                  type="button"
+                                  className="text-xs font-semibold text-[#364F9F]"
+                                  onClick={() => updateRow(idx, { parts: [...row.parts, { name: "", price: "" }] })}
+                                >+ Add part</button>
+                              </div>
+                            )}
                           </div>
                         )}
 
