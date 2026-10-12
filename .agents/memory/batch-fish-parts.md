@@ -7,4 +7,4 @@ Configure part names and per-kg prices on an inventory batch. When creating a la
 
 **Why:** The user wants every available lot sold at the latest rates but FIFO stock movement; batches still share one cleaned-weight balance across whole-product and part sales.
 
-**How to apply:** When saving a new configured batch, synchronize its parts and rates onto older lots without changing quantities or completed orders. Keep the selected part on the order line, record exact FIFO allocations for cancellation/history, and place expiry date/time side by side.
+**How to apply:** When saving a new configured batch, synchronize its parts and rates onto older lots without changing quantities or completed orders. Ignore client batch IDs for part deductions, but retain them when restoring legacy orders; record exact FIFO allocations for history/cancellation. Place expiry date/time side by side.

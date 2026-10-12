@@ -997,6 +997,7 @@ async function expandOrderItems(
   productsCol: any,
   combosCol: any,
   rawItems: Array<{ productId?: string; parentProductId?: string; batchId?: string; partName?: BigFishPartName; name?: string; quantity?: number; unit?: string }>,
+  forceFifoParts = false,
 ): Promise<Array<{ productId: string; parentProductId?: string; batchId?: string; partName?: BigFishPartName; name: string; quantity: number; unit: string }>> {
   const aggregated = new Map<string, { productId: string; parentProductId?: string; batchId?: string; partName?: BigFishPartName; name: string; quantity: number; unit: string }>();
 
@@ -1048,25 +1049,24 @@ async function expandOrderItems(
           { _id: parentId },
           { projection: { _id: 1, name: 1, unit: 1, demoKey: 1, isDemoBigFishSelector: 1, batches: 1 } },
         );
-        const sourceBatch = it.batchId
-          ? parent?.batches?.find((batch: any) => String(batch._id) === String(it.batchId))
-          : null;
-        const validPart = it.batchId
-          ? sourceBatch?.parts?.some((part: any) => String(part.name) === requestedPart)
-          : isSurmaiProduct(parent) || parent?.batches?.some((batch: any) =>
-            batch.parts?.some((part: any) => String(part.name) === requestedPart)
-          );
+        // New part sales always use shared FIFO stock. Ignore any stale batchId
+        // carried by an older POS client; retain it during restoration so older
+        // already-saved orders can still be matched to their original movement.
+        const effectiveBatchId = forceFifoParts ? undefined : it.batchId;
+        const validPart = isSurmaiProduct(parent) || parent?.batches?.some((batch: any) =>
+          batch.parts?.some((part: any) => String(part.name) === requestedPart)
+        );
         if (!parent || !validPart) {
           throw new InsufficientStockError(parent?.name ?? it.name ?? "Configured part", 0, qty);
         }
         if (parent && validPart) {
-          const key = `${String(parentId)}:${it.batchId ?? ""}:${requestedPart}`;
+          const key = `${String(parentId)}:${effectiveBatchId ?? ""}:${requestedPart}`;
           const entry = aggregated.get(key);
           if (entry) entry.quantity += qty;
           else aggregated.set(key, {
             productId: String(parentId),
             parentProductId: String(parentId),
-            ...(it.batchId ? { batchId: String(it.batchId) } : {}),
+            ...(effectiveBatchId ? { batchId: String(effectiveBatchId) } : {}),
             partName: requestedPart,
             name: it.name ?? `${parent.name ?? "Surmai"} - ${requestedPart}`,
             quantity: qty,
@@ -1178,7 +1178,12 @@ async function applyDelta(
   const orderRef = `#${orderId.slice(-6).toUpperCase()}`;
 
   // Expand combos into their constituent products before applying stock changes
-  const items = await expandOrderItems(products, combos, Array.isArray(order.items) ? order.items : []);
+  const items = await expandOrderItems(
+    products,
+    combos,
+    Array.isArray(order.items) ? order.items : [],
+    direction === "deduct",
+  );
   if (items.length === 0) {
     logger.warn({ orderId, subHubId: order.subHubId, rawItemCount: (order.items ?? []).length }, "applyDelta: no items to process after expansion");
     return 0;
@@ -1296,6 +1301,12 @@ async function applyDelta(
         .toArray();
       if (Array.isArray(latestMovement?.batchDeductions)) {
         restoreBatchDeductions.set(itemKey(it), latestMovement.batchDeductions);
+      } else if (latestMovement?.batchObjectId && latestMovement?.type === "order_deduct") {
+        restoreBatchDeductions.set(itemKey(it), [{
+          batchObjectId: String(latestMovement.batchObjectId),
+          batchNumber: latestMovement.batchNumber ?? latestMovement.batchNumbers,
+          quantity: Math.abs(Number(latestMovement.change) || 0),
+        }]);
       }
       if (latestMovement?.type === "order_deduct") {
         it.quantity = Math.min(

@@ -4415,7 +4415,7 @@ export default function Orders() {
                                  <>
                                     <p className="text-sm font-semibold text-[#1A56DB]">₹{Number(p.price).toLocaleString("en-IN")}/{stockUnit}</p>
                                      <p className={`mt-1 text-[10px] font-semibold leading-none ${stock > 0 ? "text-amber-600" : "text-red-500"}`}>
-                                     {stock.toLocaleString("en-IN", { maximumFractionDigits: 2 })} {stockUnit} left
+                                      {stock.toLocaleString("en-IN", { maximumFractionDigits: 2 })} {stockUnit} {p.posPartName ? "shared stock" : "left"}
                                    </p>
                                  </>
                                ) : (
@@ -4493,7 +4493,7 @@ export default function Orders() {
                               <p className="truncate text-base font-bold leading-5 text-black">{entry.partName ? `${product.name} - ${entry.partName}` : product.displayName ?? product.name}</p>
                               <p className="flex flex-wrap gap-x-1 text-sm leading-5 text-black">
                                 <span>₹{scaleEntryPrice(product, entry).toLocaleString("en-IN")}/kg</span>
-                                <span>· {formatOrderWeight(Math.max(0, Number(product.quantity) || 0))} left</span>
+                                <span>· {formatOrderWeight(Math.max(0, Number(product.quantity) || 0))} {entry.partName ? "shared stock" : "left"}</span>
                                 <span>· {formatRupees(amount)}</span>
                               </p>
                             </div>
