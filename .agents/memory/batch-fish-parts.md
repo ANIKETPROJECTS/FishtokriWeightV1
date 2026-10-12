@@ -7,4 +7,4 @@ Configure part names and per-kg prices on an inventory batch. When creating a la
 
 **Why:** The user clarified that parts are pricing/sale choices, not separate inventory pools; sellable stock is the cleaned final product, with current rates applied across lots.
 
-**How to apply:** Treat each batch’s cleaned final weight as its sole stock quantity and ignore legacy per-part weight fields. Show stock quantity on the whole-product POS card only, not repeated on each part card. Synchronize part rates onto older lots without changing their quantities or completed orders. Ignore client batch IDs for part deductions, retain them when restoring legacy orders, and record exact FIFO allocations.
+**How to apply:** Treat each batch’s cleaned final weight as its sole stock quantity and ignore legacy per-part weight fields. Show the same overall cleaned-stock quantity on each part card, clearly labeled as total stock rather than a separate part balance. Synchronize part rates onto older lots without changing their quantities or completed orders. Ignore client batch IDs for part deductions, retain them when restoring legacy orders, and record exact FIFO allocations.
