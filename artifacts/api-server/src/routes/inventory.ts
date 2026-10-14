@@ -707,11 +707,20 @@ router.post("/adjustments", async (req, res) => {
         });
         // Part pricing is the current POS price list for this product, even when
         // FIFO later consumes stock from an older physical batch.
-        if (batch.parts?.length) {
-          newBatches = currentBatches.map((existingBatch) => ({
-            ...existingBatch,
-            parts: batch.parts!.map((part) => ({ ...part })),
-          }));
+        const hasNewPrice = batch.price != null && Number.isFinite(batch.price) && batch.price > 0;
+        const hasNewParts = Boolean(batch.parts?.length);
+        if (hasNewPrice || hasNewParts) {
+          const nowMs = now.getTime();
+          newBatches = currentBatches.map((existingBatch) => {
+            const expiresAt = existingBatch.expiryDate ? new Date(existingBatch.expiryDate).getTime() : null;
+            const isActive = expiresAt == null || !Number.isFinite(expiresAt) || expiresAt >= nowMs;
+            if (!isActive) return existingBatch;
+            return {
+              ...existingBatch,
+              ...(hasNewPrice ? { price: batch.price } : {}),
+              ...(hasNewParts ? { parts: batch.parts!.map((part) => ({ ...part })) } : {}),
+            };
+          });
         }
         newBatches.push(batch);
         delta = addQty;
@@ -824,7 +833,7 @@ router.post("/adjustments", async (req, res) => {
          products,
          pid,
          newBatches,
-         isBigFish && mode === "add" ? { price: sharedPricePerKg } : {},
+          mode === "add" && batch.price != null ? { price: batch.price } : {},
          ctx.conn.db.collection("combos"),
        );
 
@@ -1220,7 +1229,7 @@ async function applyDelta(
   }
 
   const itemKey = (item: { productId: string; partName?: BigFishPartName; batchId?: string }) =>
-    `${item.productId}:${item.batchId ?? ""}:${item.partName ?? ""}`;
+    `${item.productId}:${item.partName ? "" : item.batchId ?? ""}:${item.partName ?? ""}`;
   const deductionPlan = new Map<string, { quantity: number; requestedQuantity: number; overageKg: number }>();
   const restoreBatchDeductions = new Map<string, Array<{ batchObjectId: string; batchNumber?: string; quantity: number }>>();
 
@@ -1321,7 +1330,7 @@ async function applyDelta(
         orderId,
         productId: String(it.productId),
         type: { $in: ["order_deduct", "order_restore"] },
-        ...(it.batchId ? { batchObjectId: String(it.batchId) } : {}),
+        ...(it.batchId && !it.partName ? { batchObjectId: String(it.batchId) } : {}),
         ...(it.partName ? { partName: it.partName } : { partName: { $exists: false } }),
       };
       const [latestMovement] = await movements
@@ -1345,6 +1354,32 @@ async function applyDelta(
         );
       } else if (latestMovement?.type === "order_restore") {
         it.quantity = 0;
+      }
+    }
+  }
+
+  if (direction === "restore") {
+    for (const it of items) {
+      if (it.quantity <= 0) continue;
+      const pid = toId(it.productId);
+      if (!pid) continue;
+      const product = await products.findOne({ _id: pid }, { projection: { batches: 1, name: 1 } });
+      if (!product) continue;
+      const batches: Batch[] = Array.isArray(product.batches)
+        ? product.batches.map((b: any) => normalizeBatch(b))
+        : [];
+      if (batches.length === 0) continue; // Legacy product-level stock has no batch allocation.
+
+      const allocations = restoreBatchDeductions.get(itemKey(it)) ?? [];
+      const allAllocationsMatch = allocations.length > 0 && allocations.every((allocation) =>
+        batches.some((batch) =>
+          (allocation.batchObjectId && String(batch._id) === String(allocation.batchObjectId)) ||
+          (allocation.batchNumber && batch.batchNumber === allocation.batchNumber)
+        )
+      );
+      const exactItemBatchExists = Boolean(it.batchId && batches.some((batch) => String(batch._id) === String(it.batchId)));
+      if (!allAllocationsMatch && !exactItemBatchExists) {
+        throw new Error(`Cannot restore ${product.name ?? it.name ?? "product"}: the original stock batch allocation is unavailable.`);
       }
     }
   }
@@ -1467,26 +1502,26 @@ async function applyDelta(
         continue;
       }
     } else {
-      // restore: add quantity back into the most recently received active (non-expired) batch
-      // to avoid creating extra batches on every cancellation/delete.
-      const nowMs3 = now.getTime();
-      const activeBatches = currentBatches.filter(
-        (b) => !b.expiryDate || new Date(b.expiryDate).getTime() >= nowMs3
-      );
-      const sortedByRecent = [...activeBatches].sort((a, b) => {
-        const at = a.receivedDate ? new Date(a.receivedDate).getTime() : 0;
-        const bt = b.receivedDate ? new Date(b.receivedDate).getTime() : 0;
-        return bt - at; // most recent first
-      });
-      const targetBatch = sortedByRecent[0];
       const priorDeductions = restoreBatchDeductions.get(itemKey(it));
       const exactBatch = it.batchId
         ? currentBatches.find((batch) => String(batch._id) === String(it.batchId))
         : undefined;
       if (priorDeductions?.length) {
-        const quantities = new Map(priorDeductions.map((entry) => [entry.batchObjectId, entry.quantity]));
+        const quantitiesById = new Map<string, number>();
+        const quantitiesByNumber = new Map<string, number>();
+        for (const entry of priorDeductions) {
+          if (entry.batchObjectId) {
+            const id = String(entry.batchObjectId);
+            quantitiesById.set(id, (quantitiesById.get(id) ?? 0) + entry.quantity);
+          }
+          if (entry.batchNumber) {
+            quantitiesByNumber.set(entry.batchNumber, (quantitiesByNumber.get(entry.batchNumber) ?? 0) + entry.quantity);
+          }
+        }
         newBatches = currentBatches.map((batch) => {
-          const restoreQty = quantities.get(String(batch._id)) ?? 0;
+          const restoreQty = quantitiesById.get(String(batch._id))
+            ?? quantitiesByNumber.get(batch.batchNumber ?? "")
+            ?? 0;
           if (restoreQty <= 0) return batch;
           return { ...batch, quantity: batch.quantity + restoreQty };
         });
@@ -1496,15 +1531,8 @@ async function applyDelta(
           ? { ...batch, quantity: batch.quantity + qty }
           : batch);
         appliedBatchNumbers = exactBatch.batchNumber;
-      } else if (targetBatch && !it.batchId) {
-        newBatches = currentBatches.map((b) =>
-          b._id && targetBatch._id && String(b._id) === String(targetBatch._id)
-            ? { ...b, quantity: b.quantity + qty }
-            : b
-        );
-        if (targetBatch.batchNumber) appliedBatchNumbers = targetBatch.batchNumber;
       } else {
-        // No active batch — create a plain new batch (no RESTORE label)
+        // Legacy products without batch records have no original batch to target.
         newBatches = [...currentBatches, normalizeBatch({
           quantity: qty,
           receivedDate: now,

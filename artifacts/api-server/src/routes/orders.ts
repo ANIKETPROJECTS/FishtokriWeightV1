@@ -2577,6 +2577,18 @@ router.delete("/:id", async (req: ScopedRequest, res) => {
       );
     } catch (e) {
       req.log.error({ err: e }, "Failed to restore inventory on order delete");
+      await conn.db.collection(COLLECTION).updateOne(
+        { _id: oid, isDeleted: true },
+        {
+          $set: { isDeleted: false, inventoryDeducted: (existing as any).inventoryDeducted === true },
+          $unset: { deletedAt: "" },
+        }
+      );
+      res.status(409).json({
+        error: "InventoryRestoreFailed",
+        message: "The order was not deleted because its original stock batch could not be restored.",
+      });
+      return;
     }
 
     try {
