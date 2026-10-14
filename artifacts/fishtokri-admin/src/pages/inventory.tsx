@@ -66,6 +66,12 @@ function daysUntil(iso: string | null) {
   return Math.ceil((d.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
 }
 
+function stockUnitLabel(unit: string) {
+  if (/^per\s*(kg|kilogram|kilograms)$/i.test(unit.trim())) return "kg";
+  if (/^per\s*(g|gram|grams)$/i.test(unit.trim())) return "g";
+  return unit || "unit";
+}
+
 function LockedHubBadge({ label, name, location }: { label: string; name: string; location?: string }) {
   return (
     <div className="flex items-center gap-1.5">
@@ -326,7 +332,7 @@ export default function InventoryPage() {
                             </td>
                             <td className="px-4 py-4 text-right">
                               <span className={`inline-flex items-center justify-end px-2.5 py-1 rounded-md font-bold text-sm ${stockTone}`}>
-                                {p.quantity.toLocaleString("en-IN", { maximumFractionDigits: 2 })} {p.unit || "unit"} left
+                                {p.quantity.toLocaleString("en-IN", { maximumFractionDigits: 2 })} {stockUnitLabel(p.unit)} left
                               </span>
                             </td>
                             <td className="px-4 py-4 text-center text-sm text-gray-500">

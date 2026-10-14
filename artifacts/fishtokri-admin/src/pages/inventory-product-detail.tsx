@@ -71,6 +71,13 @@ function fmtDateTime(iso: string | null | undefined) {
   const timePart = d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
   return `${datePart} · ${timePart}`;
 }
+
+function stockUnitLabel(unit: string) {
+  if (/^per\s*(kg|kilogram|kilograms)$/i.test(unit.trim())) return "kg";
+  if (/^per\s*(g|gram|grams)$/i.test(unit.trim())) return "g";
+  return unit || "unit";
+}
+
 function daysUntil(iso: string | null | undefined) {
   if (!iso) return null;
   const d = new Date(iso);
@@ -266,7 +273,7 @@ export default function InventoryProductDetail() {
                   }}>
                   <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Live Stock</p>
                   <p className="text-lg font-bold text-[#162B4D] mt-0.5">
-                     {totalLiveQty.toLocaleString("en-IN", { maximumFractionDigits: 2 })} <span className="text-xs font-normal text-gray-400">{product.unit || "unit"} left</span>
+                      {totalLiveQty.toLocaleString("en-IN", { maximumFractionDigits: 2 })} <span className="text-xs font-normal text-gray-400">{stockUnitLabel(product.unit)} left</span>
                   </p>
                 </div>
                 <div className="bg-gray-50 rounded-xl p-3">
@@ -430,7 +437,7 @@ export default function InventoryProductDetail() {
                         <span className={`font-bold text-sm ${b.quantity > 0 ? "text-[#162B4D]" : "text-gray-400"}`}>
                           {b.quantity}
                         </span>
-                        <span className="text-xs text-gray-400 ml-1">{product.unit}</span>
+                         <span className="text-xs text-gray-400 ml-1">{stockUnitLabel(product.unit)}</span>
                       </td>
                       <td className="px-4 py-3 text-gray-600 text-xs">
                         <div className="flex items-center gap-1">

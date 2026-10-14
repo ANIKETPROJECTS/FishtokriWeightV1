@@ -174,6 +174,14 @@ function batchesTotal(batches: Batch[] | undefined | null): number {
   return batches.reduce((s, b) => s + (Number(b?.quantity) || 0), 0);
 }
 
+function activeBatchesTotal(batches: Batch[] | undefined | null, nowMs = Date.now()): number {
+  if (!Array.isArray(batches)) return 0;
+  return batchesTotal(batches.filter((batch) => {
+    const expiry = batch?.expiryDate ? new Date(batch.expiryDate).getTime() : null;
+    return expiry == null || !Number.isFinite(expiry) || expiry >= nowMs;
+  }));
+}
+
 function reduceBatchQuantity(batch: Batch, newQuantity: number) {
   // A batch has one cleaned-weight balance. Part cards affect only the sale
   // label and rate; never split or scale stock into per-part quantities.
@@ -370,7 +378,7 @@ router.get("/analytics/summary", async (req: ScopedRequest, res) => {
       let subLow = 0;
       for (const p of products) {
         const batches: Batch[] = Array.isArray(p.batches) ? p.batches : [];
-        const qty = batches.length > 0 ? batchesTotal(batches) : (Number(p.quantity) || 0);
+        const qty = batches.length > 0 ? activeBatchesTotal(batches, now.getTime()) : (Number(p.quantity) || 0);
         const price = Number(p.price) || 0;
         totalProducts += 1;
         totalQuantity += qty;
@@ -483,7 +491,7 @@ router.get("/products", async (req, res) => {
     res.json({
       products: products.map((p: any) => {
         const batches: Batch[] = Array.isArray(p.batches) ? p.batches : [];
-        const qty = batches.length > 0 ? batchesTotal(batches) : (Number(p.quantity) || 0);
+        const qty = batches.length > 0 ? activeBatchesTotal(batches) : (Number(p.quantity) || 0);
         return {
           id: String(p._id),
           name: p.name,
@@ -899,7 +907,7 @@ router.get("/products/:productId/batches", async (req, res) => {
       productId: String(pid),
       name: product.name,
       unit: product.unit ?? "",
-      quantity: batchesTotal(batches) || (Number(product.quantity) || 0),
+      quantity: batches.length > 0 ? activeBatchesTotal(batches) : (Number(product.quantity) || 0),
       batches: sortBatchesFIFO(batches),
     });
   } catch (err) {
