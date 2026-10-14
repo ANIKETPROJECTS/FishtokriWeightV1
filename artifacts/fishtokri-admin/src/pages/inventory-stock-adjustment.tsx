@@ -51,11 +51,13 @@ type Batch = {
   rawWeight?: number | null;
   cleanedWeight?: number | null;
   yieldPercentage?: number | null;
+  shelfLifeCategory?: "A1" | "A2" | null;
   shelfLifeDays: number | null;
   receivedDate: string | null;
   expiryDate: string | null;
   expiryTime?: string;
   notes: string;
+  createdAt?: string | null;
 };
 type Product = {
   id: string;
@@ -81,6 +83,7 @@ type FormRow = {
   addQuantity: string;
   rawWeight: string;
   cleanedWeight: string;
+  shelfLifeCategory: "" | "A1" | "A2";
   shelfLifeDays: string;
   expiryDate: string;
   expiryTime: string;
@@ -174,7 +177,7 @@ function generateNextBatchNumber(productName: string, productBatches: Batch[], s
 function emptyRow(): FormRow {
   return {
     productId: "", productName: "", category: "", unit: "", quantityBefore: 0,
-    mode: "add", addQuantity: "", rawWeight: "", cleanedWeight: "", shelfLifeDays: "", expiryDate: "", expiryTime: DEFAULT_EXPIRY_TIME, batchNumber: "",
+    mode: "add", addQuantity: "", rawWeight: "", cleanedWeight: "", shelfLifeCategory: "", shelfLifeDays: "", expiryDate: "", expiryTime: DEFAULT_EXPIRY_TIME, batchNumber: "",
     batchNotes: "",
     parts: [],
     removeQuantity: "", removeKg: "", removeGrams: "", selectedBatchId: "", search: "",
@@ -198,6 +201,13 @@ function addDaysISO(baseDate: string, days: number): string {
   const d = new Date(Date.UTC(year, month - 1, day));
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
+}
+
+const SHELF_LIFE_DAYS = { A1: 5, A2: 3 } as const;
+type ShelfLifeCategory = keyof typeof SHELF_LIFE_DAYS;
+
+function getShelfLifeDays(category: string): number | null {
+  return category === "A1" || category === "A2" ? SHELF_LIFE_DAYS[category] : null;
 }
 
 function daysBetweenISO(stockDate: string, expiryDate: string): number | null {
@@ -862,7 +872,7 @@ function ExistingBatchesCard({
             <div className="grid grid-cols-6 gap-2">
               <span className="text-[10px] font-bold text-[#364F9F] uppercase tracking-wider">Batch ID</span>
               <span className="text-[10px] font-bold text-[#364F9F] uppercase tracking-wider">Qty ({unit})</span>
-              <span className="text-[10px] font-bold text-[#364F9F] uppercase tracking-wider">Shelf Life (d)</span>
+              <span className="text-[10px] font-bold text-[#364F9F] uppercase tracking-wider">Shelf Category</span>
               <span className="text-[10px] font-bold text-[#364F9F] uppercase tracking-wider">Received</span>
               <span className="text-[10px] font-bold text-[#364F9F] uppercase tracking-wider">Expiry Date &amp; Time</span>
               <span className="text-[10px] font-bold text-[#364F9F] uppercase tracking-wider">Notes</span>
@@ -892,29 +902,45 @@ function ExistingBatchesCard({
                     onChange={(e) => patchBatch(i, { quantity: Number(e.target.value) })}
                     className="h-7 px-2 text-[11px] font-bold text-[#162B4D] border border-gray-200 rounded bg-white focus:outline-none focus:ring-1 focus:ring-[#364F9F]/30 mt-0.5"
                   />
-                  <input
-                    type="number"
-                    min="0"
-                    value={b.shelfLifeDays ?? ""}
-                    onChange={(e) => {
-                      const days = e.target.value === "" ? null : Number(e.target.value);
-                      let expiryDate = b.expiryDate;
-                      if (days !== null && days >= 0 && Number.isInteger(days) && b.receivedDate) {
-                        const dateISO = addDaysISO(b.receivedDate, days);
-                        expiryDate = `${dateISO}T${to24hTime(b.expiryTime || DEFAULT_EXPIRY_TIME)}:00+05:30`;
-                      }
-                      patchBatch(i, { shelfLifeDays: days, expiryDate });
-                    }}
-                    placeholder="—"
-                    className="h-7 px-2 text-[11px] text-[#162B4D] border border-gray-200 rounded bg-white focus:outline-none focus:ring-1 focus:ring-[#364F9F]/30 mt-0.5"
-                  />
+                  <div>
+                    <Select
+                      value={b.shelfLifeCategory ?? undefined}
+                      onValueChange={(value) => {
+                        const category = value as ShelfLifeCategory;
+                        const days = SHELF_LIFE_DAYS[category];
+                        const received = b.receivedDate?.slice(0, 10) ?? "";
+                        const dateISO = received ? addDaysISO(received, days) : "";
+                        patchBatch(i, {
+                          shelfLifeCategory: category,
+                          shelfLifeDays: days,
+                          expiryDate: dateISO
+                            ? `${dateISO}T${to24hTime(b.expiryTime || DEFAULT_EXPIRY_TIME)}:00+05:30`
+                            : b.expiryDate,
+                        });
+                      }}
+                    >
+                      <SelectTrigger className="h-7 px-2 text-[11px] mt-0.5">
+                        <SelectValue placeholder="Choose" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="A1">A1 · 5 days</SelectItem>
+                        <SelectItem value="A2">A2 · 3 days</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="mt-0.5 text-[9px] text-gray-400">{b.shelfLifeDays != null ? `${b.shelfLifeDays} days` : "Legacy"}</p>
+                  </div>
                   <input
                     type="date"
                     value={b.receivedDate?.slice(0, 10) ?? ""}
                     onChange={(e) => {
                       const received = e.target.value || null;
                       const patch: Partial<Batch> = { receivedDate: received };
-                      if (received && b.expiryDate) {
+                      const categoryDays = b.shelfLifeCategory ? SHELF_LIFE_DAYS[b.shelfLifeCategory] : null;
+                      if (received && categoryDays != null) {
+                        const dateISO = addDaysISO(received, categoryDays);
+                        patch.shelfLifeDays = categoryDays;
+                        patch.expiryDate = `${dateISO}T${to24hTime(b.expiryTime || DEFAULT_EXPIRY_TIME)}:00+05:30`;
+                      } else if (received && b.expiryDate) {
                         patch.shelfLifeDays = daysBetweenISO(received, b.expiryDate);
                       }
                       patchBatch(i, patch);
@@ -926,6 +952,7 @@ function ExistingBatchesCard({
                     <input
                       type="date"
                       value={b.expiryDate?.slice(0, 10) ?? ""}
+                      readOnly={Boolean(b.shelfLifeCategory)}
                       onChange={(e) => {
                         const dateVal = e.target.value || null;
                         const patch: Partial<Batch> = {};
@@ -1044,9 +1071,9 @@ export default function InventoryStockAdjustment() {
   function setStockDate(date: string) {
     setFormDate(date);
     setFormRows((rows) => rows.map((row) => {
-      if (row.mode !== "add" || !row.expiryDate) return row;
-      const days = daysBetweenISO(date, row.expiryDate);
-      return { ...row, shelfLifeDays: days == null ? "" : String(days) };
+      if (row.mode !== "add" || !row.shelfLifeCategory) return row;
+      const days = SHELF_LIFE_DAYS[row.shelfLifeCategory];
+      return { ...row, shelfLifeDays: String(days), expiryDate: date ? addDaysISO(date, days) : "" };
     }));
   }
 
@@ -1081,6 +1108,7 @@ export default function InventoryStockAdjustment() {
       unit: p.unit, quantityBefore: p.quantity, search: p.name,
       addQuantity: "",
       rawWeight: "", cleanedWeight: "", removeQuantity: "", removeKg: "", removeGrams: "",
+      shelfLifeCategory: "", shelfLifeDays: "", expiryDate: "",
       batchNumber: r.mode === "add" ? autoNum : "",
       batchNotes: "",
       parts: savedParts.map((part) => ({ name: part.name, price: String(part.price) })),
@@ -1092,7 +1120,7 @@ export default function InventoryStockAdjustment() {
     updateRow(i, {
       productId: "", productName: "", category: "", unit: "", quantityBefore: 0, search: "",
       addQuantity: "", rawWeight: "", cleanedWeight: "", removeQuantity: "", removeKg: "", removeGrams: "",
-      batchNumber: "", selectedBatchId: "",
+      batchNumber: "", selectedBatchId: "", shelfLifeCategory: "", shelfLifeDays: "", expiryDate: "",
     });
   }
 
@@ -1100,7 +1128,7 @@ export default function InventoryStockAdjustment() {
     updateRow(i, {
       search: val, productId: "", productName: "", category: "", unit: "", quantityBefore: 0,
       addQuantity: "", rawWeight: "", cleanedWeight: "", removeQuantity: "", removeKg: "", removeGrams: "",
-      batchNumber: "", selectedBatchId: "",
+      batchNumber: "", selectedBatchId: "", shelfLifeCategory: "", shelfLifeDays: "", expiryDate: "",
     });
   }
 
@@ -1127,17 +1155,13 @@ export default function InventoryStockAdjustment() {
     });
   }
 
-  function setShelfLife(i: number, val: string) {
-    const days = Number(val);
-    const expiry = val !== "" && Number.isInteger(days) && days >= 0 && formDate
-      ? addDaysISO(formDate, days)
-      : "";
-    updateRow(i, { shelfLifeDays: val, expiryDate: expiry });
-  }
-
-  function setExpiryDate(i: number, val: string) {
-    const days = daysBetweenISO(formDate, val);
-    updateRow(i, { expiryDate: val, shelfLifeDays: days == null ? "" : String(days) });
+  function setShelfLifeCategory(i: number, category: "" | ShelfLifeCategory) {
+    const days = getShelfLifeDays(category);
+    updateRow(i, {
+      shelfLifeCategory: category,
+      shelfLifeDays: days == null ? "" : String(days),
+      expiryDate: days == null || !formDate ? "" : addDaysISO(formDate, days),
+    });
   }
 
   function setWeight(i: number, field: "rawWeight" | "cleanedWeight", value: string) {
@@ -1167,9 +1191,9 @@ export default function InventoryStockAdjustment() {
     );
     if (validRows.length === 0) { toast({ title: "Add at least one product with a quantity", variant: "destructive" }); return; }
     if (!formReason.trim()) { toast({ title: "Reason is required", variant: "destructive" }); return; }
-    const missingExpiry = validRows.find((r) => r.mode === "add" && !r.shelfLifeDays && !r.expiryDate);
-    if (missingExpiry) {
-      toast({ title: "Set shelf life or expiry", description: `Add shelf life (days) or an expiry date for ${missingExpiry.productName}.`, variant: "destructive" });
+    const missingShelfCategory = validRows.find((r) => r.mode === "add" && !r.shelfLifeCategory);
+    if (missingShelfCategory) {
+      toast({ title: "Choose a shelf-life category", description: `Select A1 (5 days) or A2 (3 days) for ${missingShelfCategory.productName}.`, variant: "destructive" });
       return;
     }
     const invalidExpiryDate = validRows.find((r) =>
@@ -1251,6 +1275,8 @@ export default function InventoryStockAdjustment() {
                 cleanedWeight: Number(r.cleanedWeight),
                 yieldPercentage: Number(r.cleanedWeight) / Number(r.rawWeight) * 100,
                 shelfLifeDays: r.shelfLifeDays !== "" ? Number(r.shelfLifeDays) : undefined,
+                shelfLifeCategory: r.shelfLifeCategory,
+                receivedDate: formDate,
                 expiryDate: r.expiryDate
                   ? `${r.expiryDate}T${to24hTime(r.expiryTime || DEFAULT_EXPIRY_TIME)}:00+05:30`
                   : undefined,
@@ -1490,14 +1516,12 @@ export default function InventoryStockAdjustment() {
                                 <input
                                   type="date"
                                   value={row.expiryDate}
-                                  onChange={(e) => setExpiryDate(idx, e.target.value)}
+                                  readOnly
+                                  aria-label={`Expiry date for ${row.productName}, calculated from shelf-life category`}
                                   className={`w-full min-w-0 h-9 px-1.5 text-[11px] font-semibold border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-[#364F9F]/20 focus:border-[#364F9F] ${expTone}`}
                                   data-testid={`input-adjustment-expiry-date-${idx}`}
                                 />
-                                <ClockPickerField
-                                  value={row.expiryTime}
-                                  onChange={(v) => updateRow(idx, { expiryTime: v })}
-                                />
+                                <ClockPickerField value={row.expiryTime} onChange={(v) => updateRow(idx, { expiryTime: v })} />
                               </div>
                               {dLeft != null && (
                                 <p className={`text-[10px] font-bold ${expTone}`}>
@@ -1507,14 +1531,17 @@ export default function InventoryStockAdjustment() {
                             </div>
                             {/* Shelf Life */}
                             <div className="col-span-6 md:col-span-2 space-y-1">
-                              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Shelf Life (days)</label>
-                              <input
-                                type="number" min="0"
-                                value={row.shelfLifeDays}
-                                onChange={(e) => setShelfLife(idx, e.target.value)}
-                                placeholder="e.g. 7"
-                                className="w-full h-9 px-3 text-sm font-medium text-center border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-[#364F9F]/20 focus:border-[#364F9F]"
-                              />
+                              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Shelf-Life Category</label>
+                              <Select value={row.shelfLifeCategory || undefined} onValueChange={(value) => setShelfLifeCategory(idx, value as ShelfLifeCategory)}>
+                                <SelectTrigger className="h-9 text-sm font-semibold">
+                                  <SelectValue placeholder="Choose A1 or A2" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="A1">A1 · 5 days</SelectItem>
+                                  <SelectItem value="A2">A2 · 3 days</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <p className="text-[10px] text-gray-400">Expiry is calculated from the stock date.</p>
                             </div>
                           </>
                         ) : (isAddExisting || row.mode === "remove") ? (

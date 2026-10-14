@@ -25,6 +25,7 @@ type Batch = {
   batchNumber: string;
   quantity: number;
   price?: number | null;
+  shelfLifeCategory?: "A1" | "A2" | null;
   shelfLifeDays: number | null;
   receivedDate: string | null;
   expiryDate: string | null;
@@ -454,7 +455,7 @@ export default function InventoryProductDetail() {
                         {b.shelfLifeDays != null ? (
                           <div className="flex items-center gap-1">
                             <Hash className="w-3 h-3 text-gray-300" />
-                            {b.shelfLifeDays}d
+                            {b.shelfLifeCategory ? `${b.shelfLifeCategory} · ` : ""}{b.shelfLifeDays}d
                           </div>
                         ) : <span className="text-gray-300">—</span>}
                       </td>

@@ -82,6 +82,7 @@ type Batch = {
   rawWeight?: number | null;
   cleanedWeight?: number | null;
   yieldPercentage?: number | null;
+  shelfLifeCategory?: "A1" | "A2" | null;
   shelfLifeDays?: number | null;
   receivedDate?: Date | null;
   expiryDate?: Date | null;
@@ -104,11 +105,46 @@ function toDate(v: any): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
+const SHELF_LIFE_DAYS: Record<"A1" | "A2", number> = { A1: 5, A2: 3 };
+
+function shelfLifeExpiry(receivedDate: Date, days: number, preferredExpiry?: any): Date {
+  const stockDateParts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(receivedDate).reduce<Record<string, string>>((parts, part) => {
+    if (part.type !== "literal") parts[part.type] = part.value;
+    return parts;
+  }, {});
+  const stockDay = `${stockDateParts.year}-${stockDateParts.month}-${stockDateParts.day}`;
+  const expiryDay = new Date(`${stockDay}T00:00:00.000Z`);
+  expiryDay.setUTCDate(expiryDay.getUTCDate() + days);
+  const datePart = expiryDay.toISOString().slice(0, 10);
+  const preferred = toDate(preferredExpiry);
+  const timePart = preferred
+    ? new Intl.DateTimeFormat("en-GB", {
+        timeZone: "Asia/Kolkata",
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
+      }).format(preferred)
+    : "19:00";
+  return new Date(`${datePart}T${timePart}:00+05:30`);
+}
+
 function normalizeBatch(b: any): Batch {
   const received = toDate(b?.receivedDate) ?? new Date();
-  const shelf = b?.shelfLifeDays != null && b.shelfLifeDays !== "" ? Number(b.shelfLifeDays) : null;
+  const category = b?.shelfLifeCategory === "A1" || b?.shelfLifeCategory === "A2"
+    ? b.shelfLifeCategory as "A1" | "A2"
+    : null;
+  const shelf = category
+    ? SHELF_LIFE_DAYS[category]
+    : b?.shelfLifeDays != null && b.shelfLifeDays !== "" ? Number(b.shelfLifeDays) : null;
   let expiry = toDate(b?.expiryDate);
-  if (!expiry && shelf != null && Number.isFinite(shelf)) {
+  if (category && shelf != null) {
+    expiry = shelfLifeExpiry(received, shelf, b?.expiryDate);
+  } else if (!expiry && shelf != null && Number.isFinite(shelf)) {
     expiry = new Date(received.getTime() + shelf * 24 * 60 * 60 * 1000);
   }
   return {
@@ -124,6 +160,7 @@ function normalizeBatch(b: any): Batch {
     rawWeight: b?.rawWeight != null && Number.isFinite(Number(b.rawWeight)) ? Number(b.rawWeight) : null,
     cleanedWeight: b?.cleanedWeight != null && Number.isFinite(Number(b.cleanedWeight)) ? Number(b.cleanedWeight) : null,
     yieldPercentage: b?.yieldPercentage != null && Number.isFinite(Number(b.yieldPercentage)) ? Number(b.yieldPercentage) : null,
+    shelfLifeCategory: category,
     shelfLifeDays: shelf != null && Number.isFinite(shelf) ? shelf : null,
     receivedDate: received,
     expiryDate: expiry,
@@ -468,6 +505,7 @@ router.get("/products", async (req, res) => {
             rawWeight: b.rawWeight ?? null,
             cleanedWeight: b.cleanedWeight ?? null,
             yieldPercentage: b.yieldPercentage ?? null,
+            shelfLifeCategory: b.shelfLifeCategory ?? null,
             shelfLifeDays: b.shelfLifeDays ?? null,
             receivedDate: b.receivedDate ? new Date(b.receivedDate).toISOString() : null,
             expiryDate: b.expiryDate ? new Date(b.expiryDate).toISOString() : null,
@@ -619,6 +657,13 @@ router.post("/adjustments", async (req, res) => {
       if (mode === "add") {
         const addQty = Math.max(0, Number(it.addQuantity) || 0);
         if (addQty <= 0) continue;
+        if (it.shelfLifeCategory !== "A1" && it.shelfLifeCategory !== "A2") {
+          res.status(400).json({
+            error: "ValidationError",
+            message: `Choose shelf-life category A1 (5 days) or A2 (3 days) for ${existing.name}.`,
+          });
+          return;
+        }
         if (isBigFish) {
           const cleanedWeight = Number(it.cleanedWeight);
           sharedPricePerKg = Number(it.price ?? existing.price);
@@ -644,9 +689,10 @@ router.post("/adjustments", async (req, res) => {
           rawWeight: it.rawWeight,
           cleanedWeight: it.cleanedWeight,
           yieldPercentage: it.yieldPercentage,
-          shelfLifeDays: it.shelfLifeDays,
+          shelfLifeCategory: it.shelfLifeCategory,
+          shelfLifeDays: SHELF_LIFE_DAYS[it.shelfLifeCategory],
           expiryDate: it.expiryDate,
-          receivedDate: it.receivedDate ?? now,
+          receivedDate: it.receivedDate ?? date ?? now,
           notes: it.notes,
           parts: it.parts,
           createdAt: now,
