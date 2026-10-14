@@ -833,7 +833,7 @@ router.post("/adjustments", async (req, res) => {
          products,
          pid,
          newBatches,
-          mode === "add" && batch.price != null ? { price: batch.price } : {},
+          mode === "add" && appliedBatch?.price != null ? { price: appliedBatch.price } : {},
          ctx.conn.db.collection("combos"),
        );
 
