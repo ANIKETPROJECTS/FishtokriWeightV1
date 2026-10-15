@@ -68,6 +68,7 @@ type Product = {
   price?: number;
   quantity: number;
   batches?: Batch[];
+  partsTemplate?: Array<{ name: string; price: number }>;
   demoKey?: string;
   demoParts?: Array<{ partName?: string; price?: number }>;
 };
@@ -1101,7 +1102,8 @@ export default function InventoryStockAdjustment() {
           new Date(a.batch.createdAt ?? a.batch.receivedDate ?? 0).getTime() ||
         b.index - a.index
       )
-      .find(({ batch }) => (batch.parts?.length ?? 0) > 0)?.batch.parts ?? [];
+      .find(({ batch }) => (batch.parts?.length ?? 0) > 0)?.batch.parts ??
+      p.partsTemplate ?? [];
     setFormRows((rows) => rows.map((r, idx) => idx === i ? {
       ...r,
       productId: p.id, productName: p.name, category: p.category || "",
