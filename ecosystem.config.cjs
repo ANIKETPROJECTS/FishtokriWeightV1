@@ -60,7 +60,7 @@ for (const key of [
 module.exports = {
   apps: [
     {
-      name: "fishtokri-api",
+      name: "fishtokri-weight-api",
       script: "artifacts/api-server/dist/index.mjs",
       cwd: projectRoot,
       instances: 1,
