@@ -1356,7 +1356,9 @@ async function applyDelta(
           (allocation.batchObjectId && String(candidate._id) === String(allocation.batchObjectId)) ||
           (allocation.batchNumber && candidate.batchNumber === allocation.batchNumber)
         );
-        if (!batch || batch.quantity + 1e-9 < allocation.quantity) {
+        if (!batch
+          || batch.quantity + 1e-9 < allocation.quantity
+          || (batch.expiryDate && new Date(batch.expiryDate).getTime() < now.getTime())) {
           throw new InsufficientStockError(
             product?.name ?? it.name ?? "Product",
             Number(batch?.quantity) || 0,
