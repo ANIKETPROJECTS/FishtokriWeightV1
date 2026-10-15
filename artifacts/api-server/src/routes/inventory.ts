@@ -1232,6 +1232,7 @@ async function applyDelta(
     `${item.productId}:${item.partName ? "" : item.batchId ?? ""}:${item.partName ?? ""}`;
   const deductionPlan = new Map<string, { quantity: number; requestedQuantity: number; overageKg: number }>();
   const restoreBatchDeductions = new Map<string, Array<{ batchObjectId: string; batchNumber?: string; quantity: number }>>();
+  const restoreOrderAllocations = new Map<string, Array<{ batchObjectId: string; batchNumber?: string; quantity: number }>>();
 
   // ── Pre-flight stock check (deduct only) ────────────────────────────────────
   // This runs INSIDE withDeductionLock so only one request at a time reaches
@@ -1239,6 +1240,26 @@ async function applyDelta(
   // the lock only after the first has already deducted — it then sees available=0
   // and throws InsufficientStockError before any mutation occurs.
   if (direction === "deduct") {
+    if (subReason === "order_restored") {
+      for (const it of items) {
+        const movementFilter: any = {
+          orderId,
+          productId: String(it.productId),
+          type: "order_restore",
+          ...(it.batchId && !it.partName ? { batchObjectId: String(it.batchId) } : {}),
+          ...(it.partName ? { partName: it.partName } : { partName: { $exists: false } }),
+        };
+        const [latestRestore] = await movements
+          .find(movementFilter)
+          .sort({ createdAt: -1, _id: -1 })
+          .limit(1)
+          .toArray();
+        if (Array.isArray(latestRestore?.batchDeductions) && latestRestore.batchDeductions.length > 0) {
+          restoreOrderAllocations.set(itemKey(it), latestRestore.batchDeductions);
+        }
+      }
+    }
+
     const stockGroups = new Map<string, {
       productName: string;
       available: number;
@@ -1319,6 +1340,32 @@ async function applyDelta(
       }
     }
 
+    // Re-activating a deleted order must consume the same physical lots that
+    // were returned when it was deleted. Fail instead of silently shifting
+    // the sale to a different batch if the original lot has since changed.
+    for (const it of items) {
+      const allocations = restoreOrderAllocations.get(itemKey(it));
+      if (!allocations?.length) continue; // Legacy movements without allocations retain FIFO behavior.
+      const pid = toId(it.productId);
+      const product = pid ? await products.findOne({ _id: pid }, { projection: { name: 1, batches: 1 } }) : null;
+      const batches: Batch[] = Array.isArray(product?.batches)
+        ? product.batches.map((batch: any) => normalizeBatch(batch))
+        : [];
+      for (const allocation of allocations) {
+        const batch = batches.find((candidate) =>
+          (allocation.batchObjectId && String(candidate._id) === String(allocation.batchObjectId)) ||
+          (allocation.batchNumber && candidate.batchNumber === allocation.batchNumber)
+        );
+        if (!batch || batch.quantity + 1e-9 < allocation.quantity) {
+          throw new InsufficientStockError(
+            product?.name ?? it.name ?? "Product",
+            Number(batch?.quantity) || 0,
+            allocation.quantity,
+          );
+        }
+      }
+    }
+
     logger.info({ orderId, itemCount: items.length }, "applyDelta: pre-flight stock check passed — all items have sufficient stock");
   } else {
     // A POS order's billed weight can be higher than the stock quantity that was
@@ -1389,9 +1436,17 @@ async function applyDelta(
     const pid = toId(it.productId);
     if (!pid) continue;
     const plan = direction === "deduct" ? deductionPlan.get(itemKey(it)) : undefined;
-    const qty = plan?.quantity ?? it.quantity;
+    const restoredOrderAllocations = direction === "deduct" && subReason === "order_restored"
+      ? restoreOrderAllocations.get(itemKey(it))
+      : undefined;
+    let qty = plan?.quantity ?? it.quantity;
     const requestedQuantity = plan?.requestedQuantity ?? qty;
-    const weightOverageKg = plan?.overageKg ?? 0;
+    if (restoredOrderAllocations?.length) {
+      qty = restoredOrderAllocations.reduce((total, allocation) => total + (Number(allocation.quantity) || 0), 0);
+    }
+    const weightOverageKg = restoredOrderAllocations?.length
+      ? Math.max(0, requestedQuantity - qty)
+      : plan?.overageKg ?? 0;
     if (qty <= 0) {
       // Keep a zero-deduction marker for a line whose billed weight was fully
       // covered by the POS allowance. Cancellation uses it to avoid restoring
@@ -1441,7 +1496,27 @@ async function applyDelta(
         const selectedBatch = it.batchId
           ? currentBatches.find((batch) => String(batch._id) === String(it.batchId))
           : undefined;
-        if (it.batchId) {
+        if (restoredOrderAllocations?.length) {
+          const quantitiesById = new Map<string, number>();
+          const quantitiesByNumber = new Map<string, number>();
+          for (const allocation of restoredOrderAllocations) {
+            if (allocation.batchObjectId) {
+              const id = String(allocation.batchObjectId);
+              quantitiesById.set(id, (quantitiesById.get(id) ?? 0) + allocation.quantity);
+            }
+            if (allocation.batchNumber) {
+              quantitiesByNumber.set(allocation.batchNumber, (quantitiesByNumber.get(allocation.batchNumber) ?? 0) + allocation.quantity);
+            }
+          }
+          newBatches = currentBatches.map((batch) => {
+            const take = quantitiesById.get(String(batch._id))
+              ?? quantitiesByNumber.get(batch.batchNumber ?? "")
+              ?? 0;
+            return take > 0 ? { ...batch, quantity: Math.max(0, batch.quantity - take) } : batch;
+          });
+          appliedBatchDeductions = restoredOrderAllocations;
+          appliedBatchNumbers = restoredOrderAllocations.map((entry) => entry.batchNumber).filter(Boolean).join(", ");
+        } else if (it.batchId) {
           if (!selectedBatch || selectedBatch.quantity + 1e-9 < qty || (selectedBatch.expiryDate && new Date(selectedBatch.expiryDate).getTime() < nowMs2)) {
             throw new InsufficientStockError(existing.name ?? it.name ?? "Product", Number(selectedBatch?.quantity) || 0, qty);
           }
@@ -1468,6 +1543,13 @@ async function applyDelta(
         logger.info({ orderId, productId: String(pid), batchesAfter: newBatches.length, totalAfter: batchesTotal(newBatches) }, "applyDelta: consumeBatches result");
         if (it.batchId) {
           appliedExpiry = selectedBatch?.expiryDate ?? null;
+        } else if (restoredOrderAllocations?.length) {
+          const firstAllocation = restoredOrderAllocations[0];
+          const allocatedBatch = currentBatches.find((batch) =>
+            (firstAllocation.batchObjectId && String(batch._id) === String(firstAllocation.batchObjectId)) ||
+            (firstAllocation.batchNumber && batch.batchNumber === firstAllocation.batchNumber)
+          );
+          appliedExpiry = allocatedBatch?.expiryDate ?? null;
         } else {
           // Pick expiry and batches from the FIFO stock actually consumed.
           const activeSorted = sortBatchesFIFO(
@@ -1525,6 +1607,7 @@ async function applyDelta(
           if (restoreQty <= 0) return batch;
           return { ...batch, quantity: batch.quantity + restoreQty };
         });
+        appliedBatchDeductions = priorDeductions;
         appliedBatchNumbers = priorDeductions.map((entry) => entry.batchNumber).filter(Boolean).join(", ");
       } else if (exactBatch) {
         newBatches = currentBatches.map((batch) => String(batch._id) === String(it.batchId)
@@ -1559,9 +1642,9 @@ async function applyDelta(
       ...(direction === "deduct" ? {
         requestedQuantity,
         ...(weightOverageKg > 0 ? { weightOverageKg } : {}),
-        ...(it.partName ? { partName: it.partName } : {}),
-        ...(appliedBatchDeductions?.length ? { batchDeductions: appliedBatchDeductions } : {}),
       } : {}),
+      ...(it.partName ? { partName: it.partName } : {}),
+      ...(appliedBatchDeductions?.length ? { batchDeductions: appliedBatchDeductions } : {}),
       ...(it.batchId ? { batchObjectId: String(it.batchId) } : {}),
       ...(appliedBatchNumbers ? { batchNumbers: appliedBatchNumbers } : {}),
       expiryDate: appliedExpiry || undefined,
